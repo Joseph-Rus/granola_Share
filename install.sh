@@ -21,6 +21,9 @@ fi
 if [ -d "$APP/.git" ] && command -v git >/dev/null 2>&1; then
   echo "Updating app..."
   git -C "$APP" pull --ff-only -q || true
+elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  echo "Downloading app (gh)..."
+  gh repo clone "$REPO" "$APP" -- -q
 elif command -v git >/dev/null 2>&1; then
   echo "Downloading app..."
   git clone -q "$REPO" "$APP"
