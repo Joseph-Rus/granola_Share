@@ -50,6 +50,7 @@ OWNER_KEYS = ["owner", "creator", "author"]
 MEETING_LIST_KEYS = ("meetings", "notes", "documents", "results", "items", "data", "meetings_data", "meeting")
 
 # Granola's human-readable dates, e.g. "Feb 4, 2026 7:30 PM" / "Feb 4, 2026".
+_TZ_SUFFIX = re.compile(r"\s+\(?(?!(?:AM|PM)\)?$)[A-Z]{2,5}\)?$")
 _DATE_FORMATS = (
     ("%b %d, %Y %I:%M %p", True),
     ("%B %d, %Y %I:%M %p", True),
@@ -129,6 +130,10 @@ def parse_granola_date(s: Any) -> str:
     except ValueError:
         pass
     squashed = re.sub(r"\s+", " ", text)
+    # Granola stamps the user's local zone on listings ("Sep 15, 2026 2:20 PM PDT"). Keep the
+    # wall-clock time and drop the abbreviation: it is the lecture's local time either way.
+    # AM/PM is never a zone, so it must survive — stripping it would turn 7:30 PM into 07:30.
+    squashed = _TZ_SUFFIX.sub("", squashed)
     for fmt, with_time in _DATE_FORMATS:
         try:
             d = datetime.strptime(squashed, fmt)
@@ -281,6 +286,9 @@ def xml_to_data(text: str) -> dict | list | str:
         root = None
     if root is not None:
         return _normalise_root(root.tag, _element_to_data(root))
+    fragments = _parse_fragments(src)
+    if fragments is not None:
+        return _normalise_root(*fragments)
     loose = _loose_parse(src)
     if loose is None:
         return text
@@ -302,6 +310,47 @@ def _xml_candidate(blob: str) -> str | None:
     if sep and "<" not in first and rest.startswith("<"):
         return rest
     return None
+
+
+# Granola wraps results in advisories: an <access_notice> about plan limits, then a sentence
+# telling the reader to treat the notes as data. So a response is a sequence of fragments,
+# not one document — we wrap it and pull out the element that actually carries the payload.
+PAYLOAD_TAGS = ("meetings_data", "transcript", "folders", "meeting")
+_WRAP_ROOT = "granola_response"
+
+
+def _richest_child(root: ET.Element) -> ET.Element | None:
+    children = [c for c in root if c.tag not in ("access_notice", "notice", "warning")]
+    return max(children, key=lambda c: len(list(c.iter())), default=None)
+
+
+def find_payload_element(root: ET.Element) -> ET.Element | None:
+    """The element holding the data: a known payload tag anywhere, else the biggest child."""
+    for tag in PAYLOAD_TAGS:
+        el = root.find(f".//{tag}")
+        if el is not None:
+            return el
+    return _richest_child(root)
+
+
+def access_notice(text: str) -> str:
+    """The plan-limit sentence Granola prepends, if any — worth repeating to the human."""
+    if not isinstance(text, str):
+        return ""
+    m = re.search(r"<access_notice>(.*?)</access_notice>", text, re.DOTALL)
+    return _clean_text(m.group(1)) if m else ""
+
+
+def _parse_fragments(src: str) -> tuple[str, dict | str] | None:
+    """Parse a blob of mixed notices, prose and XML by wrapping it in one synthetic root."""
+    try:
+        wrapped = ET.fromstring(f"<{_WRAP_ROOT}>{_sanitize_xml(src)}</{_WRAP_ROOT}>")
+    except ET.ParseError:
+        return None
+    el = find_payload_element(wrapped)
+    if el is None:
+        return None
+    return el.tag, _element_to_data(el)
 
 
 # --- participants ------------------------------------------------------------
