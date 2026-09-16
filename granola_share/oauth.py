@@ -21,7 +21,7 @@ from pathlib import Path
 
 import httpx
 
-from .config import Config
+from .config import ClientConfig, Config
 
 
 class OAuthError(Exception):
@@ -46,7 +46,7 @@ def _write_private(path: Path, data: dict) -> None:
 
 
 class GranolaOAuth:
-    def __init__(self, cfg: Config, http: httpx.Client | None = None):
+    def __init__(self, cfg: Config | ClientConfig, http: httpx.Client | None = None):
         self.cfg = cfg
         self.http = http or httpx.Client(timeout=30)
         self._meta: dict | None = None
@@ -158,6 +158,11 @@ class GranolaOAuth:
             "code_challenge_method": "S256",
             "resource": self.cfg.mcp_url,
         }
+        # prompt=login forces the account picker so a cached browser session cannot sign the
+        # wrong Google account in silently. Blank in config = let the auth server decide.
+        prompt = getattr(self.cfg, "oauth_prompt", "") or ""
+        if prompt:
+            params["prompt"] = prompt
         return meta["authorization_endpoint"] + "?" + urllib.parse.urlencode(params)
 
     def exchange_code(self, code: str, verifier: str) -> dict:

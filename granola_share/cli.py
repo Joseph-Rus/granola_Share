@@ -1,7 +1,7 @@
 """granola-share command line.
 
-Server (the pool):   setup | run | serve | sync | login | logout | tools | init
-Friend (a laptop):   client setup | client run | client once | client login
+Server (the pool):   setup | run | serve | sync | login | logout | tools | doctor | init
+Friend (a laptop):   client setup | client run | client once | client panel | client login | client doctor
 Both:                autostart install|uninstall --role server|client
 """
 
@@ -14,6 +14,7 @@ import sys
 import threading
 from pathlib import Path
 
+from . import __version__
 from .config import DEFAULT_HOME, load_client_config, load_config, write_example_config
 
 
@@ -79,6 +80,15 @@ def cmd_tools(args):
                         print(full[0].notes_markdown[:800])
 
     asyncio.run(go())
+
+
+def cmd_doctor(args):
+    from . import doctor
+
+    checks = doctor.server_doctor(load_config(args.home))
+    print(doctor.render(checks))
+    if doctor.failed(checks):
+        sys.exit(1)
 
 
 def cmd_sync(args):
@@ -152,24 +162,68 @@ def cmd_client_login(args):
     GranolaOAuth(load_client_config(args.home)).login(open_browser=not args.no_browser)
 
 
-def cmd_client_run(args):
+def _require_client_setup(args):
     cc = load_client_config(args.home)
     if not cc.server_url:
         sys.exit("Not set up yet: run `granola-share client setup`.")
-    _share_client(cc).run_loop()
+    return cc
+
+
+def _start_panel(cc, client, log=print):
+    """Serve the control panel next to the watcher. Returns the thread, or None (disabled / port taken)."""
+    if not cc.panel_enabled:
+        return None
+    from . import panel
+
+    t = panel.serve_in_thread(client)
+    if t is None:
+        log(f"[client] control panel could not start on port {cc.panel_port} (already in use?)")
+    else:
+        log(f"Control panel: {cc.panel_url}")
+    return t
+
+
+def cmd_client_run(args):
+    cc = _require_client_setup(args)
+    client = _share_client(cc)
+    _start_panel(cc, client)
+    client.run_loop()
+
+
+def cmd_client_panel(args):
+    """Serve only the control panel in the foreground (debugging; no polling loop)."""
+    import uvicorn
+
+    from . import panel
+
+    cc = _require_client_setup(args)
+    client = _share_client(cc)
+    print(f"Control panel: {cc.panel_url}  (panel only; run `granola-share client run` to also watch Granola)")
+    uvicorn.run(panel.create_panel(client), host="127.0.0.1", port=cc.panel_port, log_level="info")
 
 
 def cmd_client_once(args):
-    cc = load_client_config(args.home)
-    if not cc.server_url:
-        sys.exit("Not set up yet: run `granola-share client setup`.")
+    cc = _require_client_setup(args)
     if args.auto:
         cc.mode = "auto"
     rep = asyncio.run(_share_client(cc).poll_once())
+    queued = getattr(rep, "queued", []) or []
     print(f"listed={rep.listed} considered={rep.considered} shared={len(rep.shared)} skipped={len(rep.skipped)} "
-          f"pending={len(rep.pending)} errors={len(rep.errors)}")
+          f"queued={len(queued)} pending={len(rep.pending)} errors={len(rep.errors)}")
+    if queued:
+        print(f"  {len(queued)} waiting for your Share/Skip in the control panel: {cc.panel_url} "
+              f"(it is up while `granola-share client run` is watching)")
     for e in rep.errors:
         print("  error:", e)
+
+
+def cmd_client_doctor(args):
+    from . import doctor
+
+    checks = doctor.client_doctor(load_client_config(args.home))
+    print(doctor.render(checks))
+    if doctor.failed(checks):
+        sys.exit(1)
 
 
 # --- autostart -----------------------------------------------------------------
@@ -185,8 +239,18 @@ def cmd_autostart(args):
 
 # --- parser --------------------------------------------------------------------
 
-def main(argv=None):
+def _line_buffer_stdout() -> None:
+    """Log lines show up as they happen even when stdout is a file (launchd, systemd)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="granola-share", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--version", action="version", version=f"granola-share {__version__}")
     p.add_argument("--home", type=Path, default=DEFAULT_HOME, help=f"data directory (default {DEFAULT_HOME})")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -207,6 +271,7 @@ def main(argv=None):
     rp = sub.add_parser("run", help="what the server runs: web UI + ingest API (+ own sync if enabled)")
     rp.add_argument("--no-ollama", action="store_true")
     rp.set_defaults(fn=cmd_run)
+    sub.add_parser("doctor", help="check the server: config, pool folder, web port, Ollama, login, autostart").set_defaults(fn=cmd_doctor)
 
     cp = sub.add_parser("client", help="friend's laptop: watch my Granola and push approved notes")
     csub = cp.add_subparsers(dest="client_cmd", required=True)
@@ -214,16 +279,23 @@ def main(argv=None):
     clp = csub.add_parser("login", help="sign in to Granola again")
     clp.add_argument("--no-browser", action="store_true")
     clp.set_defaults(fn=cmd_client_login)
-    csub.add_parser("run", help="watch forever").set_defaults(fn=cmd_client_run)
+    csub.add_parser("run", help="watch forever (and serve the control panel)").set_defaults(fn=cmd_client_run)
     cop = csub.add_parser("once", help="check once and exit")
     cop.add_argument("--auto", action="store_true", help="share without asking this time")
     cop.set_defaults(fn=cmd_client_once)
+    csub.add_parser("panel", help="serve only the control panel in the foreground (debugging)").set_defaults(fn=cmd_client_panel)
+    csub.add_parser("doctor", help="check this laptop: server, password, Granola login, notes, panel, autostart").set_defaults(fn=cmd_client_doctor)
 
     ap = sub.add_parser("autostart", help="install/uninstall the background service")
     ap.add_argument("action", choices=["install", "uninstall"])
     ap.add_argument("--role", choices=["server", "client"], required=True)
     ap.set_defaults(fn=cmd_autostart)
+    return p
 
+
+def main(argv=None):
+    _line_buffer_stdout()
+    p = build_parser()
     args = p.parse_args(argv)
     args.home = Path(args.home).expanduser()
     args.home.mkdir(parents=True, exist_ok=True)

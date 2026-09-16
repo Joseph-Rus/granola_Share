@@ -188,6 +188,35 @@ class Store:
         ).fetchall()
         return [(r["class_name"], r["n"]) for r in rows]
 
+    def class_counts(self) -> dict[str, int]:
+        return dict(self.classes_summary())
+
+    @_locked
+    def count(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) AS n FROM notes").fetchone()["n"])
+
+    @_locked
+    def latest_date(self, class_name: str) -> str | None:
+        """Newest note date filed under `class_name`, or None when the class is empty."""
+        row = self.conn.execute("SELECT MAX(date) AS d FROM notes WHERE class_name=?", (class_name,)).fetchone()
+        return row["d"] or None
+
+    @_locked
+    def owners_summary(self) -> list[tuple[str, int, str]]:
+        """(owner, note count, latest note date) per contributor, busiest first."""
+        rows = self.conn.execute(
+            "SELECT COALESCE(owner, '') AS owner, COUNT(*) AS n, MAX(date) AS d FROM notes "
+            "GROUP BY COALESCE(owner, '') ORDER BY n DESC, owner"
+        ).fetchall()
+        return [(r["owner"], r["n"], r["d"] or "") for r in rows]
+
+    @_locked
+    def recent(self, limit: int = 10) -> list[sqlite3.Row]:
+        """The most recently filed notes (by arrival, not lecture date)."""
+        return list(self.conn.execute(
+            "SELECT * FROM notes ORDER BY first_seen DESC, date DESC, title LIMIT ?", (int(limit),)
+        ))
+
     @_locked
     def set_class(self, note_id: str, class_name: str, by: str = "human") -> Path | None:
         row = self.get(note_id)

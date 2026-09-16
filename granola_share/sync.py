@@ -24,6 +24,7 @@ class SyncReport:
     new: int = 0
     saved: list[tuple[str, str]] = field(default_factory=list)  # (title, class)
     errors: list[str] = field(default_factory=list)
+    account: dict | None = None  # {"email", "workspace", ...} from get_account_info, when known
 
 
 def _since(store: Store) -> date:
@@ -33,12 +34,60 @@ def _since(store: Store) -> date:
     return date.today() - timedelta(days=FIRST_RUN_LOOKBACK_DAYS)
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def account_label(info: dict | None) -> str:
+    """'me@example.com · Joey's workspace' or 'not signed in' (mirrors granola.account_label)."""
+    if not info or not info.get("email"):
+        return "not signed in"
+    ws = info.get("workspace")
+    return f"{info['email']} · {ws}" if ws else str(info["email"])
+
+
+async def fetch_account_info(client, session) -> dict | None:
+    """Ask the client who we are signed in as. Old fakes/clients without the method give None."""
+    fn = getattr(client, "get_account_info", None)
+    if fn is None:
+        return None
+    try:
+        info = await fn(session)
+    except Exception:
+        return None
+    return info if isinstance(info, dict) else None
+
+
+def record_sync_state(store: Store, info: dict | None, listed: int) -> None:
+    """Persist what the last successful poll saw so the web /status page can say it out loud."""
+    store.set_state("sync_account", json.dumps(info or {}))
+    store.set_state("sync_listed", str(int(listed)))
+    store.set_state("sync_checked_at", _now_iso())
+    store.set_state("sync_error", "")
+
+
+def record_sync_error(store: Store, error: str) -> None:
+    store.set_state("sync_error", str(error)[:2000])
+    store.set_state("sync_checked_at", _now_iso())
+
+
 async def sync_once(cfg: Config, client: GranolaClient, store: Store, chat=None, log=print) -> SyncReport:
+    try:
+        return await _sync_once(cfg, client, store, chat, log)
+    except Exception as e:
+        record_sync_error(store, f"{type(e).__name__}: {e}")
+        raise
+
+
+async def _sync_once(cfg: Config, client: GranolaClient, store: Store, chat, log) -> SyncReport:
     report = SyncReport()
     since = _since(store)
     async with client.session() as session:
         stubs = await client.list_meetings(session, since=since)
         report.listed = len(stubs)
+        report.account = await fetch_account_info(client, session)
+        record_sync_state(store, report.account, len(stubs))
+        log(f"[sync] signed in as {account_label(report.account)} · {len(stubs)} notes since {since}")
         known = store.known_ids()
         new_ids = [m.id for m in stubs if m.id not in known]
         report.new = len(new_ids)
@@ -90,6 +139,10 @@ def run_loop(cfg: Config, client: GranolaClient, store: Store, log=print, stop=N
             asyncio.run(sync_once(cfg, client, store, log=log))
         except Exception as e:
             log(f"[sync] error: {e}")
+            try:
+                record_sync_error(store, f"{type(e).__name__}: {e}")
+            except Exception as e2:  # the store itself is broken; keep the loop alive anyway
+                log(f"[sync] could not record error: {e2}")
         if stop is not None and stop.is_set():
             return
         for _ in range(cfg.poll_interval_seconds):

@@ -43,6 +43,9 @@ class Config:
     ollama_model: str = "qwen3.6:35b-a3b"
     min_confidence: float = 0.6
     include_transcripts: bool = True
+    # OAuth "prompt" value sent on login. "login" forces the account picker so a cached browser
+    # session cannot silently sign you into the wrong Google account. Blank = let the server decide.
+    oauth_prompt: str = "login"
     classes: list[ClassDef] = field(default_factory=list)
 
     @property
@@ -82,17 +85,30 @@ class ClientConfig:
     pool_key: str = ""
     pool_name: str = ""
     display_name: str = ""
-    mode: str = "ask"  # ask | auto
+    mode: str = "ask"  # ask (queue in the control panel) | auto (share everything) | dialog (native popup)
     poll_interval_seconds: int = 180
     include_transcripts: bool = True
     share_lookback_days: int = 7
     dialog_timeout_seconds: int = 300
     mcp_url: str = MCP_URL
     oauth_callback_port: int = 3334
+    oauth_prompt: str = "login"
+    # The local control panel: http://127.0.0.1:<panel_port>, served by `client run`.
+    panel_enabled: bool = True
+    panel_port: int = 8790
+    notifications: bool = True  # desktop notification when notes are waiting / shared
 
     @property
     def config_path(self) -> Path:
         return self.home / "client.toml"
+
+    @property
+    def queue_dir(self) -> Path:
+        return self.home / "queue"
+
+    @property
+    def panel_url(self) -> str:
+        return f"http://127.0.0.1:{self.panel_port}"
 
     @property
     def state_path(self) -> Path:
@@ -138,6 +154,8 @@ def dump_config(cfg: Config) -> str:
         f"include_transcripts = {_toml_value(cfg.include_transcripts)}",
         f"mcp_url = {_toml_value(cfg.mcp_url)}",
         f"oauth_callback_port = {_toml_value(cfg.oauth_callback_port)}",
+        '# "login" forces the account picker at sign-in so a cached session cannot pick the wrong account.',
+        f"oauth_prompt = {_toml_value(cfg.oauth_prompt)}",
         "",
         "[ollama]",
         f"enabled = {_toml_value(cfg.ollama_enabled)}",
@@ -198,6 +216,7 @@ def load_config(home: Path | None = None) -> Config:
         ollama_model=str(ollama.get("model", "qwen3.6:35b-a3b")),
         min_confidence=float(ollama.get("min_confidence", 0.6)),
         include_transcripts=bool(data.get("include_transcripts", True)),
+        oauth_prompt=str(data.get("oauth_prompt", "login")),
         classes=classes,
     )
 
@@ -209,7 +228,8 @@ def dump_client_config(cc: ClientConfig) -> str:
         f"pool_key = {_toml_value(cc.pool_key)}",
         f"pool_name = {_toml_value(cc.pool_name)}",
         f"display_name = {_toml_value(cc.display_name)}",
-        '# "ask" pops up a Share/Skip dialog for each finished note; "auto" shares everything.',
+        '# "ask" queues each finished note in the control panel for your Share/Skip;',
+        '# "auto" shares everything; "dialog" uses the old native popup instead of the panel.',
         f"mode = {_toml_value(cc.mode)}",
         f"poll_interval_seconds = {_toml_value(cc.poll_interval_seconds)}",
         f"include_transcripts = {_toml_value(cc.include_transcripts)}",
@@ -217,6 +237,11 @@ def dump_client_config(cc: ClientConfig) -> str:
         f"dialog_timeout_seconds = {_toml_value(cc.dialog_timeout_seconds)}",
         f"mcp_url = {_toml_value(cc.mcp_url)}",
         f"oauth_callback_port = {_toml_value(cc.oauth_callback_port)}",
+        f"oauth_prompt = {_toml_value(cc.oauth_prompt)}",
+        "# The control panel runs at http://127.0.0.1:<panel_port> while `client run` is watching.",
+        f"panel_enabled = {_toml_value(cc.panel_enabled)}",
+        f"panel_port = {_toml_value(cc.panel_port)}",
+        f"notifications = {_toml_value(cc.notifications)}",
     ]
     return "\n".join(lines) + "\n"
 
@@ -248,6 +273,10 @@ def load_client_config(home: Path | None = None) -> ClientConfig:
         dialog_timeout_seconds=int(data.get("dialog_timeout_seconds", 300)),
         mcp_url=str(data.get("mcp_url", MCP_URL)),
         oauth_callback_port=int(data.get("oauth_callback_port", 3334)),
+        oauth_prompt=str(data.get("oauth_prompt", "login")),
+        panel_enabled=bool(data.get("panel_enabled", True)),
+        panel_port=int(data.get("panel_port", 8790)),
+        notifications=bool(data.get("notifications", True)),
     )
 
 

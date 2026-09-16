@@ -1,6 +1,6 @@
 [project]
 name = "granola-share"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pool your friends' Granola lecture notes on your own server, sorted by class."
 requires-python = ">=3.10"
 dependencies = [

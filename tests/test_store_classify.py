@@ -85,3 +85,38 @@ def test_render_markdown_includes_transcript_and_private(tmp_path):
     m = Meeting(id="1", title="T", date="2026-01-01", notes_markdown="n", private_notes="p", transcript="t")
     out = render_markdown(m, Classification("CS 101", 1.0, "folder"))
     assert "## Private notes" in out and "## Transcript" in out
+
+
+def test_store_summaries_for_the_status_page(tmp_path):
+    cfg = cfg_for(tmp_path)
+    store = Store(cfg.db_path, cfg.pool_dir)
+    assert store.count() == 0 and store.class_counts() == {} and store.owners_summary() == []
+    assert store.recent() == [] and store.latest_date("CS 101") is None
+
+    notes = [("a", "Loops", "2026-09-10", "Sam", "CS 101"),
+             ("b", "Recursion", "2026-09-12", "Sam", "CS 101"),
+             ("c", "Cells", "2026-09-11", "Ada", UNSORTED)]
+    for nid, title, date_, owner, cls in notes:
+        store.save(Meeting(id=nid, title=title, date=date_, owner=owner, notes_markdown="x"),
+                   Classification(cls, 0.9, "ollama", title, []))
+
+    assert store.count() == 3
+    assert store.class_counts() == {"CS 101": 2, UNSORTED: 1}
+    assert store.latest_date("CS 101") == "2026-09-12" and store.latest_date("Bio 110") is None
+    assert store.owners_summary() == [("Sam", 2, "2026-09-12"), ("Ada", 1, "2026-09-11")]
+
+    # recent() is arrival order (first_seen), newest first, and respects the limit; the three saves
+    # above land in the same second, so spell the arrival times out to keep this deterministic.
+    for i, nid in enumerate(["a", "b", "c"]):
+        store.conn.execute("UPDATE notes SET first_seen=? WHERE id=?", (f"2026-09-14T10:00:0{i}", nid))
+    store.conn.commit()
+    assert [r["id"] for r in store.recent()] == ["c", "b", "a"]
+    assert [r["id"] for r in store.recent(2)] == ["c", "b"]
+
+
+def test_store_owners_summary_counts_notes_without_an_owner(tmp_path):
+    cfg = cfg_for(tmp_path)
+    store = Store(cfg.db_path, cfg.pool_dir)
+    store.save(Meeting(id="a", title="Anon", date="2026-09-10", notes_markdown="x"),
+               Classification(UNSORTED, 0.0, "none"))
+    assert store.owners_summary() == [("", 1, "2026-09-10")]
