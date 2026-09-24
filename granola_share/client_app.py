@@ -224,8 +224,15 @@ class ClientRuntime:
     def reload(self) -> None:
         """Settings changed on the page: the running watcher picks them up."""
         cc = self.config()
-        if self.client is not None:
-            self.client.cc = cc
+        c = self.client
+        if c is not None:
+            reconnected = (cc.server_url, cc.pool_key) != (c.cc.server_url, c.cc.pool_key)
+            c.cc = cc
+            if reconnected and getattr(c, "send_problem_kind", None):
+                # The page just checked the new address and password: drop the old warning and
+                # send what's waiting now, not at the next check minutes later.
+                c.send_problem = c.send_problem_kind = c.last_error = None
+                c.wake()
         self.apply_copying(cc)
 
     def check_now(self) -> None:
@@ -497,7 +504,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
         save_client_config(cc)
         _clear_prefill(home)
         runtime.reload()
-        return {"message": f"Connected to {cc.pool_name}."}
+        return {"message": f"Connected to {cc.pool_name}. Anything waiting is being sent now."}
 
     @app.post("/api/login")
     def login(request: Request):

@@ -198,6 +198,25 @@ def test_status_page_asks_for_the_new_password_when_the_library_refuses_it(tmp_p
     assert "Waiting to send with its transcript" in page and "Waiting for your answer" not in page
 
 
+def test_reconnecting_clears_the_password_warning_and_sends_right_away(tmp_path):
+    from types import SimpleNamespace
+
+    cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="old", pool_name="Fall pool")
+    save_client_config(cc)
+    rt = client_app.ClientRuntime(tmp_path, log=lambda s: None)
+    rt.apply_copying = lambda cc: None
+    woke = []
+    rt.client = SimpleNamespace(cc=cc, send_problem="turned down", send_problem_kind="password",
+                                last_error="turned down", wake=lambda: woke.append(1))
+    cc2 = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="new", pool_name="Fall pool")
+    save_client_config(cc2)  # what the Reconnect box saves
+    rt.reload()
+    assert rt.client.cc.pool_key == "new" and woke == [1]
+    assert rt.client.last_error is None and rt.client.send_problem_kind is None  # no stale red card
+    rt.reload()  # nothing changed: nothing to redo
+    assert woke == [1]
+
+
 def test_status_page_asks_to_sign_in_again_when_granola_signed_out(tmp_path):
     cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall pool",
                       display_name="Alex")
