@@ -20,7 +20,9 @@ let dataDir: URL = {
     }
     return userHome.appendingPathComponent(".granola-share")
 }()
-let engine = userHome.appendingPathComponent(".local/bin/granola-share")
+let env = ProcessInfo.processInfo.environment
+let engine = env["GRANOLA_SHARE_ENGINE"].map { URL(fileURLWithPath: $0) }
+    ?? userHome.appendingPathComponent(".local/bin/granola-share")
 let installScript = "https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh"
 
 func dataFile(_ name: String) -> String? {
@@ -194,6 +196,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
     var libraryShown: URL?
     var signingIn = false
     var downloads: [ObjectIdentifier: URL] = [:]
+    // The README's screenshots (macos/tour.sh): GRANOLA_SHARE_TOUR="name=tab:path,…" shows each one and
+    // saves GRANOLA_SHARE_TOUR_DIR/<name>.png, then quits. A path of "-" takes the tab as it is.
+    var tour: [(name: String, tab: String, path: String)] = (env["GRANOLA_SHARE_TOUR"] ?? "")
+        .split(separator: ",").compactMap { item in
+            let kv = item.split(separator: "=", maxSplits: 1).map(String.init)
+            guard kv.count == 2 else { return nil }
+            let at = kv[1].split(separator: ":", maxSplits: 1).map(String.init)
+            return (kv[0], at[0], at.count > 1 ? at[1] : "-")
+        }
+    var onLoaded: (() -> Void)?
+    lazy var store: WKWebsiteDataStore = tour.isEmpty ? .default() : .nonPersistent()
 
     let backID = NSToolbarItem.Identifier("back")
     let tabsID = NSToolbarItem.Identifier("tabs")
@@ -211,8 +224,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         window.minSize = NSSize(width: 520, height: 460)
         window.delegate = self
         window.contentView = container
-        window.setFrameAutosaveName("GranolaShareWindow")
-        if !window.setFrameUsingName("GranolaShareWindow") { window.center() }
+        if tour.isEmpty {
+            window.setFrameAutosaveName("GranolaShareWindow")
+            if !window.setFrameUsingName("GranolaShareWindow") { window.center() }
+        } else {
+            if let look = env["GRANOLA_SHARE_APPEARANCE"] { NSApp.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua) }
+            window.setContentSize(NSSize(width: 1180, height: 760))
+            window.center()
+        }
         tabs.target = self
         tabs.action = #selector(tabChanged)
         tabs.segmentStyle = .automatic
@@ -225,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         start()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if !tour.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.nextShot() } }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
@@ -237,7 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
 
     func makeWebView() -> WKWebView {
         let cfg = WKWebViewConfiguration()
-        cfg.websiteDataStore = .default()  // keeps the sign-in cookies between launches
+        cfg.websiteDataStore = store  // keeps the sign-in cookies between launches (not on a tour)
         let ucc = WKUserContentController()
         ucc.add(self, name: "copy")
         ucc.add(self, name: "app")
@@ -531,6 +551,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
     func webView(_ v: WKWebView, didFinish nav: WKNavigation!) {
         if v === current { window.subtitle = v.title ?? "" }
         signInIfAsked(v)
+        if v === current, let done = onLoaded, let u = v.url, u.scheme != "about", u.path != "/login" {
+            onLoaded = nil
+            done()
+        }
     }
 
     func webView(_ v: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError error: Error) {
@@ -629,6 +653,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         case "laptop": showLaptop()
         case "log": NSWorkspace.shared.open(dataDir.appendingPathComponent("logs"))
         default: m.webView === library ? openLibrary() : openLaptop()
+        }
+    }
+}
+
+// MARK: - the README's screenshots
+
+extension AppDelegate {
+    func nextShot() {
+        guard !tour.isEmpty else { return NSApp.terminate(nil) }
+        let shot = tour.removeFirst()
+        let v: WKWebView = shot.tab == "library" ? library : laptop
+        show(v)
+        let snap = { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.capture(shot.name) { self.nextShot() } } }
+        guard shot.path != "-" else { return snap() }
+        let base = shot.tab == "library" ? place.library : URL(string: "http://127.0.0.1:\(pagePort())")
+        guard let url = shot.path == "/" && shot.tab != "library" ? pageURL() : URL(string: shot.path, relativeTo: base)
+        else { return nextShot() }
+        onLoaded = snap
+        v.load(URLRequest(url: url))
+    }
+
+    /// The window as it looks: the title bar and toolbar from AppKit, the page from WebKit (drawn in
+    /// another process, so it has to be snapshotted separately). Capturing your own window needs no
+    /// Screen Recording permission.
+    func capture(_ name: String, then: @escaping () -> Void) {
+        // Blur what shouldn't be in a public picture: text matching GRANOLA_SHARE_TOUR_BLUR (only the
+        // matching part), and whole elements matching GRANOLA_SHARE_TOUR_BLUR_SELECTOR.
+        let pattern = env["GRANOLA_SHARE_TOUR_BLUR"] ?? "", selector = env["GRANOLA_SHARE_TOUR_BLUR_SELECTOR"] ?? ""
+        guard !pattern.isEmpty || !selector.isEmpty, current.url?.scheme != "about" else { return snapshot(name, then: then) }
+        current.evaluateJavaScript("""
+            (function(re, sel){
+              var blur = function(e){ e.style.filter = 'blur(7px)'; };
+              if (sel) document.querySelectorAll(sel).forEach(blur);
+              if (!re) return;
+              var rx = new RegExp(re, 'g'), w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), nodes = [];
+              while (w.nextNode()) nodes.push(w.currentNode);
+              nodes.forEach(function(n){
+                var text = n.nodeValue, parts = [], last = 0, m;
+                rx.lastIndex = 0;
+                while ((m = rx.exec(text))) {
+                  parts.push(document.createTextNode(text.slice(last, m.index)));
+                  var s = document.createElement('span'); s.textContent = m[0]; blur(s); parts.push(s);
+                  last = m.index + m[0].length;
+                }
+                if (!parts.length) return;
+                parts.push(document.createTextNode(text.slice(last)));
+                parts.forEach(function(p){ n.parentNode.insertBefore(p, n); });
+                n.remove();
+              });
+            })(\(js(pattern)), \(js(selector)));
+            """) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.snapshot(name, then: then) }
+        }
+    }
+
+    func snapshot(_ name: String, then: @escaping () -> Void) {
+        guard let frame = window.contentView?.superview,
+              let chrome = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return then() }
+        frame.cacheDisplay(in: frame.bounds, to: chrome)
+        let v: WKWebView = current
+        v.takeSnapshot(with: nil) { image, _ in
+            let size = frame.bounds.size
+            let out = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: chrome.pixelsWide, pixelsHigh: chrome.pixelsHigh,
+                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                       colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            out.size = size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: out)
+            chrome.draw(in: frame.bounds)
+            var r = v.convert(v.bounds, to: frame)
+            if frame.isFlipped { r.origin.y = size.height - r.maxY }
+            image?.draw(in: r)
+            NSGraphicsContext.restoreGraphicsState()
+            let dir = URL(fileURLWithPath: env["GRANOLA_SHARE_TOUR_DIR"] ?? NSTemporaryDirectory())
+            try? out.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("\(name).png"))
+            then()
         }
     }
 }

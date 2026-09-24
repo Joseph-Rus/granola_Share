@@ -10,3 +10,6 @@ oauth_client.json
 .claude/settings.local.json
 uv.lock
 build/
+
+# macos/build.sh output
+dist/

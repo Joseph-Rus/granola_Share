@@ -11,6 +11,8 @@ your own Mac mini (or any always-on computer). Free.
 
 It uses Granola's official MCP connector (free) and a local Ollama model, so nothing is paid.
 
+<p align="center"><img src="docs/screenshots/library.png" width="800" alt="The Granola Share app showing the library: a sidebar of classes with colored dots, and a list of recent lectures"></p>
+
 ```
 your laptop                                        your Mac mini
 ┌──────────────────────────┐   POST /api/ingest   ┌────────────────────────────────────┐
@@ -84,9 +86,36 @@ Start Menu on Windows), and opens it on setup with the address and password fill
    the page shows its exact path with a Copy button.
 5. **Finish.**
 
-Open **Granola Share** any time afterwards to see what was sent and where each lecture was
-filed, check for new lectures right away, or change settings. (`granola-share client setup`
-still works in the terminal if you prefer it.)
+<p align="center"><img src="docs/screenshots/setup.png" width="700" alt="Granola Share's setup: connected to the library, signed in to Granola, and choosing how to send, each step with a green check"></p>
+
+Each step turns into a green check when it's done. (`granola-share client setup` still works in
+the terminal if you prefer it.)
+
+### Or: the Mac app on its own
+
+Every release also has **Granola-Share.dmg** (on the
+[releases page](https://github.com/Joseph-Rus/granola_Share/releases/latest)). Open it and drag
+Granola Share into Applications. The first time you open it, it installs its background helper
+with one click, then shows the same setup. macOS asks once before opening an app from the
+internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &
+Security → Open Anyway**. The install line above skips that question, because it fetches the
+app itself.
+
+<p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Granola Share app's first screen: Welcome to Granola Share, with an Install and Continue button"></p>
+
+## 3. Using the app
+
+Open **Granola Share** from Applications or Spotlight. Its toolbar has two tabs:
+
+- **This Mac** (⌘1): whether everything is working, what was sent and where each lecture was
+  filed, and how this laptop sends. If something needs you, like a new password on the Mac mini
+  or signing in to Granola again, it shows here in red with the fix next to it.
+- **Library** (⌘2): your library on the Mac mini, signed in with the password this Mac already has.
+
+<p align="center"><img src="docs/screenshots/this-mac.png" width="800" alt="The This Mac tab: Library, Granola, Watching, and Transcripts all green, and recent lectures showing where each was filed"></p>
+
+⌘R reloads, ⌘+ and ⌘− zoom, and downloads land in Downloads. It follows your Mac's light or
+dark mode. On the Mac mini the app shows just the library.
 
 ## When a lecture finishes
 
@@ -128,33 +157,26 @@ Pick the model, turn our study notes off, or keep Granola's summary next to them
 **Settings** on the library's web page. After switching models, **Rewrite all summaries** redoes
 the library one lecture at a time. Each lecture stays readable while it waits.
 
-### Or: the Mac app on its own
+## The library
 
-Every release also has **Granola-Share.dmg** (on the
-[releases page](https://github.com/Joseph-Rus/granola_Share/releases/latest)). Open it and drag
-Granola Share into Applications. The first time you open it, it installs its background helper
-with one click, then shows the same setup. macOS asks once before opening an app from the
-internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &
-Security → Open Anyway**. The install line above skips that question, because it fetches the
-app itself.
+It's the app's Library tab, and also a web page at `http://<mac mini>:8787` for your phone or any
+browser, behind your password. On the Mac mini itself, it opens without one.
 
-The app has two tabs in its toolbar:
-- **This Mac:** what was sent, and the settings.
-- **Library:** your library on the Mac mini, signed in with the password this Mac already has.
-
-⌘1 and ⌘2 switch tabs, ⌘R reloads, and downloads land in Downloads. On the Mac mini the app
-shows just the library.
-
-## The library's web page
-
-`http://<mac mini>:8787`, behind your password. On the Mac mini itself, it opens without one.
-
-- Classes are color-coded tabs: each class keeps its color everywhere it appears.
+- Each class has a color dot that follows it everywhere it appears.
 - Search covers titles, summaries, topics, and transcripts.
-- Each lecture has Summary, Transcript, and Typed notes tabs, and formulas render as math.
-  Move a lecture to another class, rewrite its summary, delete it, or download it as Markdown.
+- Each lecture has Summary, Transcript, and Typed notes, and formulas render as math. Its class
+  is a menu under the title: pick another and the lecture moves. You can also rewrite its
+  summary, delete it, or download it as Markdown.
 - Download a whole class as a zip.
-- **Settings:** models, classes, the laptop install line, updates, and rewriting summaries.
+
+<p align="center"><img src="docs/screenshots/lecture.png" width="800" alt="A lecture in the library: study notes written by the model from the transcript, with key ideas and a formula"></p>
+
+**Settings** has the models, what gets written and how lectures are sorted, your classes, the
+install line for a laptop, updates, and rewriting every summary:
+
+<p align="center"><img src="docs/screenshots/settings.png" width="800" alt="Library settings: which model writes summaries and which sorts, switches for notes and sorting, and the class list"></p>
+
+<sub>Screenshots use made-up lectures; addresses and passwords are blurred.</sub>
 
 ## Updates
 
@@ -242,7 +264,8 @@ granola_share/
   client.py     laptop watcher: poll → popup → send → "it's filed"
   client_app.py the laptop's Granola Share page: setup and status, on 127.0.0.1 only
   launcher.py   the Granola Share app (native on macOS, else a script), Start Menu, .desktop
-macos/          the native Mac app: GranolaShare.swift, its icon, build.sh → .app, zip, DMG
+macos/          the native Mac app: GranolaShare.swift, its icon, build.sh → .app, zip, DMG; tour.py
+                → docs/screenshots
   transcript_grab.py  macOS: copy transcripts from the Granola window (free plans)
   dialogs.py    native popups and notifications (macOS/Windows/Linux)
   autostart.py  launchd / Startup folder / systemd --user
@@ -260,6 +283,8 @@ tests/          offline tests: .venv/bin/python -m pytest
 ```
 
 Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`).
+Redo the README's screenshots with `uv run --with pillow python macos/tour.py` after a build. It
+serves made-up lectures, lets the app capture its own window, and blurs addresses and passwords.
 From a checkout: `python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`. To try the
 installer against your working copy, run
 `GRANOLA_SHARE_SRC=$PWD GRANOLA_SHARE_NO_SETUP=1 sh install.sh`.
