@@ -713,13 +713,17 @@ def wait_for_app(home: Path, timeout: float = 20) -> str | None:
     return None
 
 
-def open_app(home: Path, install: bool = False, log=print) -> str | None:
-    """`granola-share client open`: make sure the background service runs, then open its page."""
+def open_app(home: Path, install: bool = False, log=print, browser: bool = True) -> str | None:
+    """`granola-share client open`: make sure the background service runs, then show its page, in the
+    Granola Share app when it's installed (macOS), else in the browser. `browser=False` only starts it:
+    that's what the app itself runs."""
     from . import launcher
 
     if install:
         from .update import cleanup_legacy
 
+        if mac() and launcher.native_installed() is None:
+            _install_native_app(log)
         autostart.install("client", home)
         launcher.install(home)
         cleanup_legacy(home, log)  # 0.1 lived in <home>/venv and <home>/app
@@ -731,6 +735,20 @@ def open_app(home: Path, install: bool = False, log=print) -> str | None:
     if not url:
         log(f"Granola Share didn't start. See {home / 'logs' / 'client.log'}, or run `granola-share doctor`.")
         return None
-    dialogs.open_url(url)
+    if browser:
+        native = launcher.native_installed() if mac() else None
+        if native is None or not dialogs.open_app(str(native)):
+            dialogs.open_url(url)
     return url
 
+
+def _install_native_app(log=print) -> None:
+    """The first install on a Mac also gets the Granola Share app from the newest release, if it has one."""
+    from . import launcher, update
+
+    try:
+        rel = update.latest_release()
+    except Exception:
+        return
+    if rel and rel.mac_app:
+        launcher.install_native(rel.mac_app, log=log)

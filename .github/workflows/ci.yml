@@ -2,7 +2,8 @@
 #   Every push and pull request: tests on macOS, Linux, and Windows, then the real one-line
 #   installer on each, then a server that boots and answers.
 #   Push to main with a new version in granola_share/__init__.py: once all of that passes,
-#   publish release v<version>. Installed copies pick it up within a few hours
+#   publish release v<version>, with the Mac app attached (Granola-Share.dmg, and a zip the
+#   installer and auto-update use). Installed copies pick it up within a few hours
 #   (auto_update), or right away with `granola-share update`.
 name: ci
 
@@ -96,9 +97,31 @@ jobs:
         shell: bash
         run: cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/client.log" || true
 
+  mac-app:
+    name: Mac app (DMG)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Granola Share.app, its zip, and the DMG
+        run: sh macos/build.sh "" dist
+      - name: The app starts
+        run: |
+          file "dist/Granola Share.app/Contents/MacOS/Granola Share" | grep -q "universal binary"
+          codesign --verify --deep "dist/Granola Share.app"
+          GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/Granola Share.app/Contents/MacOS/Granola Share" &
+          sleep 8
+          kill -0 $!   # still running after 8 seconds: it launched and showed its window
+          kill $!
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-app
+          path: |
+            dist/Granola-Share.dmg
+            dist/Granola-Share-mac.zip
+
   release:
     name: publish release
-    needs: [test, install]
+    needs: [test, install, mac-app]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -107,6 +130,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-app
+          path: dist
       - name: Publish v<version> if it is new
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,4 +144,5 @@ jobs:
             echo "v$V is already released; bump __version__ to publish a new one."
             exit 0
           fi
-          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes
+          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
+            dist/Granola-Share.dmg dist/Granola-Share-mac.zip

@@ -73,8 +73,8 @@ $env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SH
 ```
 
 That's the last time you touch the terminal on the laptop. The line installs granola-share,
-starts it in the background, adds a **Granola Share** app (Applications on a Mac, the Start Menu
-on Windows), and opens its setup page in your browser with the address and password filled in:
+starts it in the background, adds the **Granola Share** app (a real Mac app in Applications; the
+Start Menu on Windows), and opens it on setup with the address and password filled in:
 
 1. **Connect to your library.** One click checks the address and password.
 2. **Sign in to Granola.** A browser tab opens for your Granola account.
@@ -127,6 +127,23 @@ free-plan lectures keep Granola's summary for now.
 Pick the model, turn our study notes off, or keep Granola's summary next to them under
 **Settings** on the library's web page. After switching models, **Rewrite all summaries** redoes
 the library one lecture at a time. Each lecture stays readable while it waits.
+
+### Or: the Mac app on its own
+
+Every release also has **Granola-Share.dmg** (on the
+[releases page](https://github.com/Joseph-Rus/granola_Share/releases/latest)). Open it and drag
+Granola Share into Applications. The first time you open it, it installs its background helper
+with one click, then shows the same setup. macOS asks once before opening an app from the
+internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &
+Security → Open Anyway**. The install line above skips that question, because it fetches the
+app itself.
+
+The app has two tabs in its toolbar:
+- **This Mac:** what was sent, and the settings.
+- **Library:** your library on the Mac mini, signed in with the password this Mac already has.
+
+⌘1 and ⌘2 switch tabs, ⌘R reloads, and downloads land in Downloads. On the Mac mini the app
+shows just the library.
 
 ## The library's web page
 
@@ -183,7 +200,7 @@ Logs live in `~/.granola-share/logs/` (`server.log`, `client.log`, `update.log`)
 |---|---|
 | `setup` | set up the library (safe to rerun; `--help` lists flags to answer without prompts) |
 | `run` | the library: web page, ingest API, study notes (+ its own sync if enabled) |
-| `client open [--install]` | open the laptop's Granola Share page; what the app icon runs |
+| `client open [--install] [--no-browser]` | show Granola Share (the app on a Mac, else the browser), starting its service if needed |
 | `client setup` | laptop setup in the terminal instead (`--server`, `--key`, `--mode`, `--yes`, …) |
 | `client run [--no-ui]` / `client once [--auto]` | the laptop's background service, or check once |
 | `client login` / `login` | sign in to Granola again |
@@ -224,7 +241,8 @@ granola_share/
   granola.py    MCP client; discovers tool argument names at runtime
   client.py     laptop watcher: poll → popup → send → "it's filed"
   client_app.py the laptop's Granola Share page: setup and status, on 127.0.0.1 only
-  launcher.py   the Granola Share app icon (macOS app, Start Menu, .desktop)
+  launcher.py   the Granola Share app (native on macOS, else a script), Start Menu, .desktop
+macos/          the native Mac app: GranolaShare.swift, its icon, build.sh → .app, zip, DMG
   transcript_grab.py  macOS: copy transcripts from the Granola window (free plans)
   dialogs.py    native popups and notifications (macOS/Windows/Linux)
   autostart.py  launchd / Startup folder / systemd --user
@@ -241,6 +259,7 @@ granola_share/
 tests/          offline tests: .venv/bin/python -m pytest
 ```
 
+Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`).
 From a checkout: `python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`. To try the
 installer against your working copy, run
 `GRANOLA_SHARE_SRC=$PWD GRANOLA_SHARE_NO_SETUP=1 sh install.sh`.

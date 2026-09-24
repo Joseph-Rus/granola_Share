@@ -86,10 +86,10 @@ if [ "${GRANOLA_SHARE_NO_SETUP:-}" = "1" ]; then
 fi
 say ""
 if [ "$ROLE" = client ] && [ -z "${GRANOLA_SHARE_TERMINAL:-}" ] && [ "$#" -eq 0 ]; then
-  # The laptop sets up in the browser: this starts the background service, adds the Granola Share
-  # app, and opens its setup page (with the library's address and password filled in).
+  # The laptop sets up in the Granola Share app (on a Mac; elsewhere the browser): this starts the
+  # background service, adds the app, and opens its setup page with the library's address and password.
   "$BIN" --home "$HOME_DIR" client open --install || fail "Granola Share didn't start (log: $HOME_DIR/logs/client.log)"
-  say "Setup continues in your browser. Later, open Granola Share from your Applications folder."
+  say "Setup continues in the Granola Share window. Later, open Granola Share from your Applications folder."
   exit 0
 fi
 if [ "$ROLE" = server ]; then set -- setup "$@"; else set -- client setup "$@"; fi

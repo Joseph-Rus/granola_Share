@@ -67,11 +67,60 @@ def render_mac_script(args: list[str]) -> str:
     return f"#!/bin/sh\n# Opens the Granola Share page (starting its background service if needed).\nexec {quoted}\n"
 
 
+NATIVE_EXE = "Granola Share"  # the native app's binary; the script launcher's is granola-share-app
+
+
+def is_native(app: Path) -> bool:
+    return (app / "Contents" / "MacOS" / NATIVE_EXE).is_file()
+
+
+def native_installed() -> Path | None:
+    return next((a for a in mac_app_paths() if is_native(a)), None)
+
+
+def install_native(url: str, *, log=print, get=None, run=subprocess.run) -> Path | None:
+    """Download the native Mac app (a zip from the release) into Applications, replacing any older copy.
+    Fetched here rather than in a browser, macOS doesn't quarantine it, so it opens without a warning."""
+    import tempfile
+
+    import httpx
+
+    get = get or httpx.get
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "app.zip"
+            r = get(url, follow_redirects=True, timeout=120)
+            r.raise_for_status()
+            zip_path.write_bytes(r.content)
+            unpacked = Path(tmp) / "unpacked"
+            p = run(["ditto", "-x", "-k", str(zip_path), str(unpacked)], capture_output=True, text=True)
+            new = unpacked / f"{APP_NAME}.app"
+            if p.returncode != 0 or not is_native(new):
+                log("The Granola Share app in that release didn't unpack; keeping the one you have.")
+                return None
+            dest = mac_app_path()
+            for old in mac_app_paths():
+                shutil.rmtree(old, ignore_errors=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(new), str(dest))
+            log(f"Installed the Granola Share app in {dest.parent}.")
+            return dest
+    except Exception as e:
+        log(f"Couldn't install the Granola Share app ({e}); the one in Applications still works.")
+        return None
+
+
 def install(home: Path, *, system: str | None = None, python: str | None = None, run=subprocess.run) -> Path | None:
     system = system or platform.system()
     args = _command(home, python)
     try:
         if system == "Darwin":
+            native = native_installed()
+            if native is not None:  # the real app is there: never swap it for the script launcher
+                for other in mac_app_paths():
+                    if other != native and not is_native(other):
+                        shutil.rmtree(other, ignore_errors=True)
+                return native
             app = mac_app_path()
             (app / "Contents" / "MacOS").mkdir(parents=True, exist_ok=True)
             (app / "Contents" / "Info.plist").write_text(render_info_plist(), encoding="utf-8")

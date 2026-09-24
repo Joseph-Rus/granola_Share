@@ -24,6 +24,7 @@ from . import __version__, autostart
 
 REPO_SLUG = "Joseph-Rus/granola_Share"
 LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
+MAC_APP_ASSET = "Granola-Share-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
 FIRST_CHECK_AFTER = 10 * 60
 CHECK_EVERY = 6 * 3600
 LOCK_STALE_AFTER = 20 * 60
@@ -35,6 +36,7 @@ class Release:
     version: tuple[int, ...]
     url: str  # source archive uv installs from
     page: str  # release notes
+    mac_app: str = ""  # download URL of the native Mac app, when the release has one
 
 
 def parse_version(v: str) -> tuple[int, ...]:
@@ -55,7 +57,9 @@ def latest_release(get=httpx.get) -> Release | None:
     r.raise_for_status()
     data = r.json()
     tag = str(data["tag_name"])
-    return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""))
+    mac_app = next((str(a.get("browser_download_url") or "") for a in data.get("assets") or []
+                    if a.get("name") == MAC_APP_ASSET), "")
+    return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""), mac_app)
 
 
 _cache: dict = {"at": 0.0, "release": None}
@@ -190,6 +194,11 @@ def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restar
         log(f"Install failed:\n{(p.stderr or p.stdout or '').strip()[-2000:]}")
         return False
     log(f"Installed {release.tag}.")
+    if platform.system() == "Darwin" and release.mac_app:
+        from . import launcher
+
+        if launcher.native_installed():  # the Granola Share app updates along with everything else
+            launcher.install_native(release.mac_app, log=log)
     if restart_services:
         for role in roles:
             autostart.restart(role)

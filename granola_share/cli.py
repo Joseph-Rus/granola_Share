@@ -225,11 +225,14 @@ def cmd_client_open(args):
 
     write_prefill(args.home, args.server or os.environ.get("GRANOLA_SHARE_SERVER"),
                   args.key or os.environ.get("GRANOLA_SHARE_KEY"))
-    url = open_app(args.home, install=args.install)
+    url = open_app(args.home, install=args.install, browser=not args.no_browser)
     if not url:
         sys.exit(1)
-    print("Granola Share is open in your browser." + (" Finish setting up there." if args.install else ""))
-    print(f"If it didn't open, go to: {url}")
+    if args.no_browser:
+        print(url)
+        return
+    print("Granola Share is open." + (" Finish setting up there." if args.install else ""))
+    print(f"If nothing opened, go to: {url}")
 
 
 def cmd_client_once(args):
@@ -365,6 +368,7 @@ def main(argv=None):
     cap.add_argument("--install", action="store_true", help="also install the background service and the app icon")
     cap.add_argument("--server", help="library address to fill in (default: $GRANOLA_SHARE_SERVER)")
     cap.add_argument("--key", help="library password to fill in (default: $GRANOLA_SHARE_KEY)")
+    cap.add_argument("--no-browser", action="store_true", help="only start it and print the page's address")
     cap.set_defaults(fn=cmd_client_open)
     cop = csub.add_parser("once", help="check once and exit")
     cop.add_argument("--auto", action="store_true", help="share without asking this time")
