@@ -7,11 +7,12 @@ schemas at runtime, so small changes on Granola's side do not break the sync.
 
 from __future__ import annotations
 
+import html
 import json
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from .config import Config
@@ -128,10 +129,84 @@ def parse_tool_result(result: Any) -> Any:
         return blob
 
 
+# Granola's MCP now returns meetings as an XML-ish document rather than JSON:
+#   <meetings_data ... count="N">
+#     <meeting id=".." title=".." date="Sep 15, 2026 2:20 PM PDT" captured_by_me="true" ...>
+#       <known_participants> name (note creator) &lt;email&gt; </known_participants>
+#       <summary> # markdown ... </summary>
+#     </meeting>
+#   </meetings_data>
+# It is not always well-formed XML (prose preamble, unescaped markdown in <summary>),
+# so parse it with tolerant regex rather than an XML parser.
+_MEETING_BLOCK_RE = re.compile(r"<meeting\b([^>]*)>(.*?)</meeting>", re.DOTALL | re.IGNORECASE)
+_ATTR_RE = re.compile(r'([\w:-]+)\s*=\s*"([^"]*)"')
+
+
+def _inner_tag(tag: str, block: str) -> str:
+    m = re.search(rf"<{tag}\b[^>]*>(.*?)</{tag}>", block, re.DOTALL | re.IGNORECASE)
+    return html.unescape(m.group(1)).strip() if m else ""
+
+
+def _iso_date(s: str) -> str:
+    """Turn Granola's 'Sep 15, 2026 2:20 PM PDT' into ISO; pass through if already ISO."""
+    s = (s or "").strip()
+    if not s or re.match(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    m = re.match(r"([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*([AaPp][Mm]))?", s)
+    if not m:
+        return s
+    mon, day, year, hh, mm, ap = m.groups()
+    try:
+        if hh:
+            dt = datetime.strptime(f"{mon[:3]} {day} {year} {hh}:{mm} {ap.upper()}", "%b %d %Y %I:%M %p")
+        else:
+            dt = datetime.strptime(f"{mon[:3]} {day} {year}", "%b %d %Y")
+        return dt.isoformat()
+    except ValueError:
+        return s
+
+
+def _participant_names(block_text: str) -> list[str]:
+    names = []
+    for line in block_text.splitlines():
+        line = re.sub(r"<[^>]*>", "", line).strip()  # drop <email>
+        line = re.sub(r"\((?:note creator|organizer|host|guest)\)", "", line, flags=re.IGNORECASE).strip()
+        line = line.split("<")[0].strip().rstrip(",")
+        if line:
+            names.append(line)
+    return names
+
+
+def parse_meetings_xml(blob: str) -> list[dict]:
+    """Parse the <meetings_data> document into meeting dicts normalize_meeting understands."""
+    out: list[dict] = []
+    for attrs, body in _MEETING_BLOCK_RE.findall(blob):
+        d: dict = {k: html.unescape(v) for k, v in _ATTR_RE.findall(attrs)}
+        if not d.get("id"):
+            continue
+        if d.get("date"):
+            d["date"] = _iso_date(d["date"])
+        summary = _inner_tag("summary", body)
+        if summary:
+            d["summary"] = summary
+        parts = _inner_tag("known_participants", body)
+        if parts:
+            names = _participant_names(parts)
+            if names:
+                d["attendees"] = names
+        folder = _inner_tag("folder", body) or d.get("folder") or d.get("folder_name")
+        if folder:
+            d["folder"] = folder
+        out.append(d)
+    return out
+
+
 def extract_meetings(payload: Any) -> list[dict]:
     """Find the list of meeting dicts inside whatever shape the tool returned."""
     if payload is None:
         return []
+    if isinstance(payload, str):
+        return parse_meetings_xml(payload)
     if isinstance(payload, list):
         return [p for p in payload if isinstance(p, dict)]
     if isinstance(payload, dict):

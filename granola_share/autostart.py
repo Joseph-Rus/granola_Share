@@ -15,7 +15,8 @@ ROLES = {"server": ["run"], "client": ["client", "run"]}
 def role_args(role: str, home: Path, python: str | None = None) -> list[str]:
     if role not in ROLES:
         raise ValueError(f"role must be one of {sorted(ROLES)}")
-    return [python or sys.executable, "-m", "granola_share.cli", "--home", str(home), *ROLES[role]]
+    # -u keeps stdout/stderr unbuffered so the launchd/systemd log fills in live.
+    return [python or sys.executable, "-u", "-m", "granola_share.cli", "--home", str(home), *ROLES[role]]
 
 
 def render_plist(label: str, args: list[str], log_path: Path) -> str:

@@ -30,7 +30,7 @@ def test_ask_yes_no_darwin_with_fake_runner():
 
 def test_role_args_and_renderers(tmp_path):
     args = autostart.role_args("client", tmp_path, python="/py")
-    assert args == ["/py", "-m", "granola_share.cli", "--home", str(tmp_path), "client", "run"]
+    assert args == ["/py", "-u", "-m", "granola_share.cli", "--home", str(tmp_path), "client", "run"]
     plist = autostart.render_plist("com.granola-share.client", args, tmp_path / "c.log")
     assert "<string>client</string>" in plist and "<key>KeepAlive</key><true/>" in plist
     unit = autostart.render_systemd("d", ["/py", "-m", "x", "--home", "/a b"])
