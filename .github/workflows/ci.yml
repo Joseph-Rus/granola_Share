@@ -78,8 +78,13 @@ jobs:
           done
           curl -fsS -X POST -H "Authorization: Bearer pw" -H "Content-Type: application/json" \
             -d '{"id":"ci-1","title":"CS101 lecture 1","notes_markdown":"loops"}' http://127.0.0.1:8799/api/ingest
-          sleep 3
-          curl -fsS http://127.0.0.1:8799/api/status | tee /dev/stderr | grep -q '"done":1'
+          # the note is filed in the background; wait for it (no /dev/stderr on Windows)
+          for i in $(seq 1 30); do
+            S=$(curl -fsS http://127.0.0.1:8799/api/status); echo "$S"
+            case "$S" in *'"done":1'*) break;; esac
+            sleep 2
+          done
+          echo "$S" | grep -q '"done":1'
           curl -fsS http://127.0.0.1:8799/ | grep -q "CS101 lecture 1"
           granola-share --home "$H" doctor --role server || true
           # the laptop's Granola Share page comes up before any setup
