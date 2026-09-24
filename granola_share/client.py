@@ -103,6 +103,9 @@ class ShareClient:
         self.handled_since = handled_since or (lambda started: None)
         self.clock = clock
         self.last_error: str | None = None  # the latest check's failure, shown on the Granola Share page
+        # Why the library didn't take the last lecture: "password", "unreachable", "other", or None.
+        self.send_problem: str | None = None
+        self.send_problem_kind: str | None = None
         self.state = self._load_state()
 
     # -- state -------------------------------------------------------------
@@ -179,9 +182,11 @@ class ShareClient:
         except Exception as e:
             rep.errors.append(f"{m.id}: {e}")
             rep.pending.append(m.title)
-            self._mark(m, "pending", {"error": str(e)})
+            self._mark(m, "pending", {"error": str(e), "approved": True})  # retried without asking again
             self.log(f"[client] could not share '{m.title}': {e}")
+            self._send_failed(e)
             return
+        self.send_problem = self.send_problem_kind = None
         cls = str(res.get("class_name") or "")  # empty while the server is still sorting it
         rep.shared.append((m.title, cls or "being sorted"))
         self._mark(m, "shared", {"class_name": cls, "filed": False} if cls else {"filed": False})
@@ -189,6 +194,20 @@ class ShareClient:
         self.log(f"[client] shared '{m.title}'{with_t}" + (f" → {cls}" if cls else ""))
         if message:
             self.notify("granola-share", message)  # otherwise the one notification is "it's filed"
+
+    def _send_failed(self, e: Exception) -> None:
+        """Say why where it's seen: on the Granola Share page, plus one notification when only the user
+        can fix it (the Mac mini has a new password). Lectures wait here and are retried either way."""
+        if getattr(getattr(e, "response", None), "status_code", None) == 401:
+            kind, text = "password", f"{self.library} turned down this laptop's password, so lectures are waiting here."
+        elif isinstance(e, httpx.TransportError):
+            kind, text = "unreachable", (f"Can't reach {self.library} right now. Is the Mac mini awake, with Tailscale "
+                                         "on? Lectures wait here and go as soon as it's back.")
+        else:
+            kind, text = "other", f"Couldn't send to {self.library}: {e}"
+        if kind == "password" and self.send_problem_kind != "password":
+            self.notify("granola-share", f"{text} Open Granola Share to enter the new one.")
+        self.send_problem, self.send_problem_kind = text, kind
 
     # -- main loop ---------------------------------------------------------
     async def poll_once(self, since: date | None = None) -> ClientReport:
@@ -228,7 +247,9 @@ class ShareClient:
         if ended == "asking":
             rep.pending.append(m.title)  # the "Save it?" popup from the end of the recording is still up
             return
-        if not m.transcript.strip() and copy_state != COPY_OFF and ended is None:
+        if entry.get("approved"):
+            decision = True  # they already said yes; the library just didn't take it yet
+        elif not m.transcript.strip() and copy_state != COPY_OFF and ended is None:
             # Nothing copied when the recording ended (the laptop was off, or it was recorded elsewhere).
             choice = self.ask_save(m, copy_state)
             if choice == "save":
@@ -331,7 +352,7 @@ class ShareClient:
             self._wake.clear()
             try:
                 asyncio.run(self.poll_once())
-                self.last_error = None
+                self.last_error = self.send_problem
             except Exception as e:
                 self.last_error = str(e)
                 self.log(f"[client] error: {e}\n{traceback.format_exc()}")

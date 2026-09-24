@@ -174,6 +174,30 @@ def test_mac_app_goes_where_finder_shows_it_when_allowed(tmp_path, monkeypatch):
     assert not launcher.installed(system="Darwin")
 
 
+def test_status_page_asks_for_the_new_password_when_the_library_refuses_it(tmp_path):
+    cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="old", pool_name="Fall pool",
+                      display_name="Alex")
+    save_client_config(cc)
+    cc.tokens_path.write_text("{}")
+    (tmp_path / "client_state.json").write_text(json.dumps({"seen": {"n1": {
+        "decision": "pending", "title": "Membranes", "date": "2026-09-24", "transcript_chars": 8180,
+        "at": "2026-09-24T19:37:49+00:00", "error": "401 Unauthorized"}}}))
+    rt = FakeRuntime(tmp_path)
+    rt._watching = True
+
+    class Refused:
+        send_problem_kind = "password"
+        last_error = "Fall pool turned down this laptop's password, so lectures are waiting here."
+
+    rt.client = Refused()
+    rt, c = app(tmp_path, runtime=rt)
+    login(c, tmp_path)
+    page = c.get("/").text
+    assert "needs its new password" in page and "turned down this laptop" in page
+    assert 'data-action="/api/pool"' in page and 'value="http://mini:8787"' in page and "Reconnect" in page
+    assert "Waiting to send with its transcript" in page and "Waiting for your answer" not in page
+
+
 def test_status_page_asks_to_sign_in_again_when_granola_signed_out(tmp_path):
     cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall pool",
                       display_name="Alex")

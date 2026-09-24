@@ -284,6 +284,8 @@ def _describe(e: dict) -> str:
         if e.get("filed") is True:
             return f"Filed{where}" + (" with its transcript" if e.get("transcript_chars") else "")
         return "Sent, being summarized" if e.get("filed") is False else f"Shared{where}"
+    if d == "pending" and e.get("error"):
+        return "Waiting to send" + (" with its transcript" if e.get("transcript_chars") else "")
     return {"skipped": "Skipped", "pending": "Waiting for your answer"}.get(d, d or "")
 
 
@@ -411,14 +413,28 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             facts.append(("Transcripts", "copied from Granola" if copy["allowed"] else "needs permission", not copy["allowed"]))
         problem = runtime.client.last_error if runtime.client is not None else None
         signin_problem = bool(problem and "granola-share login" in problem)  # every sign-in failure says this
+        send_kind = getattr(runtime.client, "send_problem_kind", None) if problem else None
         if signin_problem:
             facts[1] = ("Granola", "needs you to sign in again", True)
+        elif send_kind == "password":
+            facts[0] = ("Library", "needs its new password", True)
+        elif send_kind == "unreachable":
+            facts[0] = ("Library", "can't be reached", True)
         facts_html = "".join(f'<div><dt>{esc(k)}</dt><dd class="{"bad" if bad else ""}">{esc(v)}</dd></div>' for k, v, bad in facts)
-        if problem:
+        if problem and send_kind == "password":
+            problem_html = (
+                f'<div class="callout">{esc(problem)}'
+                '<form class="row" data-action="/api/pool" data-out="problem-say" data-busy="Connecting…">'
+                f'<input type="hidden" name="server" value="{esc(cc.server_url)}">'
+                '<input type="password" name="key" placeholder="The new password" aria-label="Library password" required>'
+                '<button class="primary">Reconnect</button></form>'
+                '<p class="small muted">It\'s shown on the Mac mini, in your library\'s Settings under Connect your laptop.</p>'
+                '<p class="say" id="problem-say"></p></div>')
+        elif problem:
             fix = ('<button class="primary" data-action="/api/login" data-out="problem-say">Sign in to Granola again</button>'
                    if signin_problem else "")
-            said = "Granola signed you out, so new lectures can't be checked." if signin_problem else \
-                f"The last check didn't work: {problem[:240]}"
+            said = ("Granola signed you out, so new lectures can't be checked." if signin_problem else
+                    problem if send_kind else f"The last check didn't work: {problem[:240]}")
             problem_html = (f'<div class="callout">{esc(said)}'
                             f'<div class="row">{fix}<span class="say" id="problem-say"></span></div></div>')
         else:
