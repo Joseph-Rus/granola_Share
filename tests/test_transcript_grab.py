@@ -242,8 +242,8 @@ def test_stopping_in_granola_copies_with_no_clicks_from_the_user(tmp_path):
     assert end_recording(g, ui, clock) == "copied after recording"
     assert ui.events == ["open panel", "close panel"] and asked == [] and len(got) == 1
     assert g.handled_since(datetime(2026, 9, 24, 15, 0)) == "copied"
-    saved = list((tmp_path / "transcripts").glob("*.json"))
-    assert saved and "15:50" in saved[0].read_text()  # stop time kept, for matching by time
+    saved = [p for p in (tmp_path / "transcripts").glob("*.json") if p.name != "status.json"]
+    assert len(saved) == 1 and "15:50" in saved[0].read_text()  # stop time kept, for matching by time
 
 
 def test_stopping_elsewhere_asks_once_and_save_brings_you_back(tmp_path):
