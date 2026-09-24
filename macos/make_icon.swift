@@ -1,6 +1,7 @@
 // Draws the app icon into an .iconset folder: `swift make_icon.swift out.iconset`, then iconutil.
-// On Apple's macOS grid (an 824-pt rounded square on a 1024 canvas): a blue tile with a white page that
-// holds a sound wave (the lecture) above lines of notes.
+// A sibling of Granola's icon: the same dark tile and lime green, but the spiral unwinds into an
+// arrow heading up and out, for lectures leaving Granola for your library. On Apple's macOS grid (an 824-pt rounded
+// square on a 1024 canvas).
 
 import AppKit
 
@@ -12,8 +13,31 @@ func color(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
             blue: CGFloat(hex & 0xff) / 255, alpha: a)
 }
 
-func rounded(_ r: CGRect, _ radius: CGFloat) -> CGPath {
-    CGPath(roundedRect: r, cornerWidth: radius, cornerHeight: radius, transform: nil)
+func gradient(_ colors: [CGColor], _ stops: [CGFloat]) -> CGGradient {
+    CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: stops)!
+}
+
+/// An Archimedean spiral from the middle outwards that ends at `endAngle` (after `rounds` full turns),
+/// then runs straight on for `tail`. Returns the path, where it ends, and which way it points there.
+func spiral(center c: CGPoint, rounds: Int, endAngle: CGFloat, inner: CGFloat, outer: CGFloat,
+            tail: CGFloat) -> (CGPath, CGPoint, CGFloat) {
+    let path = CGMutablePath()
+    let steps = 540
+    let start: CGFloat = .pi * 0.35  // begin a little way round, so the middle isn't a dot
+    let end = endAngle + CGFloat(rounds) * 2 * .pi
+    var last = CGPoint.zero, prev = CGPoint.zero
+    for i in 0...steps {
+        let t = start + (end - start) * CGFloat(i) / CGFloat(steps)
+        let r = inner + (outer - inner) * (t - start) / (end - start)
+        let p = CGPoint(x: c.x + r * cos(t), y: c.y + r * sin(t))
+        if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+        prev = last
+        last = p
+    }
+    let a = atan2(last.y - prev.y, last.x - prev.x)
+    let tip = CGPoint(x: last.x + tail * cos(a), y: last.y + tail * sin(a))
+    path.addLine(to: tip)
+    return (path, tip, a)
 }
 
 func icon(_ px: Int) -> Data {
@@ -23,55 +47,61 @@ func icon(_ px: Int) -> Data {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let ctx = NSGraphicsContext.current!.cgContext
-    let s = CGFloat(px) / 1024  // design in 1024 units
-    ctx.scaleBy(x: s, y: s)
+    ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)  // design in 1024 units
+    let small = px <= 64  // at Finder-list sizes: fewer turns, a thicker line, so it still reads
 
     let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
-    let tilePath = rounded(tile, 185)
+    let tilePath = CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil)
     ctx.saveGState()  // the drop shadow macOS icons sit on
-    ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: color(0x000000, 0.28))
+    ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: color(0x000000, 0.35))
     ctx.addPath(tilePath)
-    ctx.setFillColor(color(0x0a84ff))
+    ctx.setFillColor(color(0x1b1f1b))
     ctx.fillPath()
     ctx.restoreGState()
 
     ctx.saveGState()
     ctx.addPath(tilePath)
     ctx.clip()
-    let tileGradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                  colors: [color(0x5ac8fa), color(0x007aff), color(0x0a5ce0)] as CFArray,
-                                  locations: [0, 0.62, 1])!
-    ctx.drawLinearGradient(tileGradient, start: CGPoint(x: 0, y: tile.maxY), end: CGPoint(x: 0, y: tile.minY), options: [])
+    ctx.drawLinearGradient(gradient([color(0x333a32), color(0x1c201c), color(0x121512)], [0, 0.55, 1]),
+                           start: CGPoint(x: 0, y: tile.maxY), end: CGPoint(x: 0, y: tile.minY), options: [])
+    // a soft lime glow behind the spiral
+    ctx.drawRadialGradient(gradient([color(0xb7d84b, 0.20), color(0xb7d84b, 0)], [0, 1]),
+                           startCenter: CGPoint(x: 470, y: 530), startRadius: 0,
+                           endCenter: CGPoint(x: 470, y: 530), endRadius: 400, options: [])
 
-    let page = CGRect(x: 302, y: 232, width: 420, height: 540)
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -14), blur: 34, color: color(0x001a4d, 0.35))
-    ctx.addPath(rounded(page, 44))
-    ctx.setFillColor(color(0xffffff))
-    ctx.fillPath()
+    let width: CGFloat = small ? 78 : 58
+    // It unwinds at the lower right and heads off up and to the right: out of Granola, to the library.
+    let (path, tip, angle) = spiral(center: CGPoint(x: 432, y: 530), rounds: small ? 1 : 2, endAngle: -.pi * 0.12,
+                                    inner: small ? 42 : 30, outer: small ? 226 : 236, tail: small ? 110 : 150)
+    // the arrowhead where the spiral leaves: a chevron along the line's last direction
+    let arrow = CGMutablePath()
+    let len: CGFloat = small ? 118 : 104, spread: CGFloat = .pi * 0.26
+    let head = tip
+    arrow.move(to: CGPoint(x: head.x - len * cos(angle - spread), y: head.y - len * sin(angle - spread)))
+    arrow.addLine(to: head)
+    arrow.addLine(to: CGPoint(x: head.x - len * cos(angle + spread), y: head.y - len * sin(angle + spread)))
+
+    for p in [path, arrow as CGPath] {
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -6), blur: 16, color: color(0x000000, 0.45))
+        ctx.addPath(p)
+        ctx.setLineWidth(width)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        ctx.replacePathWithStrokedPath()
+        ctx.clip()
+        ctx.drawLinearGradient(gradient([color(0xe4f07a), color(0xc2de52), color(0x8fbf36)], [0, 0.5, 1]),
+                               start: CGPoint(x: 0, y: 800), end: CGPoint(x: 0, y: 200), options: [])
+        ctx.restoreGState()
+    }
     ctx.restoreGState()
 
-    // the lecture: a sound wave
-    let bars: [CGFloat] = [0.34, 0.62, 1.0, 0.74, 0.46, 0.82, 0.52, 0.3]
-    let barW: CGFloat = 24, gap: CGFloat = 17, maxH: CGFloat = 150
-    let waveW = CGFloat(bars.count) * barW + CGFloat(bars.count - 1) * gap
-    let midY = page.maxY - 150
-    for (i, h) in bars.enumerated() {
-        let x = page.midX - waveW / 2 + CGFloat(i) * (barW + gap)
-        let hh = maxH * h
-        ctx.addPath(rounded(CGRect(x: x, y: midY - hh / 2, width: barW, height: hh), barW / 2))
-    }
-    ctx.setFillColor(color(0x007aff))
-    ctx.fillPath()
-
-    // the notes: lines of text
-    let lines: [(CGFloat, UInt32)] = [(0.74, 0x1d1d1f), (0.64, 0xc7cbd6), (0.7, 0xc7cbd6), (0.46, 0xc7cbd6)]
-    for (i, (w, c)) in lines.enumerated() {
-        let y = page.minY + 222 - CGFloat(i) * 52
-        ctx.addPath(rounded(CGRect(x: page.minX + 62, y: y, width: (page.width - 124) * w, height: 26), 13))
-        ctx.setFillColor(color(c, i == 0 ? 0.85 : 1))
-        ctx.fillPath()
-    }
+    // the fine light edge along the top of the tile, as on Apple's icons
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: tile.insetBy(dx: 1.5, dy: 1.5), cornerWidth: 184, cornerHeight: 184, transform: nil))
+    ctx.setLineWidth(3)
+    ctx.setStrokeColor(color(0xffffff, 0.08))
+    ctx.strokePath()
     ctx.restoreGState()
 
     NSGraphicsContext.restoreGraphicsState()
