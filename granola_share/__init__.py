@@ -1,3 +1,3 @@
 """granola-share: pool Granola lecture notes on your own server, sorted by class."""
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"

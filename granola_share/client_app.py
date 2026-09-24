@@ -35,37 +35,31 @@ CSP = ("default-src 'self'; script-src 'nonce-{nonce}'; style-src 'self' 'unsafe
        "font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 
 APP_CSS = r"""
-.solo{max-width:46rem;margin:0 auto;padding:2.4rem 1.1rem 5rem}
-.solo>header{margin-bottom:1.4rem}
-.solo>header p{margin:.2rem 0 0}
-.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:.8rem;padding:.4rem clamp(1rem,4vw,2rem) 1.4rem}
-.step{display:grid;grid-template-columns:2.2rem minmax(0,1fr);gap:.1rem 1rem;padding:1.3rem 0;border-top:1px solid var(--grid)}
-.step:first-child{border-top:0}
-.step-n{font:700 1.1rem/1 var(--head);width:2.1rem;height:2.1rem;border-radius:50%;display:grid;place-items:center;
-  border:2px solid var(--rule);color:var(--ink-2);background:var(--sheet)}
-.step.done .step-n{background:var(--pen);border-color:var(--pen);color:var(--pen-ink)}
-.step.locked{opacity:.45;pointer-events:none}
-.step h2{margin:.15rem 0 .35rem}
-.step p{margin:.2rem 0 .7rem;max-width:60ch}
-.row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.5rem 0}
-.row input[type=text],.row input[type=password],.row input[type=url]{flex:1 1 14rem;min-width:0}
-.choice{display:flex;gap:.6rem;align-items:flex-start;margin:.35rem 0}
-.choice input{margin-top:.3rem}
-.say{font-size:.92rem;margin:.4rem 0 0}
-.say.good{color:var(--pen);font-weight:600}
-.say.bad{color:var(--bad);font-weight:600}
-.say.wait{color:var(--ink-2)}
-.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.8rem;margin:0 0 1.6rem}
-.status div{background:var(--sheet);border:1px solid var(--rule);border-radius:.6rem;padding:.8rem 1rem}
-.status dt{font-size:.8rem;color:var(--ink-2)}
-.status dd{margin:.15rem 0 0;font-weight:600}
-.status .bad{color:var(--bad)}
-.recent{list-style:none;margin:0;padding:0;border-top:1px solid var(--grid)}
-.recent li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.2rem 1rem;padding:.7rem .2rem;border-bottom:1px solid var(--grid)}
-.recent .t{font:600 1.05rem var(--head)}
-.recent .s{font-size:.88rem;color:var(--ink-2)}
-details.more{margin-top:1.8rem}
-details.more summary{cursor:pointer;font:600 1.1rem var(--head)}
+.solo{max-width:40rem;margin:0 auto;padding:2.6rem 1.1rem 5rem}
+.solo>header{margin-bottom:1.6rem}
+.stack{display:grid;gap:.55rem}
+.stack input{width:100%}
+.say{font-size:.8125rem;margin:.5rem 0 0;color:var(--label-2);min-height:1em}
+.say:empty{display:none}
+.say.good{color:var(--green)}
+.say.bad{color:var(--red)}
+.fields>p{margin:0 0 .6rem;max-width:60ch}
+.fields>p:last-child{margin-bottom:0}
+.step{margin:0 0 1.4rem}
+.step-head{display:flex;align-items:center;gap:.65rem;margin:0 0 .55rem .2rem}
+.step-head h2{margin:0;font-size:1.0625rem;font-weight:600;letter-spacing:-.01em}
+.step-n{width:1.5rem;height:1.5rem;flex:none;border-radius:50%;display:grid;place-items:center;font:600 .8125rem/1 var(--font);
+  color:var(--label-2);border:1.5px solid var(--label-3)}
+.step.done .step-n{background:var(--green);border-color:var(--green);color:#fff}
+.step.locked{opacity:.42;pointer-events:none}
+.group>button.row{width:100%;border-radius:0;background:none;justify-content:flex-start;font:400 .9375rem/1.3 var(--font);
+  color:var(--accent);text-align:left}
+.group>button.row:hover{background:var(--fill-2)}
+.group>button.row.danger{color:var(--red)}
+details.help{margin-top:.8rem;font-size:.8125rem}
+details.help summary{cursor:pointer;color:var(--accent)}
+details.help p{margin:.5rem 0}
+details.help .code{margin:.3rem 0 .5rem}
 """
 
 APP_JS = r"""
@@ -93,6 +87,8 @@ document.querySelectorAll('[data-copy]').forEach(function(b){b.addEventListener(
   navigator.clipboard.writeText(document.getElementById(b.dataset.copy).textContent.trim()).then(function(){
     var t=b.textContent;b.textContent='Copied';setTimeout(function(){b.textContent=t;},1500);});});});
 var watch=document.body.dataset.watch;
+document.querySelectorAll('form[data-autosave]').forEach(function(f){
+  f.addEventListener('change',function(){f.requestSubmit();});});
 if(watch){var seen=null;setInterval(function(){fetch('/api/state',{headers:{'X-Granola-Share':'1'}}).then(function(r){return r.json();})
   .then(function(s){var key=JSON.stringify([s.signed_in,s.login.running,s.login.error,s.copy.allowed,s.watching,s.recent_key,s.problem]);
     if(seen!==null&&key!==seen)location.reload();seen=key;});}, parseInt(watch,10)*1000);}
@@ -296,6 +292,13 @@ def _describe(e: dict) -> str:
     return {"skipped": "Skipped", "pending": "Waiting for your answer"}.get(d, d or "")
 
 
+def _state_color(e: dict) -> str:
+    d = e.get("decision")
+    if d == "shared":
+        return "var(--green)" if e.get("filed") is not False else "var(--accent)"
+    return "var(--orange)" if d == "pending" else "var(--gray)"
+
+
 def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check_server=None,
                       extra_hosts: tuple[str, ...] = ()) -> FastAPI:
     from .client import check_server as _check_server
@@ -335,7 +338,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             resp.set_cookie(COOKIE, token, httponly=True, samesite="strict", max_age=60 * 60 * 24 * 365)
             return resp
         if not authed(request):
-            return respond("Granola Share", "<header><h1>Granola Share</h1></header><p class=lede>Open "
+            return respond("Granola Share", "<header><h1>Granola Share</h1></header><p class=sub>Open "
                            "<strong>Granola Share</strong> from your Applications folder to see this page.</p>")
         return status_page() if runtime.configured() and runtime.watching else setup_page()
 
@@ -353,61 +356,68 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
         def step(n, title, done, locked, inner):
             cls = "step" + (" done" if done else "") + (" locked" if locked else "")
             mark = "✓" if done else str(n)
-            return f'<section class="{cls}"><div class="step-n">{mark}</div><div><h2>{esc(title)}</h2>{inner}</div></section>'
+            return (f'<section class="{cls}"><div class="step-head"><span class="step-n">{mark}</span>'
+                    f'<h2>{esc(title)}</h2></div><div class="group"><div class="fields">{inner}</div></div></section>')
 
         pool_inner = (
             f'<p>The address and password from your Mac mini\'s setup (also under Settings in its web page).</p>'
-            f'<form class="row" data-action="/api/pool" data-out="pool-say" data-busy="Connecting…">'
+            f'<form class="stack" data-action="/api/pool" data-out="pool-say" data-busy="Connecting…">'
             f'<input type="url" name="server" value="{esc(server)}" placeholder="http://mac-mini:8787" aria-label="Library address" required>'
             f'<input type="password" name="key" value="{esc(key)}" placeholder="Password" aria-label="Password">'
-            f'<button class="{"" if connected else "primary"}">{"Reconnect" if connected else "Connect"}</button></form>'
+            f'<div class="actions" style="margin:0"><button class="{"" if connected else "primary"}">'
+            f'{"Reconnect" if connected else "Connect"}</button></div></form>'
             + (f'<p class="say good" id="pool-say">Connected to {esc(cc.pool_name)}.</p>' if connected
                else '<p class="say" id="pool-say"></p>'))
         if signed:
-            granola_inner = '<p class="say good">Signed in to Granola.</p>'
+            granola_inner = '<p class="say good" style="margin:0">Signed in to Granola.</p>'
         elif login["running"]:
             granola_inner = ('<p>A browser tab opened for Granola. Sign in there, then come back to this tab.</p>'
-                             '<p class="say wait">Waiting for you to finish signing in…</p>')
+                             '<p class="say"><span class="spin" style="display:inline-block;vertical-align:-2px;'
+                             'margin-right:.4rem"></span>Waiting for you to finish signing in…</p>')
         else:
             err = f'<p class="say bad">{esc(login["error"])}. Try again.</p>' if login["error"] else ""
             granola_inner = ('<p>Sign in with your Granola account, the one you record lectures with.</p>'
-                             f'{err}<button class="primary" data-action="/api/login" data-out="login-say" '
-                             'data-busy="Opening Granola…">Sign in to Granola</button><p class="say" id="login-say"></p>')
+                             f'{err}<div class="actions" style="margin:0"><button class="primary" data-action="/api/login" '
+                             'data-out="login-say" data-busy="Opening Granola…">Sign in to Granola</button></div>'
+                             '<p class="say" id="login-say"></p>')
         ask = cc.mode == "ask"
         prefs_inner = (
-            '<p>You can change this later.</p><form data-action="/api/prefs" data-out="prefs-say">'
-            f'<label class="choice"><input type="radio" name="mode" value="auto"{"" if ask else " checked"}>'
-            '<span>Send every lecture automatically</span></label>'
-            f'<label class="choice"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}>'
-            '<span>Ask me before sending each one</span></label>'
-            + (f'<label class="choice"><input type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}>'
-               '<span>Copy each transcript from the Granola app (free Granola plans only share transcripts this way)</span></label>'
+            '<form data-action="/api/prefs" data-out="prefs-say" data-autosave><div class="group" style="margin:-.8rem -1rem">'
+            f'<label class="row pick"><input type="radio" name="mode" value="auto"{"" if ask else " checked"}>'
+            '<span class="grow">Send every lecture automatically</span><span class="tick"></span></label>'
+            f'<label class="row pick"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}>'
+            '<span class="grow">Ask me before sending each one</span><span class="tick"></span></label>'
+            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app<span class="subtitle">'
+               'Free Granola plans only share transcripts this way.</span></span>'
+               f'<input class="switch" type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}></label>'
                if mac() else "")
-            + '<div class="row"><button>Save</button><span class="say" id="prefs-say"></span></div></form>')
+            + '</div></form><p class="say" id="prefs-say" style="margin-top:1.3rem"></p>')
         steps = [step(1, "Connect to your library", connected, False, pool_inner),
                  step(2, "Sign in to Granola", signed, not connected, granola_inner),
                  step(3, "How to send", connected and signed, not signed, prefs_inner)]
         n = 4
         if mac() and cc.copy_transcripts and copy["available"]:
             if copy["allowed"]:
-                allow_inner = '<p class="say good">Allowed. Transcripts are copied while Granola is in front.</p>'
+                allow_inner = '<p class="say good" style="margin:0">Allowed. Transcripts are copied while Granola is in front.</p>'
             else:
                 allow_inner = (
-                    "<p>To copy transcripts, granola-share needs to read the Granola window. Click the button, "
+                    "<p>To copy transcripts, Granola Share needs to read the Granola window. Click the button, "
                     "then turn on <strong>python3.12</strong> in the list that opens.</p>"
-                    '<button class="primary" data-action="/api/allow" data-out="allow-say" data-busy="Opening System Settings…">'
-                    'Open Accessibility settings</button><p class="say" id="allow-say"></p>' + _python_fallback())
+                    '<div class="actions" style="margin:0"><button class="primary" data-action="/api/allow" data-out="allow-say" '
+                    'data-busy="Opening System Settings…">Open Accessibility settings</button></div>'
+                    '<p class="say" id="allow-say"></p>' + _python_fallback())
             steps.append(step(n, "Allow transcript copying", copy["allowed"], not signed, allow_inner))
             n += 1
         ready = connected and signed
-        finish_inner = ("<p>granola-share keeps running in the background and starts when you log in. "
+        finish_inner = ("<p>Granola Share keeps running in the background and starts when you log in. "
                         "When a lecture finishes in Granola, it's sent to your library.</p>"
-                        f'<button class="primary" data-action="/api/finish" data-out="finish-say"{"" if ready else " disabled"}>'
-                        'Finish setup</button><p class="say" id="finish-say"></p>')
+                        f'<div class="actions" style="margin:0"><button class="primary" data-action="/api/finish" '
+                        f'data-out="finish-say"{"" if ready else " disabled"}>Finish setup</button></div>'
+                        '<p class="say" id="finish-say"></p>')
         steps.append(step(n, "Start sending", False, not ready, finish_inner))
-        body = (f'<header><h1>Granola Share</h1><p class="lede">Send your Granola lectures to your library on your '
+        body = (f'<header><h1>Set up Granola Share</h1><p class="sub">Send your Granola lectures to your library on your '
                 f'Mac mini, where your own model writes their notes. {n} short steps.</p></header>'
-                f'<div class="sheet">{"".join(steps)}</div>')
+                f'{"".join(steps)}')
         return respond("Set up Granola Share", body, watch=2)
 
     # -- status
@@ -427,53 +437,67 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             facts[0] = ("Library", "needs its new password", True)
         elif send_kind == "unreachable":
             facts[0] = ("Library", "can't be reached", True)
-        facts_html = "".join(f'<div><dt>{esc(k)}</dt><dd class="{"bad" if bad else ""}">{esc(v)}</dd></div>' for k, v, bad in facts)
+        facts_html = "".join(
+            f'<div class="row"><span class="grow">{esc(k)}</span><span class="value{" bad" if bad else ""}">{esc(v)}</span>'
+            f'<span class="dot" style="--tag:{"var(--red)" if bad else "var(--green)"}"></span></div>'
+            for k, v, bad in facts)
         if problem and send_kind == "password":
             problem_html = (
-                f'<div class="callout">{esc(problem)}'
-                '<form class="row" data-action="/api/pool" data-out="problem-say" data-busy="Connecting…">'
+                f'<div class="notice bad"><div>{esc(problem)}'
+                '<form class="stack" data-action="/api/pool" data-out="problem-say" data-busy="Connecting…">'
                 f'<input type="hidden" name="server" value="{esc(cc.server_url)}">'
                 '<input type="password" name="key" placeholder="The new password" aria-label="Library password" required>'
-                '<button class="primary">Reconnect</button></form>'
-                '<p class="small muted">It\'s shown on the Mac mini, in your library\'s Settings under Connect your laptop.</p>'
-                '<p class="say" id="problem-say"></p></div>')
+                '<div class="actions" style="margin:0"><button class="primary">Reconnect</button></div></form>'
+                '<p class="say" id="problem-say"></p>'
+                '<p class="small muted" style="margin:.5rem 0 0">It\'s shown on the Mac mini, in your library\'s '
+                'Settings under Connect your laptop.</p></div></div>')
         elif problem:
-            fix = ('<button class="primary" data-action="/api/login" data-out="problem-say">Sign in to Granola again</button>'
-                   if signin_problem else "")
+            fix = ('<div class="toolbar"><button class="primary" data-action="/api/login" data-out="problem-say">'
+                   'Sign in to Granola again</button></div>' if signin_problem else "")
             said = ("Granola signed you out, so new lectures can't be checked." if signin_problem else
                     problem if send_kind else f"The last check didn't work: {problem[:240]}")
-            problem_html = (f'<div class="callout">{esc(said)}'
-                            f'<div class="row">{fix}<span class="say" id="problem-say"></span></div></div>')
+            problem_html = (f'<div class="notice bad"><div>{esc(said)}{fix}<p class="say" id="problem-say"></p></div></div>')
         else:
             problem_html = ""
-        allow = ('<p><button class="primary" data-action="/api/allow" data-out="allow-say">Allow transcript copying</button> '
-                 '<span class="say" id="allow-say">Turn on python3.12 in the list that opens.</span></p>' + _python_fallback()
+        allow = ('<div class="notice"><div>Transcripts can\'t be copied until you allow it. Click the button, then turn on '
+                 '<strong>python3.12</strong> in the list that opens.<div class="toolbar"><button class="primary" '
+                 'data-action="/api/allow" data-out="allow-say">Allow transcript copying</button></div>'
+                 '<p class="say" id="allow-say"></p>' + _python_fallback() + '</div></div>'
                  if mac() and cc.copy_transcripts and not copy["allowed"] else "")
         rows = _recent(cc)
-        items = "".join(f'<li><span><span class="t">{esc(e.get("title", ""))}</span> <span class="s">{esc(e.get("date", ""))}</span></span>'
-                        f'<span class="s">{esc(_describe(e))}</span></li>' for e in rows)
-        recent = (f'<ul class="recent">{items}</ul>' if rows else
+        items = "".join(
+            f'<div class="row"><div class="grow"><div class="title">{esc(e.get("title", ""))}</div>'
+            f'<div class="subtitle"><span>{esc(ui.short_date(e.get("date")))}</span><span>{esc(_describe(e))}</span></div></div>'
+            f'<span class="dot" style="--tag:{_state_color(e)}"></span></div>' for e in rows)
+        recent = (f'<div class="group">{items}</div>' if rows else
                   '<div class="empty"><strong>Nothing sent yet</strong>When a lecture finishes in Granola, '
                   "it's sent to your library and shows up here.</div>")
         ask = cc.mode == "ask"
         settings = (
-            '<details class="more"><summary>Settings</summary><form data-action="/api/prefs" data-out="prefs-say">'
-            f'<label class="choice"><input type="radio" name="mode" value="auto"{"" if ask else " checked"}><span>Send every lecture automatically</span></label>'
-            f'<label class="choice"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}><span>Ask me before sending each one</span></label>'
-            + (f'<label class="choice"><input type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}>'
-               '<span>Copy each transcript from the Granola app</span></label>' if mac() else "")
-            + '<div class="row"><button>Save</button><span class="say" id="prefs-say"></span></div></form>'
-            '<div class="row"><button data-action="/api/login" data-out="more-say">Sign in to Granola again</button>'
-            '<button data-action="/api/reset-pool" data-out="more-say" data-confirm="Connect to a different library? Your lectures stay where they are.">'
-            'Connect to a different library</button></div><p class="say" id="more-say"></p>'
-            '<div class="row"><button class="danger" data-action="/api/remove" data-out="more-say" '
-            'data-confirm="Stop granola-share and remove it from this computer? Nothing more is sent.">Stop and remove granola-share</button></div>'
-            f'<p class="small muted">Version {__version__}. Your settings and copied transcripts are in {esc(str(home))}.</p></details>')
-        body = (f'<header><h1>Granola Share</h1><p class="lede">Sending your lectures to {esc(cc.pool_name)}.</p></header>'
-                f'<dl class="status">{facts_html}</dl>{problem_html}{allow}'
-                '<div class="row"><button class="primary" data-action="/api/check" data-out="check-say">Check for new lectures now</button>'
-                f'<a class="btn" href="{esc(cc.server_url)}" target="_blank" rel="noopener">Open your library</a>'
-                '<span class="say" id="check-say"></span></div>'
+            '<div class="group-head">Sending</div>'
+            '<form data-action="/api/prefs" data-out="prefs-say" data-autosave><div class="group">'
+            f'<label class="row pick"><input type="radio" name="mode" value="auto"{"" if ask else " checked"}>'
+            '<span class="grow">Send every lecture automatically</span><span class="tick"></span></label>'
+            f'<label class="row pick"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}>'
+            '<span class="grow">Ask me before sending each one</span><span class="tick"></span></label>'
+            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app</span>'
+               f'<input class="switch" type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}></label>'
+               if mac() else "")
+            + '</div></form><p class="say" id="prefs-say"></p>'
+            '<div class="group-head">Account</div><div class="group">'
+            '<button class="row" data-action="/api/login" data-out="more-say">Sign in to Granola again</button>'
+            '<button class="row" data-action="/api/reset-pool" data-out="more-say" '
+            'data-confirm="Connect to a different library? Your lectures stay where they are.">Connect to a different library</button>'
+            '<button class="row danger" data-action="/api/remove" data-out="more-say" '
+            'data-confirm="Stop Granola Share and remove it from this computer? Nothing more is sent.">'
+            'Stop and remove Granola Share</button></div><p class="say" id="more-say"></p>'
+            f'<p class="group-foot">Version {__version__}. Your settings and copied transcripts are in {esc(str(home))}.</p>')
+        body = (f'<header><h1>Granola Share</h1><p class="sub">Sending your lectures to {esc(cc.pool_name)}.</p></header>'
+                f'{problem_html}{allow}<div class="group">{facts_html}</div>'
+                '<div class="toolbar" style="margin-top:1rem"><button class="primary" data-action="/api/check" '
+                'data-out="check-say">Check for new lectures now</button>'
+                f'<a class="btn" href="{esc(cc.server_url)}" target="_blank" rel="noopener">Open your library</a></div>'
+                '<p class="say" id="check-say"></p>'
                 f'<h2>Recent lectures</h2>{recent}{settings}')
         return respond("Granola Share", body, watch=15)
 
@@ -597,7 +621,7 @@ def python_path() -> str:
 
 def _python_fallback() -> str:
     path = python_path()
-    return ('<details class="small"><summary>Don\'t see python3.12 in the list?</summary>'
+    return ('<details class="help"><summary>Don\'t see python3.12 in the list?</summary>'
             '<p>Click <strong>+</strong> under the list, press <strong>⌘⇧G</strong>, paste this path, then click '
             f'<strong>Open</strong>:</p><pre class="code" id="py-path">{esc(path)}</pre>'
             '<button type="button" data-copy="py-path">Copy the path</button></details>')

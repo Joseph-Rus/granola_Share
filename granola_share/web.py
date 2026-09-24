@@ -107,7 +107,7 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
             raise HTTPException(401, "wrong password")
 
     # -- rendering ----------------------------------------------------------------------
-    def context(role: str | None, current: str | None = None) -> dict:
+    def context(role: str | None, current: str | None = None, back: tuple[str, str] | None = None) -> dict:
         counts = dict(store.classes_summary())
         names = cfg.class_names()
         classes = [(n, counts.get(n, 0)) for n in names]
@@ -115,7 +115,7 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
         classes.append((UNSORTED, counts.get(UNSORTED, 0)))
         return {"pool_name": cfg.pool_name, "classes": classes, "total": sum(counts.values()),
                 "processing": len(store.processing()), "admin": role == "admin", "current": current,
-                "password": bool(cfg.pool_password), "version": __version__,
+                "password": bool(cfg.pool_password), "version": __version__, "back": back,
                 "nonce": secrets.token_urlsafe(16)}
 
     def respond(body: str, ctx: dict | None = None, nonce: str | None = None, status: int = 200) -> HTMLResponse:
@@ -132,28 +132,30 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
         model = cfg.effective_summary_model
         items = []
         for r in rows:
+            retry = ""
             if r["status"] == WORKING:
-                state = f'<span class="state now">Writing the summary now with {esc(model)}</span>'
+                lead, state = '<span class="spin" aria-hidden="true"></span>', f"Writing the summary now with {esc(model)}"
             elif r["status"] == FAILED:
-                retry = (f'<form class="inline" method="post" action="/note/{quote(r["id"], safe="")}/resummarize">'
-                         f'<button>Try again</button></form>') if admin_view else ""
-                state = f'<span class="state failed">Failed: {esc((r["error"] or "")[:160])}</span>{retry}'
+                lead, state = '<span class="dot" style="--tag:var(--red)"></span>', f'Failed: {esc((r["error"] or "")[:160])}'
+                if admin_view:
+                    retry = (f'<form method="post" action="/note/{quote(r["id"], safe="")}/resummarize">'
+                             f'<button>Try again</button></form>')
             else:
-                state = '<span class="state">Waiting its turn</span>'
+                lead, state = '<span class="dot" style="--tag:var(--label-3)"></span>', "Waiting its turn"
             title = esc(r["lecture_title"] or r["title"] or "Untitled")
             if r["md_path"]:
                 title = f'<a href="/note/{quote(r["id"], safe="")}">{title}</a>'
-            items.append(f"<li><span>{title}</span>{state}</li>")
+            items.append(f'<div class="row">{lead}<div class="grow"><div class="title">{title}</div>'
+                         f'<div class="subtitle">{state}</div></div>{retry}</div>')
         waiting = any(r["status"] != FAILED for r in rows)
         refresh = ' data-refresh="20"' if waiting else ""
-        return (f'<section id="queue"{refresh}><h2>Being written</h2>'
-                f'<p class="lede small">Summaries are written on this computer with {esc(model)}. '
-                f'A lecture takes a minute or two. This page refreshes on its own.</p>'
-                f'<div class="queue"><ul>{"".join(items)}</ul></div></section>')
+        return (f'<section id="queue"{refresh}><h2>Being written</h2><div class="group">{"".join(items)}</div>'
+                f'<p class="group-foot">Summaries are written on this computer with {esc(model)}. A lecture takes a '
+                f'minute or two. This page refreshes on its own.</p></section>')
 
     def not_found(role: str, what: str = "note") -> HTMLResponse:
         ctx = context(role)
-        body = (f'<h1>No such {what}</h1><p class="lede">It may have been deleted or moved. '
+        body = (f'<h1>No such {what}</h1><p class="sub">It may have been deleted or moved. '
                 f'<a href="/">Back to recent lectures</a></p>')
         return respond(ui.page("Not found", body, ctx), ctx, status=404)
 
@@ -162,9 +164,11 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
     def login_form(next: str = "/", bad: int = 0):
         nonce = secrets.token_urlsafe(16)
         err = '<p class="bad">That password is not right.</p>' if bad else ""
-        body = (f'<div class="login"><form method="post" action="/login"><h1>{esc(cfg.pool_name)}</h1>'
-                f'<p class="muted">Enter your password to continue.</p>{err}'
-                f'<input type="password" name="password" autocomplete="current-password" aria-label="Password" autofocus required>'
+        letter = esc((cfg.pool_name or "L")[:1].upper())
+        body = (f'<div class="login"><form method="post" action="/login"><div class="appicon" aria-hidden="true">{letter}</div>'
+                f'<h1>{esc(cfg.pool_name)}</h1><p class="muted">Enter your password to continue.</p>{err}'
+                f'<input type="password" name="password" autocomplete="current-password" placeholder="Password" '
+                f'aria-label="Password" autofocus required>'
                 f'<input type="hidden" name="next" value="{esc(next)}">'
                 f'<button class="primary">Open</button></form></div>')
         return respond(ui.bare_page(f"Log in · {cfg.pool_name}", body, nonce), nonce=nonce)
@@ -199,17 +203,24 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
         empty = ("" if ctx["processing"] else
                  '<div class="empty"><strong>No lectures yet</strong>Lectures you record in Granola show up here '
                  'once your laptop sends them. To connect it, see <a href="/settings">Settings</a>.</div>')
-        body = (ui.search_box() + f"<h1>{esc(cfg.pool_name)}</h1>" + (f'<p class="lede">{lede}</p>' if lede else "")
+        # Phones have no sidebar: the classes are a list here instead, like folders in Notes.
+        folders = "".join(
+            f'<a class="row chev" href="{ui.class_url(n) if n != UNSORTED else "/unsorted"}">'
+            f'<span class="dot" style="{ui.hue_style(n)}"></span><span class="grow">{esc(n)}</span>'
+            f'<span class="value">{c}</span></a>' for n, c in ctx["classes"])
+        body = (f"<h1>{esc(cfg.pool_name)}</h1>" + (f'<p class="sub">{lede}</p>' if lede else "")
+                + f'<div class="only-narrow">{ui.search_box()}<h2>Classes</h2><div class="group">{folders}</div></div>'
                 + queue_panel(role == "admin")
                 + (f"<h2>Recent lectures</h2>{ui.note_list(rows, '', '')}" if rows else empty))
         return show(cfg.pool_name, body, ctx)
 
     def class_page(name: str, role: str, current: str, lede: str) -> HTMLResponse:
-        ctx = context(role, current)
+        ctx = context(role, current, back=("/", cfg.pool_name))
         rows = store.list_notes(name)
-        zip_btn = (f'<a class="btn" href="{ui.class_url(name)}/zip">Download all as .zip</a>' if rows else "")
-        body = (f'<header class="class-head" style="{ui.hue_style(name)}"><h1>{esc(name)}</h1></header>'
-                f'<p class="lede">{lede}</p><div class="row-actions" style="margin-bottom:1.4rem">{zip_btn}</div>'
+        zip_btn = (f'<div class="toolbar" style="margin:0 0 1.4rem"><a class="btn" href="{ui.class_url(name)}/zip">'
+                   f'Download all as .zip</a></div>' if rows else "")
+        body = (f'<h1>{esc(name)}</h1><p class="sub"><span class="tag" style="{ui.hue_style(name)}">{lede}</span></p>'
+                + zip_btn
                 + ui.note_list(rows, "Nothing here yet",
                                "Lectures sorted into this class show up here." if name != UNSORTED else
                                "Every lecture found its class."))
@@ -232,8 +243,9 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
 
     @app.get("/search", response_class=HTMLResponse)
     def search(q: str = "", role: str = Depends(member)):
-        ctx = context(role)
+        ctx = context(role, back=("/", cfg.pool_name))
         q = q.strip()
+        ctx["q"] = q
         rows = store.search(q) if q else []
         snippets = {}
         for r in rows:
@@ -241,7 +253,8 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
             text = " ".join(filter(None, [r["summary_md"], m.notes_markdown, m.transcript]))
             snippets[r["id"]] = ui.snippet(text, q)
         found = f"{len(rows)} lecture{'s' if len(rows) != 1 else ''} mention “{esc(q)}”." if q else ""
-        body = (ui.search_box(q) + "<h1>Search</h1>" + (f'<p class="lede">{found}</p>' if q else "")
+        body = ("<h1>Search</h1>" + f'<div class="only-narrow">{ui.search_box(q)}</div>'
+                + (f'<p class="sub">{found}</p>' if q else "")
                 + (ui.note_list(rows, "No matches", "Try a shorter word, a topic, or a name.", snippets) if q else ""))
         return show(f"Search: {q}" if q else "Search", body, ctx)
 
@@ -254,37 +267,41 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
         m = store.meeting(r)
         nid = quote(note_id, safe="")
         cls = r["class_name"] or ""
-        facts = [("Date", ui.long_date(r["date"]))]
-        if r["summary_md"]:
-            facts.append(("Summary", f"{r['summary_model']}, from the transcript"))
-        else:
-            facts.append(("Summary", "Granola's" + ("" if r["has_transcript"] else " (no transcript shared)")))
-        if r["classified_by"]:
-            sure = f", {round((r['confidence'] or 0) * 100)}% sure" if r["classified_by"] == "ollama" else ""
-            facts.append(("Sorted by", SORTED_BY.get(r["classified_by"], r["classified_by"]) + sure))
-        facts_html = "".join(f"<div><dt>{esc(k)}</dt><dd>{esc(v)}</dd></div>" for k, v in facts)
-
         options = "".join(f'<option value="{esc(c)}"{" selected" if c == cls else ""}>{esc(c)}</option>'
                           for c in cfg.class_names() + [UNSORTED])
-        actions = [f'<form class="inline row-actions" method="post" action="/note/{nid}/class">'
-                   f'<select name="class_name" aria-label="Class">{options}</select><button>Move</button></form>',
-                   f'<a class="btn" href="/note/{nid}/download">Download .md</a>']
+        # The class is a popup menu right where it's shown: picking another moves the lecture.
+        picker = (f'<form class="classpick" method="post" action="/note/{nid}/class" data-autosubmit>'
+                  f'<span class="dot" style="{ui.hue_style(cls)}"></span>'
+                  f'<select name="class_name" aria-label="Class (pick another to move this lecture)">{options}</select>'
+                  f'<button class="js-hide">Move</button></form>')
+        about = [("Class", picker), ("Date", esc(ui.long_date(r["date"])))]
+        if r["summary_md"]:
+            about.append(("Summary", f"Notes by {esc(r['summary_model'])}, from the transcript"))
+        else:
+            about.append(("Summary", "Granola's summary" + ("" if r["has_transcript"] else " (no transcript shared)")))
+        if r["classified_by"]:
+            sure = f", {round((r['confidence'] or 0) * 100)}% sure" if r["classified_by"] == "ollama" else ""
+            about.append(("Sorted by", "Sorted by " + esc(SORTED_BY.get(r["classified_by"], r["classified_by"]) + sure)))
+        about_html = "".join(f"<div><dt>{esc(k)}</dt><dd>{v}</dd></div>" for k, v in about)
+
+        actions = [f'<a class="btn" href="/note/{nid}/download">Download .md</a>']
         if role == "admin":
             if m.transcript.strip():
-                actions.append(f'<form class="inline" method="post" action="/note/{nid}/resummarize">'
+                actions.append(f'<form method="post" action="/note/{nid}/resummarize">'
                                f'<button>Rewrite summary</button></form>')
-            actions.append(f'<form class="inline" method="post" action="/note/{nid}/delete" '
+            actions.append(f'<form method="post" action="/note/{nid}/delete" '
                            f'data-confirm="Delete this lecture? Its file is removed too.">'
                            f'<button class="danger">Delete</button></form>')
 
         notice = ""
         if r["status"] in ("queued", WORKING):
-            notice = (f'<div class="callout" data-refresh="15">A new summary is being written with '
-                      f'{esc(cfg.effective_summary_model)}. This page refreshes on its own.</div>')
+            notice = (f'<div class="notice" data-refresh="15"><div>A new summary is being written with '
+                      f'{esc(cfg.effective_summary_model)}. This page refreshes on its own.</div></div>')
         elif r["error"]:
             retry = (f'<form method="post" action="/note/{nid}/resummarize"><button>Try again</button></form>'
                      if role == "admin" else "")
-            notice = (f'<div class="callout">{esc(r["error"][:300])}. Showing Granola\'s summary instead.{retry}</div>')
+            notice = (f'<div class="notice bad"><div>{esc(r["error"][:300])}. Showing Granola\'s summary instead.'
+                      f'{retry}</div></div>')
 
         docs = []  # (id, label, html)
         if r["summary_md"]:
@@ -301,15 +318,17 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
             docs.append(("summary", "Summary", '<p class="muted">Granola returned no notes for this lecture.</p>'))
         tabs = "".join(f'<button type="button" role="tab" data-for="{d}" aria-controls="{d}">{esc(label)}</button>'
                        for d, label, _ in docs)
-        panes = "".join(f'<section class="doc" id="{d}" role="tabpanel">{content}</section>' for d, _, content in docs)
-        tabbar = f'<div class="doc-tabs" role="tablist" data-tabs>{tabs}</div>' if len(docs) > 1 else ""
+        panes = "".join(f'<section id="{d}" role="tabpanel">{content}</section>' for d, _, content in docs)
+        tabbar = (f'<div class="seg" role="tablist" data-tabs>{tabs}</div>' if len(docs) > 1
+                  else '<div style="height:1.6rem"></div>')
 
         title = r["lecture_title"] or r["title"] or "Untitled"
-        crumb_href = ui.class_url(cls) if cls != UNSORTED else "/unsorted"
-        body = (f'<div style="{ui.hue_style(cls)}"><a class="crumb" href="{crumb_href}">{esc(cls)}</a>'
-                f"<h1>{esc(title)}</h1><dl class=facts>{facts_html}</dl>"
-                f'<div class="row-actions">{"".join(actions)}</div>'
-                f'<div style="height:1.2rem"></div>{notice}{tabbar}{panes}</div>')
+        back = (ui.class_url(cls) if cls != UNSORTED else "/unsorted", cls)
+        ctx["back"] = back
+        body = (f'<a class="back only-wide" href="{back[0]}">{esc(back[1])}</a>'
+                f'<h1>{esc(title)}</h1><dl class="about">{about_html}</dl>'
+                f'<div class="toolbar">{"".join(actions)}</div>'
+                f'<div style="height:1.4rem"></div>{notice}{tabbar}<div class="sheet">{panes}</div>')
         return show(title, body, ctx, math=True)
 
     @app.post("/note/{note_id}/class")
@@ -364,89 +383,107 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings(request: Request, saved: int = 0, queued: int = -1, role: str = Depends(admin)):
-        ctx = context(role, "settings")
+        ctx = context(role, "settings", back=("/", cfg.pool_name))
         models = list_models(cfg.ollama_host)
         flash = ""
         if saved:
-            flash = '<div class="flash">Settings saved. New lectures use them right away.</div>'
+            flash = '<div class="notice good"><div>Settings saved. New lectures use them right away.</div></div>'
         if queued >= 0:
-            flash = f'<div class="flash">{queued} lecture{"s" if queued != 1 else ""} queued for a new summary.</div>'
+            flash = (f'<div class="notice good"><div>{queued} lecture{"s" if queued != 1 else ""} queued for a new '
+                     f'summary.</div></div>')
 
         if models is None:
-            ai_state = (f'<div class="callout">Ollama isn\'t answering at {esc(cfg.ollama_host)}, so summaries and AI '
-                        f'sorting are paused. Open the Ollama app on this computer, then reload.</div>')
+            ai_state = (f'<div class="notice"><div>Ollama isn\'t answering at {esc(cfg.ollama_host)}, so summaries and AI '
+                        f'sorting are paused. Open the Ollama app on this computer, then reload.</div></div>')
         elif not models:
-            ai_state = ('<div class="callout">Ollama has no models yet. On this computer run '
-                        f'<code>ollama pull {esc(ollama.recommended_model(ollama.total_ram_gb()))}</code>, then reload.</div>')
+            ai_state = ('<div class="notice"><div>Ollama has no models yet. On this computer run '
+                        f'<code>ollama pull {esc(ollama.recommended_model(ollama.total_ram_gb()))}</code>, then reload.</div></div>')
         else:
             ai_state = ""
         checked = lambda b: " checked" if b else ""  # noqa: E731
-        ai = (f'<section class="panel"><h2>AI models</h2>{ai_state}'
-              f'<div class="field"><label for="summary_model">Writes summaries</label>'
-              f'{model_select("summary_model", cfg.summary_model, models, blank="Same as the sorting model")}'
-              f'<span class="hint">Reads each transcript and writes the lecture notes. Bigger models write better notes '
-              f'but take longer. Granola only shares transcripts from paid plans; other lectures keep Granola\'s summary.</span></div>'
-              f'<div class="field"><label for="ollama_model">Sorts lectures into classes</label>'
-              f'{model_select("ollama_model", cfg.ollama_model, models)}'
-              f'<span class="hint">Using the same model for both avoids reloading it between the two steps.</span></div>'
-              f'<label class="check"><input type="checkbox" name="summary_enabled" value="1"{checked(cfg.summary_enabled)}>'
-              f'<span>Write our own summary when a transcript is shared</span></label>'
-              f'<label class="check"><input type="checkbox" name="keep_granola_notes" value="1"{checked(cfg.keep_granola_notes)}>'
-              f'<span>Also keep Granola\'s summary next to ours</span></label>'
-              f'<label class="check"><input type="checkbox" name="ollama_enabled" value="1"{checked(cfg.ollama_enabled)}>'
-              f'<span>Use AI at all (off: only folder and title rules sort lectures)</span></label>'
-              f'<div class="field"><label for="min_confidence">Minimum confidence to file a lecture</label>'
-              f'<input id="min_confidence" name="min_confidence" type="number" min="0" max="1" step="0.05" value="{cfg.min_confidence}">'
-              f'<span class="hint">Below this, the lecture goes to Unsorted for a person to file.</span></div></section>')
+
+        def switch(name: str, on: bool, text: str) -> str:
+            return (f'<label class="row"><span class="grow">{text}</span>'
+                    f'<input class="switch" type="checkbox" name="{name}" value="1"{checked(on)}></label>')
+
+        ai = (f'<div class="group-head">AI models</div>{ai_state}<div class="group">'
+              f'<div class="row"><label class="grow" for="summary_model">Writes summaries</label>'
+              f'{model_select("summary_model", cfg.summary_model, models, blank="Same as the sorting model")}</div>'
+              f'<div class="row"><label class="grow" for="ollama_model">Sorts lectures into classes</label>'
+              f'{model_select("ollama_model", cfg.ollama_model, models)}</div></div>'
+              f'<p class="group-foot">The summary model reads each transcript and writes the lecture notes. Bigger '
+              f'models write better notes but take longer. Using the same model for both avoids reloading it between '
+              f'the two steps.</p>'
+              f'<div class="group-head">Notes and sorting</div><div class="group">'
+              + switch("summary_enabled", cfg.summary_enabled, "Write our own summary when a transcript is shared")
+              + switch("keep_granola_notes", cfg.keep_granola_notes, "Also keep Granola\'s summary next to ours")
+              + switch("ollama_enabled", cfg.ollama_enabled, "Use AI to sort lectures into classes")
+              + f'<div class="row"><label class="grow" for="min_confidence">Minimum confidence to file a lecture</label>'
+              f'<input id="min_confidence" name="min_confidence" type="number" min="0" max="1" step="0.05" '
+              f'value="{cfg.min_confidence}" style="width:5.5rem"></div></div>'
+              f'<p class="group-foot">Below the minimum confidence, a lecture goes to Unsorted for you to file. With AI '
+              f'off, only Granola folder and title rules sort lectures.</p>')
 
         rows = []
-        for i, c in enumerate(cfg.classes + [ClassDef("")] * 2):
+        for i, c in enumerate(cfg.classes + [ClassDef("")]):
+            remove = (f'<label class="remove">Remove<input class="switch" type="checkbox" '
+                      f'name="class_remove_{i}" value="1"></label>' if c.name else "<span></span>")
             rows.append(
-                f'<div class="c"><input name="class_name_{i}" value="{esc(c.name)}" placeholder="Class name, e.g. CS 101" aria-label="Class name">'
-                f'<input name="class_aliases_{i}" value="{esc(", ".join(c.aliases))}" placeholder="Other names, comma separated" aria-label="Other names">'
-                f'<input name="class_desc_{i}" value="{esc(c.description)}" placeholder="What it covers (helps the AI)" aria-label="Description">'
-                + (f'<label class="check" style="margin:0"><input type="checkbox" name="class_remove_{i}" value="1"><span>Remove</span></label>'
-                   if c.name else "<span></span>") + "</div>")
-        classes = (f'<section class="panel"><h2>Classes</h2><p class="lede small">Lectures are sorted into these. A Granola '
-                   f'folder or a title that matches a name here files the lecture without asking the AI. Removing a '
-                   f'class keeps its lectures; move them from their pages.</p>'
-                   f'<div class="classes-edit">{"".join(rows)}</div></section>')
+                f'<div class="fields class-edit">'
+                f'<input type="text" name="class_name_{i}" value="{esc(c.name)}" placeholder="New class, e.g. CS 101" aria-label="Class name">'
+                f'<input type="text" name="class_aliases_{i}" value="{esc(", ".join(c.aliases))}" placeholder="Other names" aria-label="Other names, comma separated">'
+                f'{remove}'
+                f'<input class="wide" type="text" name="class_desc_{i}" value="{esc(c.description)}" placeholder="What it covers (helps the AI)" aria-label="Description">'
+                f'</div>')
+        classes = (f'<div class="group-head">Classes</div><div class="group">{"".join(rows)}</div>'
+                   f'<p class="group-foot">Lectures are sorted into these. A Granola folder or a title that matches a '
+                   f'name here files the lecture without asking the AI. Removing a class keeps its lectures; move them '
+                   f'from their pages. Fill in the last row to add a class.</p>')
 
         form = (f'<form method="post" action="/settings">{ai}{classes}'
-                f'<button class="primary">Save settings</button></form>')
+                f'<div class="actions"><button class="primary">Save settings</button></div></form>')
 
         ts = tailscale()
         urls = hostinfo.server_urls(cfg.web_port, ts)
         url = urls[0]
         cmds = hostinfo.invite_commands(url, cfg.pool_password)
         ts_note = ("" if ts.get("running") else
-                   '<p class="callout">Tailscale isn\'t running on this computer, so your laptop can only reach it on '
-                   'the same Wi-Fi. Install Tailscale on both and sign in to the same account.</p>')
-        invite = (f'<section class="panel"><h2>Connect your laptop</h2>{ts_note}'
-                  f'<p class="lede small">On the computer you record lectures on, paste this one line into Terminal '
-                  f'(Mac) or PowerShell (Windows). It installs everything with this address and password filled in, '
-                  f'then finishes setup in the browser.</p>'
-                  f'<div class="field"><label>Mac or Linux</label><pre class="code" id="inv-mac">{esc(cmds["mac"])}</pre>'
-                  f'<div><button type="button" data-copy="inv-mac">Copy</button></div></div>'
-                  f'<div class="field"><label>Windows</label><pre class="code" id="inv-win">{esc(cmds["windows"])}</pre>'
-                  f'<div><button type="button" data-copy="inv-win">Copy</button></div></div>'
-                  f'<p class="small muted">Address: {esc(url)}. Password: {esc(cfg.pool_password or "none")}.</p></section>')
+                   '<div class="notice"><div>Tailscale isn\'t running on this computer, so your laptop can only reach '
+                   'it on the same Wi-Fi. Install Tailscale on both and sign in to the same account.</div></div>')
+
+        def command(label: str, cid: str, text: str) -> str:
+            return (f'<div class="fields"><div class="toolbar" style="justify-content:space-between">'
+                    f'<strong>{label}</strong><button type="button" class="link" data-copy="{cid}">Copy</button></div>'
+                    f'<pre class="code" id="{cid}">{esc(text)}</pre></div>')
+
+        invite = (f'<div class="group-head">Connect your laptop</div>{ts_note}<div class="group">'
+                  + command("Mac or Linux", "inv-mac", cmds["mac"]) + command("Windows", "inv-win", cmds["windows"])
+                  + f'<div class="row"><span class="grow">Address</span><span class="value">{esc(url)}</span></div>'
+                  f'<div class="row"><span class="grow">Password</span><span class="value">{esc(cfg.pool_password or "none")}</span></div>'
+                  f'</div><p class="group-foot">On the computer you record lectures on, paste one line into Terminal (Mac) '
+                  f'or PowerShell (Windows). It installs everything with this address and password filled in, then '
+                  f'finishes setup in the browser.</p>')
 
         rel = latest()
         if update.is_newer(rel):
-            upd = (f'<p>Version {esc(rel.tag)} is out (<a href="{esc(rel.page)}">what changed</a>). You have {__version__}.</p>'
-                   f'<form method="post" action="/settings/update"><button class="primary">Update now</button></form>')
+            upd = (f'<div class="row"><span class="grow">Version {esc(rel.tag)} is out '
+                   f'(<a href="{esc(rel.page)}">what changed</a>). You have {__version__}.</span>'
+                   f'<form method="post" action="/settings/update"><button class="primary">Update now</button></form></div>')
         else:
-            upd = f'<p class="muted">You have version {__version__}, the newest.</p>'
-        auto = "on" if cfg.auto_update else "off"
+            upd = (f'<div class="row"><span class="grow">Version {__version__}</span>'
+                   f'<span class="value">The newest</span></div>')
+        auto = "On" if cfg.auto_update else "Off"
         n_done = ctx["total"]
-        maintenance = (f'<section class="panel"><h2>Updates</h2>{upd}'
-                       f'<p class="small muted">Automatic updates are {auto} (auto_update in config.toml).</p></section>'
-                       f'<section class="panel"><h2>Rewrite every summary</h2><p class="lede small">Useful after switching '
-                       f'models. Lectures stay readable while they are rewritten, one at a time.</p>'
-                       f'<form method="post" action="/settings/resummarize-all" data-confirm="Rewrite all {n_done} '
-                       f'summaries with {esc(cfg.effective_summary_model)}? This can take a while.">'
-                       f'<button>Rewrite all summaries</button></form></section>')
+        maintenance = (f'<div class="group-head">Updates</div><div class="group">{upd}'
+                       f'<div class="row"><span class="grow">Automatic updates</span><span class="value">{auto}</span></div></div>'
+                       f'<p class="group-foot">Set with auto_update in config.toml.</p>'
+                       f'<div class="group-head">Rewrite every summary</div><div class="group">'
+                       f'<form class="row" method="post" action="/settings/resummarize-all" data-confirm="Rewrite all '
+                       f'{n_done} summaries with {esc(cfg.effective_summary_model)}? This can take a while.">'
+                       f'<span class="grow">Rewrite all summaries with {esc(cfg.effective_summary_model)}</span>'
+                       f'<button>Rewrite all</button></form></div>'
+                       f'<p class="group-foot">Useful after switching models. Lectures stay readable while they are '
+                       f'rewritten, one at a time.</p>')
         body = f"<h1>Settings</h1>{flash}{form}{invite}{maintenance}"
         return show("Settings", body, ctx)
 
@@ -486,8 +523,9 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
         if update.is_newer(rel):
             threading.Thread(target=update.apply, args=(rel, cfg.home), daemon=True).start()
         nonce = secrets.token_urlsafe(16)
-        body = ('<div class="login"><form><h1>Updating</h1><p class="muted">This restarts on the new version in about '
-                'a minute.</p><a class="btn primary" href="/settings">Back to settings</a></form></div>')
+        body = ('<div class="login"><form><span class="spin" style="margin:0 auto .4rem;width:1.6rem;height:1.6rem"></span>'
+                '<h1>Updating</h1><p class="muted">This restarts on the new version in about a minute.</p>'
+                '<a class="btn primary" href="/settings">Back to settings</a></form></div>')
         return respond(ui.bare_page("Updating", body, nonce), nonce=nonce)
 
     # -- API -------------------------------------------------------------------------------
