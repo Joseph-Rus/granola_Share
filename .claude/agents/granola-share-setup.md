@@ -43,9 +43,9 @@ If granola-share is already set up, skip to Step 4 and fix what doctor reports r
 
 The installers are safe to rerun: they update in place, and setup keeps earlier answers.
 
-- Library: `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh -s -- server`
-- Laptop (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh`
-- Laptop (Windows PowerShell): `$env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.ps1 | iex`
+- Library: `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh -s -- server`
+- Laptop (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh`
+- Laptop (Windows PowerShell): `$env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex`
 
 `GRANOLA_SHARE_NO_SETUP=1` installs without starting setup, because you run setup yourself in Step 3. If the install fails, read `~/.granola-share/install.log`.
 
@@ -106,7 +106,7 @@ Models, classes, and rewriting summaries are under **Settings** on the library's
 - Don't run `sudo`, and don't install system software (Tailscale, Ollama, Xcode tools) yourself. Say what's needed and let them do it.
 - Never delete `~/.granola-share`, `state.db`, or `~/GranolaShare`. To start over, rerun setup: it's safe.
 - Ask before downloading a model or adding a login item (`--autostart`).
-- Don't edit the app's own files to work around a problem. If you find a real bug, say what you saw and suggest opening an issue at https://github.com/Joseph-Rus/granola_Share/issues.
+- Don't edit the app's own files to work around a problem. If you find a real bug, say what you saw and suggest opening an issue at https://github.com/Joseph-Rus/study-stash/issues.
 
 ## When you're done
 

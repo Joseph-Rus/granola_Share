@@ -22,7 +22,7 @@ import httpx
 
 from . import __version__, autostart
 
-REPO_SLUG = "Joseph-Rus/granola_Share"
+REPO_SLUG = "Joseph-Rus/study-stash"
 LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
 MAC_APP_ASSET = "Study-Stash-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
 FIRST_CHECK_AFTER = 10 * 60

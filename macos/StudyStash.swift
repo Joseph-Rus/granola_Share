@@ -23,7 +23,7 @@ let dataDir: URL = {
 let env = ProcessInfo.processInfo.environment
 let engine = env["GRANOLA_SHARE_ENGINE"].map { URL(fileURLWithPath: $0) }
     ?? userHome.appendingPathComponent(".local/bin/granola-share")
-let installScript = "https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh"
+let installScript = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh"
 
 func dataFile(_ name: String) -> String? {
     guard let s = try? String(contentsOf: dataDir.appendingPathComponent(name), encoding: .utf8) else { return nil }

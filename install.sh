@@ -1,7 +1,7 @@
 #!/bin/sh
 # granola-share one-line installer (macOS / Linux).
 #   The Mac mini (keeps the library):
-#     curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh | sh -s -- server
+#     curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- server
 #   Your laptop (the Mac mini's setup prints this line with the address and password filled in):
 #     curl -fsSL .../install.sh | GRANOLA_SHARE_SERVER=http://mac-mini:8787 GRANOLA_SHARE_KEY=pw sh
 # Anything after the role goes to the setup wizard, e.g. `sh -s -- server --yes --pool-name Fall`.
@@ -20,7 +20,7 @@ ROLE=client
 case "${1:-}" in
   server|client) ROLE="$1"; shift ;;
 esac
-SLUG="Joseph-Rus/granola_Share"
+SLUG="Joseph-Rus/study-stash"
 HOME_DIR="${GRANOLA_SHARE_HOME:-$HOME/.granola-share}"
 LOG="$HOME_DIR/install.log"
 ORIG_PATH="$PATH"

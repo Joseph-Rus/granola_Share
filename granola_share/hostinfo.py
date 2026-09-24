@@ -11,7 +11,7 @@ from pathlib import Path
 
 import httpx
 
-RAW = "https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main"
+RAW = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main"
 TAILSCALE_PATHS = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", r"C:\Program Files\Tailscale\tailscale.exe"]
 
 

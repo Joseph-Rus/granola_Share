@@ -1,6 +1,6 @@
 # granola-share one-line installer (Windows PowerShell).
 #   The computer that keeps the library:
-#     $env:GRANOLA_SHARE_ROLE='server'; irm https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.ps1 | iex
+#     $env:GRANOLA_SHARE_ROLE='server'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
 #   Your laptop (the library's setup prints this line with the address and password filled in):
 #     $env:GRANOLA_SHARE_SERVER='http://mac-mini:8787'; $env:GRANOLA_SHARE_KEY='pw'; irm .../install.ps1 | iex
 #
@@ -11,7 +11,7 @@
 & {
   $ErrorActionPreference = "Stop"
   $Role = if ($env:GRANOLA_SHARE_ROLE) { $env:GRANOLA_SHARE_ROLE } else { "client" }
-  $Slug = "Joseph-Rus/granola_Share"
+  $Slug = "Joseph-Rus/study-stash"
   $HomeDir = if ($env:GRANOLA_SHARE_HOME) { $env:GRANOLA_SHARE_HOME } else { Join-Path $env:USERPROFILE ".granola-share" }
   $Log = Join-Path $HomeDir "install.log"
   New-Item -ItemType Directory -Force -Path $HomeDir | Out-Null

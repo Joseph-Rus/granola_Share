@@ -31,7 +31,7 @@ your laptop                                        your Mac mini
 ## 1. Set up the Mac mini
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh | sh -s -- server
+curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- server
 ```
 
 The installer puts a `granola-share` command on the Mac mini. It uses uv, so it needs no admin
@@ -71,11 +71,11 @@ the library's web page):
 
 ```bash
 # Mac / Linux (Terminal)
-curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.sh | GRANOLA_SHARE_SERVER=http://mac-mini.tailnet.ts.net:8787 GRANOLA_SHARE_KEY=the-password sh
+curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://mac-mini.tailnet.ts.net:8787 GRANOLA_SHARE_KEY=the-password sh
 ```
 ```powershell
 # Windows (PowerShell)
-$env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SHARE_KEY='the-password'; irm https://raw.githubusercontent.com/Joseph-Rus/granola_Share/main/install.ps1 | iex
+$env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SHARE_KEY='the-password'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
 ```
 
 That's the last time you touch the terminal on the laptop. The line installs granola-share,
@@ -100,7 +100,7 @@ the terminal if you prefer it.)
 ### Or: the Mac app on its own
 
 Every release also has **Study-Stash.dmg** (on the
-[releases page](https://github.com/Joseph-Rus/granola_Share/releases/latest)). Open it and drag
+[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest)). Open it and drag
 Study Stash into Applications. The first time you open it, it installs its background helper
 with one click, then shows the same setup. macOS asks once before opening an app from the
 internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &

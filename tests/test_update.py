@@ -28,7 +28,7 @@ def test_latest_release_reads_github_and_handles_no_releases():
     get = lambda url, **kw: Resp(status_code=200, data={"tag_name": "v0.3.0", "html_url": "https://gh/r/v0.3.0"})
     rel = update.latest_release(get=get)
     assert rel.tag == "v0.3.0" and rel.version == (0, 3, 0)
-    assert rel.url == "https://github.com/Joseph-Rus/granola_Share/archive/refs/tags/v0.3.0.tar.gz"
+    assert rel.url == "https://github.com/Joseph-Rus/study-stash/archive/refs/tags/v0.3.0.tar.gz"
     assert update.latest_release(get=lambda url, **kw: Resp(status_code=404, data={})) is None
 
 
