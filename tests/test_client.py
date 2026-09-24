@@ -19,7 +19,7 @@ def make(tmp_path, mode="ask", answers=None, post_fail=False):
     answers = list(answers or [])
     asked, posted, notified = [], [], []
 
-    def ask(title, text, timeout=0):
+    def ask(title, text, yes=None, no=None, timeout=0):
         asked.append(text)
         return answers.pop(0)
 
@@ -29,7 +29,8 @@ def make(tmp_path, mode="ask", answers=None, post_fail=False):
             raise RuntimeError("server down")
         return {"class_name": "CS 101"}
 
-    client = ShareClient(cc, g, ask=ask, notify=lambda t, x: notified.append(x), post=post, log=lambda *_: None)
+    client = ShareClient(cc, g, ask=ask, notify=lambda t, x: notified.append(x), post=post, log=lambda *_: None,
+                         get=lambda url, headers: None)
     return cc, client, asked, posted, notified
 
 
@@ -42,13 +43,13 @@ def test_ask_mode_share_skip_pending_and_repoll(tmp_path):
     url, payload, headers = posted[0]
     assert url == "http://mini:8787/api/ingest" and headers == {"Authorization": "Bearer pw"}
     assert payload["owner"] == "Sam" and payload["notes_markdown"] == "notes a" and payload["transcript"] == "t"
-    assert notified == ["Shared \u201cCS101 lec 1\u201d → CS 101"]
+    assert notified == []  # the one notification comes when the library has filed it
     state = json.loads(cc.state_path.read_text())
     assert state["seen"]["a"]["decision"] == "shared" and state["seen"]["b"]["decision"] == "skipped"
     assert state["seen"]["c"]["decision"] == "pending" and state["last_poll"]
 
     # next poll: only the pending one is asked again
-    client.ask = lambda t, x, timeout=0: (asked.append(x), True)[1]
+    client.ask = lambda t, x, yes=None, no=None, timeout=0: (asked.append(x), True)[1]
     rep2 = asyncio.run(client.poll_once())
     assert rep2.considered == 1 and rep2.shared == [("Standup", "CS 101")]
     assert len(posted) == 2

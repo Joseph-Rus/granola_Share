@@ -80,6 +80,57 @@ def ask_yes_no(title: str, text: str, yes: str = "Share", no: str = "Skip", time
     return _ask_tk(title, f"{text}\n\nYes = {yes}, No = {no}")
 
 
+def ask_choice(title: str, text: str, buttons: list[str], default: str | None = None, timeout: int = 300,
+               runner=subprocess.run, system: str | None = None) -> str | None:
+    """A dialog with up to three buttons. Returns the label clicked, or None if nobody answered in time.
+
+    Only macOS draws three buttons; elsewhere the first and the default button are offered.
+    """
+    system = system or platform.system()
+    default = default or buttons[-1]
+    if system == "Darwin":
+        labels = ", ".join(f'"{_esc(b)}"' for b in buttons)
+        script = (f'display dialog "{_esc(text)}" with title "{_esc(title)}" buttons {{{labels}}} '
+                  f'default button "{_esc(default)}" with icon note giving up after {int(timeout)}')
+        p = runner(["osascript", "-e", script], capture_output=True, text=True)
+        if p.returncode != 0 or "gave up:true" in p.stdout:
+            return None
+        m = re.search(r"button returned:([^,\n]*)", p.stdout)
+        return m.group(1).strip() if m else None
+    other = buttons[0] if buttons[0] != default else buttons[-1]
+    answer = ask_yes_no(title, text, yes=default, no=other, timeout=timeout, runner=runner, system=system)
+    return None if answer is None else (default if answer else other)
+
+
+ACCESSIBILITY_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+
+
+def open_url(url: str, runner=subprocess.run, system: str | None = None) -> None:
+    """Open a web page or a System Settings pane with the system's default handler."""
+    system = system or platform.system()
+    try:
+        if system == "Darwin":
+            runner(["open", url], capture_output=True, text=True)
+        elif system == "Windows":
+            import os
+
+            os.startfile(url)  # type: ignore[attr-defined]
+        else:
+            runner(["xdg-open", url], capture_output=True, text=True)
+    except Exception:
+        pass
+
+
+def open_app(name: str, runner=subprocess.run, system: str | None = None) -> bool:
+    """Bring an app to the front (macOS)."""
+    if (system or platform.system()) != "Darwin":
+        return False
+    try:
+        return runner(["open", "-a", name], capture_output=True, text=True).returncode == 0
+    except Exception:
+        return False
+
+
 def notify(title: str, text: str, runner=subprocess.run, system: str | None = None) -> None:
     """Best-effort, non-blocking notification."""
     system = system or platform.system()

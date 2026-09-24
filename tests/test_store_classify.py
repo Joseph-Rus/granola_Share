@@ -59,7 +59,7 @@ def test_store_save_move_and_listing(tmp_path):
                 notes_markdown="# Hello\nworld", raw={"id": "abc123", "title": "Lec 1: Intro", "date": "2026-09-10T09:00:00Z", "notes": "# Hello\nworld"})
     path = store.save(m, Classification("CS 101", 0.9, "ollama", "Intro", ["hello"]))
     assert path.exists() and path.parent.name == "CS 101" and path.name == "2026-09-10 Lec 1 Intro.md"
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert text.startswith("---") and "## Notes" in text and "world" in text
     assert store.known_ids() == {"abc123"}
     assert store.classes_summary() == [("CS 101", 1)]

@@ -1,0 +1,115 @@
+# The update pipeline.
+#   Every push and pull request: tests on macOS, Linux, and Windows, then the real one-line
+#   installer on each, then a server that boots and answers.
+#   Push to main with a new version in granola_share/__init__.py: once all of that passes,
+#   publish release v<version>. Installed copies pick it up within a few hours
+#   (auto_update), or right away with `granola-share update`.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run tests
+        run: uv run --python ${{ matrix.python }} --extra dev pytest -q
+
+  install:
+    name: installer (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GRANOLA_SHARE_SRC: ${{ github.workspace }}
+      GRANOLA_SHARE_NO_SETUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # No setup-uv here on purpose: the installer has to fetch uv itself, as on a fresh laptop.
+      - name: Install (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: |
+          sh install.sh client
+          sh install.sh server   # a second run must update in place
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          .\install.ps1
+          .\install.ps1
+          Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.local\bin"
+      - name: Set up a pool without a keyboard and boot it
+        shell: bash
+        run: |
+          H="$RUNNER_TEMP/gs"
+          granola-share --version
+          granola-share --home "$H" setup --yes --pool-name CI --password pw --pool-dir "$RUNNER_TEMP/pool" \
+            --port 8799 --class "CS 101=cs101" --no-server-sync --no-autostart --no-pull < /dev/null
+          granola-share --home "$H" serve > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS -H "Authorization: Bearer pw" http://127.0.0.1:8799/api/health && break
+            sleep 2
+          done
+          curl -fsS -X POST -H "Authorization: Bearer pw" -H "Content-Type: application/json" \
+            -d '{"id":"ci-1","title":"CS101 lecture 1","notes_markdown":"loops"}' http://127.0.0.1:8799/api/ingest
+          sleep 3
+          curl -fsS http://127.0.0.1:8799/api/status | tee /dev/stderr | grep -q '"done":1'
+          curl -fsS http://127.0.0.1:8799/ | grep -q "CS101 lecture 1"
+          granola-share --home "$H" doctor --role server || true
+          # the laptop's Granola Share page comes up before any setup
+          granola-share --home "$RUNNER_TEMP/laptop" client run > "$RUNNER_TEMP/client.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/healthz && break; sleep 2; done
+          curl -fsS http://127.0.0.1:8765/healthz | grep -q granola-share
+      - name: Server log
+        if: failure()
+        shell: bash
+        run: cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/client.log" || true
+
+  release:
+    name: publish release
+    needs: [test, install]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Publish v<version> if it is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' granola_share/__init__.py)
+          if [ -z "$V" ]; then echo "no __version__ found"; exit 1; fi
+          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+            echo "v$V is already released; bump __version__ to publish a new one."
+            exit 0
+          fi
+          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes

@@ -1,4 +1,4 @@
-"""The sync loop: ask Granola for new notes, classify them, write them to the pool."""
+"""The server's own sync loop: ask Granola for new notes and queue them for the pipeline."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import traceback
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-from .classify import classify
 from .config import Config
 from .granola import GranolaClient, Meeting
 from .store import Store
@@ -22,7 +21,7 @@ OVERLAP_DAYS = 2
 class SyncReport:
     listed: int = 0
     new: int = 0
-    saved: list[tuple[str, str]] = field(default_factory=list)  # (title, class)
+    queued: list[str] = field(default_factory=list)  # titles handed to the pipeline
     errors: list[str] = field(default_factory=list)
 
 
@@ -33,7 +32,7 @@ def _since(store: Store) -> date:
     return date.today() - timedelta(days=FIRST_RUN_LOOKBACK_DAYS)
 
 
-async def sync_once(cfg: Config, client: GranolaClient, store: Store, chat=None, log=print) -> SyncReport:
+async def sync_once(cfg: Config, client: GranolaClient, store: Store, log=print, on_queued=None) -> SyncReport:
     report = SyncReport()
     since = _since(store)
     async with client.session() as session:
@@ -61,14 +60,15 @@ async def sync_once(cfg: Config, client: GranolaClient, store: Store, chat=None,
             if cfg.include_transcripts and not m.transcript:
                 m.transcript = await client.get_transcript(session, mid)
             try:
-                c = classify(m, cfg, chat)
-                path = store.save(m, c)
-                report.saved.append((m.title, c.class_name))
-                log(f"[sync] saved '{m.title}' → {c.class_name} ({c.by} {c.confidence:.2f}) {path.name}")
+                store.enqueue(m)
+                report.queued.append(m.title)
+                log(f"[sync] queued '{m.title}'")
             except Exception as e:
                 report.errors.append(f"{mid}: {e}")
                 log(f"[sync] failed on {mid}: {e}\n{traceback.format_exc()}")
         _dump_debug(cfg, full or list(stub_by_id.values()))
+    if report.queued and on_queued:
+        on_queued()
     store.set_state("last_sync", datetime.now(timezone.utc).isoformat())
     return report
 
@@ -84,10 +84,10 @@ def _dump_debug(cfg: Config, meetings: list[Meeting]) -> None:
         pass
 
 
-def run_loop(cfg: Config, client: GranolaClient, store: Store, log=print, stop=None) -> None:
+def run_loop(cfg: Config, client: GranolaClient, store: Store, log=print, stop=None, on_queued=None) -> None:
     while True:
         try:
-            asyncio.run(sync_once(cfg, client, store, log=log))
+            asyncio.run(sync_once(cfg, client, store, log=log, on_queued=on_queued))
         except Exception as e:
             log(f"[sync] error: {e}")
         if stop is not None and stop.is_set():

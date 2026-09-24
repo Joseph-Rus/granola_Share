@@ -1,4 +1,3 @@
-import os
 from types import SimpleNamespace
 
 from granola_share import autostart
@@ -59,3 +58,35 @@ def test_install_windows_and_linux(tmp_path):
     u = autostart.install("client", tmp_path / "h", system="Linux", systemd_dir=tmp_path / "sd", run_cmd=run, python="/py")
     assert u.suffix == ".service" and "Restart=always" in u.read_text()
     assert autostart.uninstall("client", system="Linux", systemd_dir=tmp_path / "sd", run_cmd=run)
+
+
+def test_services_are_marked_for_the_auto_updater(tmp_path):
+    args = ["/py", "-u", "-m", "granola_share.cli", "run"]
+    assert "<key>GRANOLA_SHARE_SERVICE</key><string>1</string>" in autostart.render_plist("l", args, tmp_path / "x")
+    assert "Environment=GRANOLA_SHARE_SERVICE=1" in autostart.render_systemd("d", args)
+    assert "set GRANOLA_SHARE_SERVICE=1" in autostart.render_cmd(args)
+
+
+def test_status_and_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(autostart, "default_launch_agents_dir", lambda: tmp_path)
+    monkeypatch.setattr(autostart, "default_systemd_dir", lambda: tmp_path)
+    ok = lambda out: SimpleNamespace(returncode=0, stdout=out)
+    assert autostart.status("client", system="Darwin", run_cmd=lambda a, **k: ok("state = running")) == "missing"
+    (tmp_path / "com.granola-share.client.plist").write_text("x")
+    assert autostart.status("client", system="Darwin", run_cmd=lambda a, **k: ok("state = running")) == "running"
+    assert autostart.status("client", system="Darwin", run_cmd=lambda a, **k: ok("state = waiting")) == "stopped"
+    assert autostart.installed_roles(system="Darwin") == ["client"]
+    calls = []
+    autostart.restart("client", system="Darwin", run_cmd=lambda a, **k: calls.append(a) or ok(""))
+    assert calls[0][:3] == ["launchctl", "kickstart", "-k"] and calls[0][3].endswith("/com.granola-share.client")
+
+    (tmp_path / "granola-share-server.service").write_text("x")
+    assert autostart.status("server", system="Linux", run_cmd=lambda a, **k: ok("active\n")) == "running"
+    calls.clear()
+    autostart.restart("server", system="Linux", run_cmd=lambda a, **k: calls.append(a) or ok(""))
+    assert calls == [["systemctl", "--user", "restart", "granola-share-server.service"]]
+
+
+def test_windows_process_filter_tells_roles_apart():
+    assert "-like '*client*run*'" in autostart._ps_filter("client")
+    assert "-notlike '*client*run*'" in autostart._ps_filter("server")

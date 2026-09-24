@@ -78,6 +78,15 @@ def build_prompt(m: Meeting, classes: list[ClassDef]) -> str:
     return "\n".join(lines)
 
 
+def sort_context(cfg: Config) -> int:
+    if cfg.summary_enabled and cfg.ollama_model == cfg.effective_summary_model:
+        # Same model as the summarizer: ask for the same context, or Ollama reloads it between the two calls.
+        from .summarize import context_size
+
+        return context_size(cfg, cfg.ollama_model)
+    return 8192
+
+
 def ollama_chat(cfg: Config, prompt: str, schema: dict) -> str:
     body = {
         "model": cfg.ollama_model,
@@ -85,9 +94,9 @@ def ollama_chat(cfg: Config, prompt: str, schema: dict) -> str:
         "stream": False,
         "format": schema,
         "think": False,
-        "options": {"temperature": 0, "num_ctx": 8192},
+        "options": {"temperature": 0, "num_ctx": sort_context(cfg)},
     }
-    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=180)
+    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=httpx.Timeout(600, connect=10))
     r.raise_for_status()
     return r.json()["message"]["content"]
 

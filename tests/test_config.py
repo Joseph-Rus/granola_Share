@@ -29,4 +29,4 @@ def test_client_config_roundtrip(tmp_path):
 
 def test_missing_files_give_defaults(tmp_path):
     assert load_config(tmp_path).web_port == 8787
-    assert load_client_config(tmp_path).mode == "ask"
+    assert load_client_config(tmp_path).mode == "auto"
