@@ -1,7 +1,8 @@
 [project]
 name = "granola-share"
 dynamic = ["version"]
-description = "Pool your friends' Granola lecture notes on your own server, sorted by class."
+description = "Study Stash: your Granola lectures, turned into study notes by your own model and sorted by class on your own computer. Not affiliated with Granola."
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -22,7 +23,7 @@ dev = ["pytest"]
 granola-share = "granola_share.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]

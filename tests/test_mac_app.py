@@ -7,18 +7,18 @@ from granola_share import client_app, launcher, update
 
 
 def native_app(where: Path) -> Path:
-    app = where / "Granola Share.app"
+    app = where / "Study Stash.app"
     (app / "Contents" / "MacOS").mkdir(parents=True)
-    (app / "Contents" / "MacOS" / "Granola Share").write_text("binary")
+    (app / "Contents" / "MacOS" / "Study Stash").write_text("binary")
     return app
 
 
 def test_the_release_says_where_the_mac_app_is():
     data = {"tag_name": "v0.2.4", "html_url": "h", "assets": [
-        {"name": "Granola-Share.dmg", "browser_download_url": "https://gh/dl/Granola-Share.dmg"},
-        {"name": "Granola-Share-mac.zip", "browser_download_url": "https://gh/dl/Granola-Share-mac.zip"}]}
+        {"name": "Study-Stash.dmg", "browser_download_url": "https://gh/dl/Study-Stash.dmg"},
+        {"name": "Study-Stash-mac.zip", "browser_download_url": "https://gh/dl/Study-Stash-mac.zip"}]}
     ok = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: data)
-    assert update.latest_release(get=lambda url, **kw: ok).mac_app == "https://gh/dl/Granola-Share-mac.zip"
+    assert update.latest_release(get=lambda url, **kw: ok).mac_app == "https://gh/dl/Study-Stash-mac.zip"
     old = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {"tag_name": "v0.2.2"})
     assert update.latest_release(get=lambda url, **kw: old).mac_app == ""
 
@@ -43,7 +43,7 @@ def test_install_native_unpacks_the_zip_into_applications(tmp_path, monkeypatch)
         return SimpleNamespace(returncode=0)
 
     got = SimpleNamespace(status_code=200, content=b"zip", raise_for_status=lambda: None)
-    app = launcher.install_native("https://gh/dl/Granola-Share-mac.zip", log=lambda s: None,
+    app = launcher.install_native("https://gh/dl/Study-Stash-mac.zip", log=lambda s: None,
                                   get=lambda url, **kw: got, run=ditto)
     assert app == old and launcher.is_native(app) and launcher.native_installed() == app
 
@@ -68,3 +68,22 @@ def test_client_open_shows_the_app_not_the_browser(tmp_path, monkeypatch):
     assert opened == [("app", str(app))]
     opened.clear()
     assert client_app.open_app(tmp_path, browser=False) == "http://127.0.0.1:8765/?t=x" and opened == []
+
+
+def test_the_old_granola_share_app_is_replaced_by_study_stash(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    old = tmp_path / "Applications" / "Granola Share.app"  # what 0.2 installed
+    (old / "Contents" / "MacOS").mkdir(parents=True)
+    (old / "Contents" / "MacOS" / "Granola Share").write_text("binary")
+    assert launcher.native_installed() == old  # updates still find it, and replace it
+
+    def ditto(cmd, **kw):
+        app = Path(cmd[4]) / "Study Stash.app"
+        (app / "Contents" / "MacOS").mkdir(parents=True)
+        (app / "Contents" / "MacOS" / "Study Stash").write_text("binary")
+        return SimpleNamespace(returncode=0)
+
+    got = SimpleNamespace(status_code=200, content=b"zip", raise_for_status=lambda: None)
+    new = launcher.install_native("u", log=lambda s: None, get=lambda url, **kw: got, run=ditto)
+    assert new == tmp_path / "Applications" / "Study Stash.app" and launcher.is_native(new)
+    assert not old.exists() and launcher.native_installed() == new

@@ -1,11 +1,11 @@
-"""The Granola Share app on your laptop: a small web page on this computer for setup and status.
+"""The Study Stash app on your laptop: a small web page on this computer for setup and status.
 
 The background watcher (`granola-share client run`) serves it on http://127.0.0.1:<port>, so
 setting up never needs the terminal: connect to your library, sign in to Granola, choose how to
 send, allow transcript copying, done. Afterwards it shows what was sent and where it was filed.
 
 Only this computer can reach it (it listens on 127.0.0.1 and checks the Host header), and it
-needs a per-install token that the "Granola Share" launcher passes in, so websites and other
+needs a per-install token that the "Study Stash" launcher passes in, so websites and other
 programs can't drive it.
 """
 
@@ -159,7 +159,7 @@ class ClientRuntime:
         what = f"“{title}” just finished recording." if title else "Your Granola recording just finished."
         text = (f"{what}\n\nSave it to {lib} with its transcript? granola-share opens Granola, copies the "
                 "transcript, and brings you back.")
-        return dialogs.ask_choice("granola-share", text, ["Not now", "Save"], default="Save") == "Save"
+        return dialogs.ask_choice("Study Stash", text, ["Not now", "Save"], default="Save") == "Save"
 
     def request_permission(self) -> None:
         g = self._grabber_ui()
@@ -306,7 +306,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
     check_server = check_server or _check_server
     home = runtime.home
     token = _token(home)
-    app = FastAPI(title="Granola Share", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Study Stash", docs_url=None, redoc_url=None, openapi_url=None)
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", *extra_hosts}
 
     @app.middleware("http")
@@ -322,7 +322,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
     def require(request: Request) -> None:
         # The custom header can't be sent cross-site without a CORS preflight we never allow.
         if not authed(request) or request.headers.get("x-granola-share") != "1":
-            raise HTTPException(403, "Open Granola Share from its app icon.")
+            raise HTTPException(403, "Open Study Stash from its app icon.")
 
     def respond(title: str, body: str, watch: int = 0) -> HTMLResponse:
         nonce = secrets.token_urlsafe(16)
@@ -338,8 +338,8 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             resp.set_cookie(COOKIE, token, httponly=True, samesite="strict", max_age=60 * 60 * 24 * 365)
             return resp
         if not authed(request):
-            return respond("Granola Share", "<header><h1>Granola Share</h1></header><p class=sub>Open "
-                           "<strong>Granola Share</strong> from your Applications folder to see this page.</p>")
+            return respond("Study Stash", "<header><h1>Study Stash</h1></header><p class=sub>Open "
+                           "<strong>Study Stash</strong> from your Applications folder to see this page.</p>")
         return status_page() if runtime.configured() and runtime.watching else setup_page()
 
     # -- setup
@@ -387,8 +387,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             '<span class="grow">Send every lecture automatically</span><span class="tick"></span></label>'
             f'<label class="row pick"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}>'
             '<span class="grow">Ask me before sending each one</span><span class="tick"></span></label>'
-            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app<span class="subtitle">'
-               'Free Granola plans only share transcripts this way.</span></span>'
+            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app<span class="subtitle">Presses Granola’s Copy transcript for you when a lecture ends. This automates the Granola app, which may go against Granola’s terms of service, so it’s off unless you turn it on.</span></span>'
                f'<input class="switch" type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}></label>'
                if mac() else "")
             + '</div></form><p class="say" id="prefs-say" style="margin-top:1.3rem"></p>')
@@ -401,7 +400,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                 allow_inner = '<p class="say good" style="margin:0">Allowed. Transcripts are copied while Granola is in front.</p>'
             else:
                 allow_inner = (
-                    "<p>To copy transcripts, Granola Share needs to read the Granola window. Click the button, "
+                    "<p>To copy transcripts, Study Stash needs to read the Granola window. Click the button, "
                     "then turn on <strong>python3.12</strong> in the list that opens.</p>"
                     '<div class="actions" style="margin:0"><button class="primary" data-action="/api/allow" data-out="allow-say" '
                     'data-busy="Opening System Settings…">Open Accessibility settings</button></div>'
@@ -409,16 +408,16 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             steps.append(step(n, "Allow transcript copying", copy["allowed"], not signed, allow_inner))
             n += 1
         ready = connected and signed
-        finish_inner = ("<p>Granola Share keeps running in the background and starts when you log in. "
+        finish_inner = ("<p>Study Stash keeps running in the background and starts when you log in. "
                         "When a lecture finishes in Granola, it's sent to your library.</p>"
                         f'<div class="actions" style="margin:0"><button class="primary" data-action="/api/finish" '
                         f'data-out="finish-say"{"" if ready else " disabled"}>Finish setup</button></div>'
                         '<p class="say" id="finish-say"></p>')
         steps.append(step(n, "Start sending", False, not ready, finish_inner))
-        body = (f'<header><h1>Set up Granola Share</h1><p class="sub">Send your Granola lectures to your library on your '
+        body = (f'<header><h1>Set up Study Stash</h1><p class="sub">Send your Granola lectures to your library on your '
                 f'Mac mini, where your own model writes their notes. {n} short steps.</p></header>'
                 f'{"".join(steps)}')
-        return respond("Set up Granola Share", body, watch=2)
+        return respond("Set up Study Stash", body, watch=2)
 
     # -- status
     def status_page() -> HTMLResponse:
@@ -480,7 +479,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             '<span class="grow">Send every lecture automatically</span><span class="tick"></span></label>'
             f'<label class="row pick"><input type="radio" name="mode" value="ask"{" checked" if ask else ""}>'
             '<span class="grow">Ask me before sending each one</span><span class="tick"></span></label>'
-            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app</span>'
+            + (f'<label class="row"><span class="grow">Copy each transcript from the Granola app<span class="subtitle">Presses Granola’s Copy transcript for you when a lecture ends. This automates the Granola app, which may go against Granola’s terms of service, so it’s off unless you turn it on.</span></span>'
                f'<input class="switch" type="checkbox" name="copy_transcripts"{" checked" if cc.copy_transcripts else ""}></label>'
                if mac() else "")
             + '</div></form><p class="say" id="prefs-say"></p>'
@@ -489,17 +488,18 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             '<button class="row" data-action="/api/reset-pool" data-out="more-say" '
             'data-confirm="Connect to a different library? Your lectures stay where they are.">Connect to a different library</button>'
             '<button class="row danger" data-action="/api/remove" data-out="more-say" '
-            'data-confirm="Stop Granola Share and remove it from this computer? Nothing more is sent.">'
-            'Stop and remove Granola Share</button></div><p class="say" id="more-say"></p>'
-            f'<p class="group-foot">Version {__version__}. Your settings and copied transcripts are in {esc(str(home))}.</p>')
-        body = (f'<header><h1>Granola Share</h1><p class="sub">Sending your lectures to {esc(cc.pool_name)}.</p></header>'
+            'data-confirm="Stop Study Stash and remove it from this computer? Nothing more is sent.">'
+            'Stop and remove Study Stash</button></div><p class="say" id="more-say"></p>'
+            f'<p class="group-foot">Version {__version__}. Your settings and copied transcripts are in {esc(str(home))}.</p>'
+            '<p class="group-foot">Study Stash is an independent project, not affiliated with or endorsed by Granola. Granola is a trademark of its owner.</p>')
+        body = (f'<header><h1>Study Stash</h1><p class="sub">Sending your lectures to {esc(cc.pool_name)}.</p></header>'
                 f'{problem_html}{allow}<div class="group">{facts_html}</div>'
                 '<div class="toolbar" style="margin-top:1rem"><button class="primary" data-action="/api/check" '
                 'data-out="check-say">Check for new lectures now</button>'
                 f'<a class="btn" href="{esc(cc.server_url)}" target="_blank" rel="noopener">Open your library</a></div>'
                 '<p class="say" id="check-say"></p>'
                 f'<h2>Recent lectures</h2>{recent}{settings}')
-        return respond("Granola Share", body, watch=15)
+        return respond("Study Stash", body, watch=15)
 
     # -- actions
     async def body(request: Request) -> dict:
@@ -683,7 +683,7 @@ def serve(runtime: ClientRuntime, port: int | None = None) -> None:
 
     port = port or free_port()
     (runtime.home / "ui_port").write_text(str(port))
-    runtime.log(f"[app] Granola Share page on http://127.0.0.1:{port}")
+    runtime.log(f"[app] Study Stash page on http://127.0.0.1:{port}")
     uvicorn.run(create_client_app(runtime, port=port), host="127.0.0.1", port=port, log_level="warning")
 
 
@@ -715,7 +715,7 @@ def wait_for_app(home: Path, timeout: float = 20) -> str | None:
 
 def open_app(home: Path, install: bool = False, log=print, browser: bool = True) -> str | None:
     """`granola-share client open`: make sure the background service runs, then show its page, in the
-    Granola Share app when it's installed (macOS), else in the browser. `browser=False` only starts it:
+    Study Stash app when it's installed (macOS), else in the browser. `browser=False` only starts it:
     that's what the app itself runs."""
     from . import launcher
 
@@ -733,7 +733,7 @@ def open_app(home: Path, install: bool = False, log=print, browser: bool = True)
         autostart.restart("client")
     url = wait_for_app(home)
     if not url:
-        log(f"Granola Share didn't start. See {home / 'logs' / 'client.log'}, or run `granola-share doctor`.")
+        log(f"Study Stash didn't start. See {home / 'logs' / 'client.log'}, or run `granola-share doctor`.")
         return None
     if browser:
         native = launcher.native_installed() if mac() else None
@@ -743,7 +743,7 @@ def open_app(home: Path, install: bool = False, log=print, browser: bool = True)
 
 
 def _install_native_app(log=print) -> None:
-    """The first install on a Mac also gets the Granola Share app from the newest release, if it has one."""
+    """The first install on a Mac also gets the Study Stash app from the newest release, if it has one."""
     from . import launcher, update
 
     try:

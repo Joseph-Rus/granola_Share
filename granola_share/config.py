@@ -99,7 +99,9 @@ class ClientConfig:
     share_lookback_days: int = 7
     dialog_timeout_seconds: int = 300
     auto_update: bool = True
-    copy_transcripts: bool = True  # macOS: copy transcripts from the Granola window (free plans)
+    # macOS: press Granola's own "Copy transcript" when a lecture ends. Off unless you turn it on: it
+    # automates the Granola app, which may go against Granola's terms of service.
+    copy_transcripts: bool = False
     mcp_url: str = MCP_URL
     oauth_callback_port: int = 3334
     oauth_prompt: str = "login"  # always show Granola's account picker, so the right account signs in
@@ -245,7 +247,7 @@ def load_config(home: Path | None = None) -> Config:
 
 def dump_client_config(cc: ClientConfig) -> str:
     lines = [
-        "# granola-share laptop config. Change it in the Granola Share app, or rerun `granola-share client setup`.",
+        "# granola-share laptop config. Change it in the Study Stash app, or rerun `granola-share client setup`.",
         f"server_url = {_toml_value(cc.server_url)}",
         f"pool_key = {_toml_value(cc.pool_key)}",
         f"pool_name = {_toml_value(cc.pool_name)}",
@@ -295,7 +297,7 @@ def load_client_config(home: Path | None = None) -> ClientConfig:
         share_lookback_days=int(data.get("share_lookback_days", 7)),
         dialog_timeout_seconds=int(data.get("dialog_timeout_seconds", 300)),
         auto_update=bool(data.get("auto_update", True)),
-        copy_transcripts=bool(data.get("copy_transcripts", True)),
+        copy_transcripts=bool(data.get("copy_transcripts", False)),
         mcp_url=str(data.get("mcp_url", MCP_URL)),
         oauth_callback_port=int(data.get("oauth_callback_port", 3334)),
         oauth_prompt=str(data.get("oauth_prompt", "login")),

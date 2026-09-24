@@ -180,8 +180,8 @@ def copy_check(cc: ClientConfig, transcripts_via_api: bool | None, system: str |
         return None
     if not cc.copy_transcripts:
         if transcripts_via_api is False:
-            return Check("Copy transcripts", WARN, "off, so your lectures keep Granola's summary",
-                         "turn on copy_transcripts in client.toml, or rerun `granola-share client setup`")
+            return Check("Copy transcripts", OK, "off (the default), so lectures keep Granola's summary",
+                         "optional: turn it on in Study Stash, under Sending (read the note there first)")
         return None
     try:
         status = json.loads((cc.home / "transcripts" / "status.json").read_text())

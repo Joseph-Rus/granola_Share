@@ -428,9 +428,10 @@ def client_setup(home: Path, io: Prompter | None = None, *, check_server=None, d
     cc.mode = "ask" if ask_each else "auto"
     on_mac = platform.system() == "Darwin" if mac is None else mac
     if on_mac:
-        io.say("Granola's API only shares transcripts on paid plans. On a Mac, granola-share can copy each")
-        io.say("transcript from the Granola window instead: while Granola is in front with its transcript open, it")
-        io.say("clicks Copy transcript for you, then puts your clipboard and cursor back.")
+        io.say("Optional: on a Mac, Study Stash can press Granola's own Copy transcript for you when a lecture")
+        io.say("ends, then put your clipboard and cursor back, so your notes are written from the transcript.")
+        io.say("This automates the Granola app, which may go against Granola's terms of service. It's off unless")
+        io.say("you turn it on, and you decide whether that's OK for your account.")
         cc.copy_transcripts = io.confirm("Copy transcripts from the Granola app?", cc.copy_transcripts,
                                          key="copy_transcripts")
         if cc.copy_transcripts:

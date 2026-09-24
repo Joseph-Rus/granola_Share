@@ -89,8 +89,8 @@
   if ($Role -ne "server" -and -not $env:GRANOLA_SHARE_TERMINAL) {
     # The laptop sets up in the browser: start the background service, add the Start Menu entry, open setup.
     & $Exe --home $HomeDir client open --install
-    if ($LASTEXITCODE -ne 0) { Fail "Granola Share didn't start (log: $HomeDir\logs\client.log)" }
-    Write-Host "Setup continues in your browser. Later, open Granola Share from the Start Menu."
+    if ($LASTEXITCODE -ne 0) { Fail "Study Stash didn't start (log: $HomeDir\logs\client.log)" }
+    Write-Host "Setup continues in your browser. Later, open Study Stash from the Start Menu."
     return
   }
   if ($Role -eq "server") { & $Exe --home $HomeDir setup } else { & $Exe --home $HomeDir client setup }

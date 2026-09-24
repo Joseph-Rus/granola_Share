@@ -1,4 +1,4 @@
-"""The laptop's Granola Share page (setup and status) and its launcher icon."""
+"""The laptop's Study Stash page (setup and status) and its launcher icon."""
 
 import json
 from pathlib import Path
@@ -118,7 +118,7 @@ def test_pool_errors_say_what_to_check(tmp_path):
 def test_status_page_lists_recent_lectures(tmp_path, monkeypatch):
     monkeypatch.setattr(client_app, "mac", lambda: True)
     cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall pool",
-                      display_name="Alex")
+                      display_name="Sam", copy_transcripts=True)
     save_client_config(cc)
     cc.tokens_path.write_text("{}")
     cc.state_path.write_text(json.dumps({"seen": {
@@ -143,7 +143,7 @@ def test_launcher_icons(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
     app_path = launcher.install(tmp_path / ".granola-share", system="Darwin", python="/py")
-    assert app_path == tmp_path / "Applications" / "Granola Share.app"
+    assert app_path == tmp_path / "Applications" / "Study Stash.app"
     plist = (app_path / "Contents" / "Info.plist").read_text()
     script = app_path / "Contents" / "MacOS" / "granola-share-app"
     assert "<string>granola-share-app</string>" in plist and "LSUIElement" in plist
@@ -158,17 +158,17 @@ def test_launcher_icons(tmp_path, monkeypatch):
     ran = []
     link = launcher.install(tmp_path / ".granola-share", system="Windows", python="C:\\py\\python.exe",
                             run=lambda a, **k: ran.append(a))
-    assert link.name == "Granola Share.lnk" and "CreateShortcut" in ran[0][-1] and "client open" in ran[0][-1]
+    assert link.name == "Study Stash.lnk" and "CreateShortcut" in ran[0][-1] and "client open" in ran[0][-1]
 
 
 def test_mac_app_goes_where_finder_shows_it_when_allowed(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     old = launcher.install(tmp_path / ".granola-share", system="Darwin", python="/py")  # /Applications not writable
-    assert old == tmp_path / "Applications" / "Granola Share.app"
+    assert old == tmp_path / "Applications" / "Study Stash.app"
     (tmp_path / "SystemApps").mkdir()
     monkeypatch.setattr(launcher, "SYSTEM_APPS", tmp_path / "SystemApps")  # an admin account can write there
     app = launcher.install(tmp_path / ".granola-share", system="Darwin", python="/py")
-    assert app == tmp_path / "SystemApps" / "Granola Share.app" and app.exists()
+    assert app == tmp_path / "SystemApps" / "Study Stash.app" and app.exists()
     assert not old.exists() and launcher.installed(system="Darwin")  # one copy, not two
     launcher.uninstall(system="Darwin")
     assert not launcher.installed(system="Darwin")

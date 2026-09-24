@@ -79,7 +79,7 @@ def test_a_new_password_on_the_mac_mini_is_said_once_and_cleared_on_success(tmp_
     asyncio.run(client.poll_once())
     asyncio.run(client.poll_once())  # retried; still refused
     assert client.send_problem_kind == "password" and "turned down this laptop's password" in client.send_problem
-    assert len(notified) == 1 and "Open Granola Share" in notified[0]  # one notification, not one per retry
+    assert len(notified) == 1 and "Open Study Stash" in notified[0]  # one notification, not one per retry
 
     down = httpx.ConnectError("timed out", request=httpx.Request("POST", "http://mini:8787/api/ingest"))
     client.post = lambda url, payload, headers: (_ for _ in ()).throw(down)

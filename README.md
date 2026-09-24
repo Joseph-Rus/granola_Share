@@ -1,7 +1,10 @@
-# granola-share
+# Study Stash
 
 Your Granola lectures, rewritten into study notes by your own model and sorted by class, on
-your own Mac mini (or any always-on computer). Free.
+your own Mac mini (or any always-on computer). Free and open source.
+
+> Study Stash is an independent project, **not affiliated with or endorsed by Granola**.
+> "Granola" is a trademark of its owner, and is used here only to say what this works with.
 
 - **Your laptop** records lectures in Granola, as usual. When Granola finishes a lecture, a
   small background app sends it to your library.
@@ -10,14 +13,15 @@ your own Mac mini (or any always-on computer). Free.
   you can open from your laptop or phone over Tailscale.
 
 It uses Granola's official MCP connector (free) and a local Ollama model, so nothing is paid.
+The command it installs is still called `granola-share`, from before it was renamed.
 
-<p align="center"><img src="docs/screenshots/library.png" width="800" alt="The Granola Share app showing the library: a sidebar of classes with colored dots, and a list of recent lectures"></p>
+<p align="center"><img src="docs/screenshots/library.png" width="800" alt="The Study Stash app showing the library: a sidebar of classes with colored dots, and a list of recent lectures"></p>
 
 ```
 your laptop                                        your Mac mini
 ┌──────────────────────────┐   POST /api/ingest   ┌────────────────────────────────────┐
 │ Granola records          │ ───────────────────▶ │ queue → study notes from the       │
-│ Granola Share (bg app)   │   over Tailscale     │   transcript (your Ollama model)   │
+│ Study Stash (bg app)   │   over Tailscale     │   transcript (your Ollama model)   │
 │  ↳ finished lectures     │                      │ → sort into a class                │
 │  ↳ copies the transcript │ ◀─────────────────── │ ~/GranolaShare/<Class>/*.md        │
 └──────────────────────────┘  browse, search, zip │ web page  http://<mini>:8787       │
@@ -75,37 +79,39 @@ $env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SH
 ```
 
 That's the last time you touch the terminal on the laptop. The line installs granola-share,
-starts it in the background, adds the **Granola Share** app (a real Mac app in Applications; the
+starts it in the background, adds the **Study Stash** app (a real Mac app in Applications; the
 Start Menu on Windows), and opens it on setup with the address and password filled in:
 
 1. **Connect to your library.** One click checks the address and password.
 2. **Sign in to Granola.** A browser tab opens for your Granola account.
-3. **How to send.** Every lecture automatically, or ask before each one.
-4. **Allow transcript copying** (Mac). A button opens the right page of System Settings, where you
-   turn on **python3.12**. The step turns green as soon as it's on. If python3.12 isn't in the list,
-   the page shows its exact path with a Copy button.
+3. **How to send.** Every lecture automatically, or ask before each one. On a Mac there's also the
+   [optional transcript copying](#optional-copy-transcripts-from-the-granola-app), off unless you
+   turn it on.
+4. **Allow transcript copying** (only if you turned it on). A button opens the right page of System
+   Settings, where you turn on **python3.12**. The step turns green as soon as it's on. If
+   python3.12 isn't in the list, the page shows its exact path with a Copy button.
 5. **Finish.**
 
-<p align="center"><img src="docs/screenshots/setup.png" width="700" alt="Granola Share's setup: connected to the library, signed in to Granola, and choosing how to send, each step with a green check"></p>
+<p align="center"><img src="docs/screenshots/setup.png" width="700" alt="Study Stash's setup: connected to the library, signed in to Granola, and choosing how to send, each step with a green check"></p>
 
 Each step turns into a green check when it's done. (`granola-share client setup` still works in
 the terminal if you prefer it.)
 
 ### Or: the Mac app on its own
 
-Every release also has **Granola-Share.dmg** (on the
+Every release also has **Study-Stash.dmg** (on the
 [releases page](https://github.com/Joseph-Rus/granola_Share/releases/latest)). Open it and drag
-Granola Share into Applications. The first time you open it, it installs its background helper
+Study Stash into Applications. The first time you open it, it installs its background helper
 with one click, then shows the same setup. macOS asks once before opening an app from the
 internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &
 Security → Open Anyway**. The install line above skips that question, because it fetches the
 app itself.
 
-<p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Granola Share app's first screen: Welcome to Granola Share, with an Install and Continue button"></p>
+<p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Study Stash app's first screen: Welcome to Study Stash, with an Install and Continue button"></p>
 
 ## 3. Using the app
 
-Open **Granola Share** from Applications or Spotlight. Its toolbar has two tabs:
+Open **Study Stash** from Applications or Spotlight. Its toolbar has two tabs:
 
 - **This Mac** (⌘1): whether everything is working, what was sent and where each lecture was
   filed, and how this laptop sends. If something needs you, like a new password on the Mac mini
@@ -119,22 +125,20 @@ dark mode. On the Mac mini the app shows just the library.
 
 ## When a lecture finishes
 
-There's nothing to learn. Record in Granola, stop, and carry on:
+There's nothing to learn. Record in Granola, stop, and carry on. When Granola has finished the
+note, Study Stash sends it to your library (or asks first, if you chose "ask before each one").
+When the library has filed it, you get one notification: *"… is in Fall 2026 under Bio 110."*
 
-- **You stopped it in Granola** (the usual case): a few seconds later granola-share opens the
-  transcript, copies it, and closes it again. You don't click anything.
+With [transcript copying](#optional-copy-transcripts-from-the-granola-app) turned on:
+
+- **You stopped the recording in Granola** (the usual case): a few seconds later, the transcript
+  panel opens, the transcript is copied, and the panel closes again. You don't click anything.
 - **Granola wasn't in front** (you stopped it from the menu bar, or it stopped by itself): one popup
-  asks *"Save it to Lecture notes with its transcript?"* **Save** brings Granola forward, copies the
-  transcript, and puts you back where you were. **Not now** sends the lecture with Granola's own
-  summary instead.
-- **When your library has filed it**, one notification: *"… is in Lecture notes under Bio 110. Notes
-  written from the transcript."*
-
-If the laptop missed the end of a recording (it was asleep, or you recorded on your phone), you
-get the same one-click popup when Granola finishes the note. If a lecture ever goes out without
-its transcript, just open it in Granola later: the transcript is picked up and the notes are
-rewritten, with nothing else to do. With "ask before each one" turned on, the popup also has
-**Skip**.
+  asks *"Save it to Fall 2026 with its transcript?"*
+  - **Save** brings Granola forward, copies the transcript, and puts you back where you were.
+  - **Not now** sends the lecture with Granola's own summary instead.
+- **A lecture went out without its transcript:** open it in Granola later. The transcript is picked
+  up and the notes are rewritten.
 
 ## Study notes from the transcript
 
@@ -144,14 +148,24 @@ overview, key concepts, worked examples and formulas, announcements with their d
 questions. Long transcripts are summarized in parts, then merged. It all happens in the
 background, one lecture at a time, so sending never waits on the model.
 
-**Granola's API only shares transcripts on paid plans, so on a free plan the Mac laptop copies
-them from the Granola app itself.** It notices a recording ending when Granola stops using the
-microphone. Then it clicks Granola's own **Copy transcript** (opening and closing the transcript
-panel if needed), only in a pause in your typing, and puts your clipboard, cursor, and selection
-back right after. A lecture that was already sent without its transcript is sent again once one
-is copied, and its study notes are rewritten. This needs Accessibility permission for **python3.12**, and nothing else is read
-from Granola. Turn it off with `copy_transcripts = false` in `client.toml`. On Windows,
-free-plan lectures keep Granola's summary for now.
+Transcripts come through Granola's official connector on Granola's paid plans. Without a
+transcript, a lecture keeps Granola's own summary.
+
+### Optional: copy transcripts from the Granola app
+
+On a Mac, Study Stash can press Granola's own **Copy transcript** button for you when a lecture
+ends, so your notes are written from the transcript. **It's off unless you turn it on**, in the
+app under **Sending**. Before you do, know that:
+
+- **It automates the Granola app.** Granola's terms of service forbid scraping content from
+  their service "through use of manual or automated means", and this may count. Using it could
+  put your Granola account at risk. It's your call, for your own account.
+- **What it does:** it notices a recording ending when Granola stops using the microphone. Then
+  it opens the transcript panel if needed and clicks **Copy transcript**, only in a pause in your
+  typing, and puts your clipboard, cursor, and selection back right after. Nothing else is read
+  from Granola.
+- **It needs** Accessibility permission for **python3.12**. The app's Allow step opens the right
+  page of System Settings.
 
 Pick the model, turn our study notes off, or keep Granola's summary next to them under
 **Settings** on the library's web page. After switching models, **Rewrite all summaries** redoes
@@ -210,8 +224,8 @@ Start with `granola-share doctor`. It checks every piece and prints a fix for ea
 | Laptop: "wrong password" | The password is in the Mac mini's `~/.granola-share/config.toml`, and under Settings on the library's page. |
 | No study notes, only Granola's | The transcript wasn't copied (open the lecture's transcript in Granola), or Ollama is closed on the Mac mini. |
 | A lecture shows "Failed" | Open it, then **Try again**. The reason is on the page and in `~/.granola-share/logs/server.log`. |
-| Sign-in timed out | Open Granola Share and click **Sign in to Granola again**. |
-| "Copy transcripts ✗ Accessibility" | Open Granola Share and click **Allow transcript copying**, then turn on **python3.12**. |
+| Sign-in timed out | Open Study Stash and click **Sign in to Granola again**. |
+| "Copy transcripts ✗ Accessibility" | Open Study Stash and click **Allow transcript copying**, then turn on **python3.12**. |
 | Transcripts aren't copied | They're copied only while Granola is in front with the lecture's transcript panel open. Open it and wait a few seconds. |
 
 Logs live in `~/.granola-share/logs/` (`server.log`, `client.log`, `update.log`).
@@ -222,7 +236,7 @@ Logs live in `~/.granola-share/logs/` (`server.log`, `client.log`, `update.log`)
 |---|---|
 | `setup` | set up the library (safe to rerun; `--help` lists flags to answer without prompts) |
 | `run` | the library: web page, ingest API, study notes (+ its own sync if enabled) |
-| `client open [--install] [--no-browser]` | show Granola Share (the app on a Mac, else the browser), starting its service if needed |
+| `client open [--install] [--no-browser]` | show Study Stash (the app on a Mac, else the browser), starting its service if needed |
 | `client setup` | laptop setup in the terminal instead (`--server`, `--key`, `--mode`, `--yes`, …) |
 | `client run [--no-ui]` / `client once [--auto]` | the laptop's background service, or check once |
 | `client login` / `login` | sign in to Granola again |
@@ -252,6 +266,26 @@ for you. Instead the laptop pushes finished lectures to your library. Granola's 
 (used by the Obsidian plugins and granola-exporter) needs the paid Business plan; the MCP
 connector is free. Details and alternatives are in [docs/DESIGN.md](docs/DESIGN.md).
 
+## Legal and privacy
+
+- **Not affiliated with Granola.** Study Stash is an independent, unofficial project. It isn't made,
+  endorsed, or supported by Granola, and "Granola" is their trademark. It gets your notes through
+  Granola's official MCP connector, signed in as you. Its one optional feature that automates the
+  Granola app is off unless you turn it on ([why](#optional-copy-transcripts-from-the-granola-app)).
+- **Recording is your responsibility.** Before recording a lecture, class, or conversation, make
+  sure you're allowed to. Recording laws differ, and some places require everyone's consent.
+  Schools often have their own rules about recording lectures and sharing notes. Study Stash is for
+  your own study notes, not for redistributing lecture content.
+- **Your data stays with you.**
+  - Lectures, transcripts, and study notes live on your own computers.
+  - Study notes are written by a model running on your own computer.
+  - Nothing is sent to this project or its author, and there's no analytics.
+  - The only outside services are Granola (your own account, over its official connector) and
+    GitHub (update checks and downloads).
+- **No warranty.** It's provided as is, under the [MIT License](LICENSE). Check your notes against
+  the lecture before relying on them, since models make mistakes.
+- **Security:** see [SECURITY.md](SECURITY.md) to report a problem.
+
 ## Development
 
 ```
@@ -262,11 +296,11 @@ granola_share/
   oauth.py      discovery, dynamic client registration, PKCE login, refresh
   granola.py    MCP client; discovers tool argument names at runtime
   client.py     laptop watcher: poll → popup → send → "it's filed"
-  client_app.py the laptop's Granola Share page: setup and status, on 127.0.0.1 only
-  launcher.py   the Granola Share app (native on macOS, else a script), Start Menu, .desktop
-macos/          the native Mac app: GranolaShare.swift, its icon, build.sh → .app, zip, DMG; tour.py
+  client_app.py the laptop's Study Stash page: setup and status, on 127.0.0.1 only
+  launcher.py   the Study Stash app (native on macOS, else a script), Start Menu, .desktop
+macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .app, zip, DMG; tour.py
                 → docs/screenshots
-  transcript_grab.py  macOS: copy transcripts from the Granola window (free plans)
+  transcript_grab.py  macOS, optional: copy transcripts from the Granola window
   dialogs.py    native popups and notifications (macOS/Windows/Linux)
   autostart.py  launchd / Startup folder / systemd --user
   update.py     release check, uv upgrade, auto-update loop
@@ -294,7 +328,7 @@ installer against your working copy, run
 - The exact field names Granola's MCP tools return can change. The client maps common variants
   and saves the last raw payload under `debug/`; run `granola-share tools --probe` to check.
 - Copying transcripts from the Granola app depends on the app's own labels (the "Copy transcript"
-  button), so a Granola redesign can break it until granola-share is updated. The Granola Share
+  button), so a Granola redesign can break it until granola-share is updated. The Study Stash
   page and `doctor` show when the last copy happened. Accessibility access is granted to the
   python3.12 that granola-share runs on, so other programs using that same Python share it.
 - The Windows installer, Startup-folder service, and self-update helper are written against the

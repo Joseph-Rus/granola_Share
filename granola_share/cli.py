@@ -186,7 +186,7 @@ def cmd_client_setup(args):
     from .wizard import client_setup, make_prompter
 
     client_setup(args.home, make_prompter(args))
-    launcher.install(args.home)  # the "Granola Share" app, to reopen status and settings without a terminal
+    launcher.install(args.home)  # the "Study Stash" app, to reopen status and settings without a terminal
 
 
 def cmd_client_login(args):
@@ -196,18 +196,18 @@ def cmd_client_login(args):
 
 
 def cmd_client_run(args):
-    """The background service: the watcher, plus the Granola Share page for setup and status."""
+    """The background service: the watcher, plus the Study Stash page for setup and status."""
     from .client_app import ClientRuntime, serve
 
     log = lambda s: print(s, flush=True)  # noqa: E731
     runtime = ClientRuntime(args.home, log=log)
     cc = runtime.config()
     print(f"granola-share {__version__}: " + (f"watching Granola for '{cc.pool_name}'" if runtime.configured()
-                                               else "waiting for setup in the Granola Share page"), flush=True)
+                                               else "waiting for setup in the Study Stash page"), flush=True)
     if runtime.configured():
         runtime.start_watching()
     elif args.no_ui:
-        sys.exit("Not set up yet: open Granola Share, or run `granola-share client setup`.")
+        sys.exit("Not set up yet: open Study Stash, or run `granola-share client setup`.")
     try:
         if args.no_ui:
             runtime.thread.join()
@@ -218,7 +218,7 @@ def cmd_client_run(args):
 
 
 def cmd_client_open(args):
-    """What the Granola Share icon and the installer run: start the service if needed, open its page."""
+    """What the Study Stash icon and the installer run: start the service if needed, open its page."""
     import os
 
     from .client_app import open_app, write_prefill
@@ -231,7 +231,7 @@ def cmd_client_open(args):
     if args.no_browser:
         print(url)
         return
-    print("Granola Share is open." + (" Finish setting up there." if args.install else ""))
+    print("Study Stash is open." + (" Finish setting up there." if args.install else ""))
     print(f"If nothing opened, go to: {url}")
 
 
@@ -361,10 +361,10 @@ def main(argv=None):
     clp = csub.add_parser("login", help="sign in to Granola again")
     clp.add_argument("--no-browser", action="store_true")
     clp.set_defaults(fn=cmd_client_login)
-    crp = csub.add_parser("run", help="the background service: watch Granola and serve the Granola Share page")
+    crp = csub.add_parser("run", help="the background service: watch Granola and serve the Study Stash page")
     crp.add_argument("--no-ui", action="store_true", help="only watch; no local page")
     crp.set_defaults(fn=cmd_client_run)
-    cap = csub.add_parser("open", help="open the Granola Share page (setup and status), starting the service if needed")
+    cap = csub.add_parser("open", help="open the Study Stash page (setup and status), starting the service if needed")
     cap.add_argument("--install", action="store_true", help="also install the background service and the app icon")
     cap.add_argument("--server", help="library address to fill in (default: $GRANOLA_SHARE_SERVER)")
     cap.add_argument("--key", help="library password to fill in (default: $GRANOLA_SHARE_KEY)")

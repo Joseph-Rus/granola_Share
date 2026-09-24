@@ -483,7 +483,8 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
                        f'<span class="grow">Rewrite all summaries with {esc(cfg.effective_summary_model)}</span>'
                        f'<button>Rewrite all</button></form></div>'
                        f'<p class="group-foot">Useful after switching models. Lectures stay readable while they are '
-                       f'rewritten, one at a time.</p>')
+                       f'rewritten, one at a time.</p>'
+                       f'<p class="group-foot" style="margin-top:2.4rem">Study Stash is an independent project, not affiliated with or endorsed by Granola. Granola is a trademark of its owner.</p>')
         body = f"<h1>Settings</h1>{flash}{form}{invite}{maintenance}"
         return show("Settings", body, ctx)
 

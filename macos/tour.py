@@ -3,7 +3,7 @@
     sh macos/build.sh && uv run --with pillow python macos/tour.py
 
 Serves a sample library and the laptop's page (set up, and part way through setup), runs the app's
-tour mode against them (GRANOLA_SHARE_TOUR in GranolaShare.swift: the app captures its own window,
+tour mode against them (GRANOLA_SHARE_TOUR in StudyStash.swift: the app captures its own window,
 so no Screen Recording permission is needed), then gives each picture macOS's rounded corners and
 shadow and writes it to docs/screenshots/.
 """
@@ -34,7 +34,7 @@ from granola_share.pipeline import Pipeline  # noqa: E402
 from granola_share.store import Store  # noqa: E402
 from granola_share.web import create_app  # noqa: E402
 
-APP = ROOT / "dist" / "Granola Share.app" / "Contents" / "MacOS" / "Granola Share"
+APP = ROOT / "dist" / "Study Stash.app" / "Contents" / "MacOS" / "Study Stash"
 OUT = ROOT / "docs" / "screenshots"
 LIB_PORT, MAC_PORT, SETUP_PORT = 8871, 8872, 8873
 PASSWORD = "maple-otter-42"
@@ -110,7 +110,7 @@ class DemoRuntime(client_app.ClientRuntime):
         pass
 
     def copy_status(self):
-        return {"available": True, "enabled": True, "allowed": self._allowed, "why": None}
+        return {"available": True, "enabled": self.config().copy_transcripts, "allowed": self._allowed, "why": None}
 
 
 def laptop(home: Path, port: int, *, set_up: bool):

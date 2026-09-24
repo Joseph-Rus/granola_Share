@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Granola Share</string>
-    <key>CFBundleDisplayName</key><string>Granola Share</string>
+    <key>CFBundleName</key><string>Study Stash</string>
+    <key>CFBundleDisplayName</key><string>Study Stash</string>
     <key>CFBundleIdentifier</key><string>com.granola-share.mac</string>
-    <key>CFBundleExecutable</key><string>Granola Share</string>
+    <key>CFBundleExecutable</key><string>Study Stash</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>__VERSION__</string>
@@ -13,8 +13,8 @@
     <key>LSMinimumSystemVersion</key><string>12.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.education</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Sends your Granola lectures to your own library.</string>
-    <key>NSLocalNetworkUsageDescription</key><string>Granola Share opens your library on your Mac mini.</string>
+    <key>NSHumanReadableCopyright</key><string>Your Granola lectures, in your own library. An independent project, not affiliated with or endorsed by Granola. MIT License.</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Study Stash opens your library on your Mac mini.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <!-- The library is plain http inside your own Tailscale network or home Wi-Fi. Only this key:

@@ -24,7 +24,7 @@ from . import __version__, autostart
 
 REPO_SLUG = "Joseph-Rus/granola_Share"
 LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
-MAC_APP_ASSET = "Granola-Share-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
+MAC_APP_ASSET = "Study-Stash-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
 FIRST_CHECK_AFTER = 10 * 60
 CHECK_EVERY = 6 * 3600
 LOCK_STALE_AFTER = 20 * 60
@@ -197,7 +197,7 @@ def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restar
     if platform.system() == "Darwin" and release.mac_app:
         from . import launcher
 
-        if launcher.native_installed():  # the Granola Share app updates along with everything else
+        if launcher.native_installed():  # the Study Stash app updates along with everything else
             launcher.install_native(release.mac_app, log=log)
     if restart_services:
         for role in roles:

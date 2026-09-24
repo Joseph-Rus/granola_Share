@@ -369,7 +369,7 @@ def test_setup_asks_about_copying_on_a_mac(tmp_path):
 
 
 def test_doctor_reports_copying(tmp_path):
-    cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw")
+    cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", copy_transcripts=True)
     save_client_config(cc)
     assert doctor.copy_check(cc, False, system="Linux") is None
     assert doctor.copy_check(cc, False, system="Darwin").state == doctor.WARN  # watcher hasn't run yet
@@ -380,6 +380,7 @@ def test_doctor_reports_copying(tmp_path):
     (tmp_path / "transcripts" / "status.json").write_text(json.dumps(
         {"trusted": True, "last_copy": {"title": "Membranes", "chars": 8181, "at": "2026-09-24T15:40:00"}}))
     assert "Membranes" in doctor.copy_check(cc, False, system="Darwin").detail
-    cc.copy_transcripts = False
-    assert doctor.copy_check(cc, False, system="Darwin").state == doctor.WARN
+    cc.copy_transcripts = False  # the default: fine, and it says how to turn it on
+    off = doctor.copy_check(cc, False, system="Darwin")
+    assert off.state == doctor.OK and "off (the default)" in off.detail and "read the note" in off.fix
 

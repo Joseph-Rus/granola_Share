@@ -30,3 +30,11 @@ def test_client_config_roundtrip(tmp_path):
 def test_missing_files_give_defaults(tmp_path):
     assert load_config(tmp_path).web_port == 8787
     assert load_client_config(tmp_path).mode == "auto"
+
+
+def test_copying_transcripts_is_off_unless_turned_on(tmp_path):
+    from granola_share.config import ClientConfig, load_client_config, save_client_config
+
+    assert ClientConfig(home=tmp_path).copy_transcripts is False  # it automates the Granola app
+    save_client_config(ClientConfig(home=tmp_path, server_url="http://mini:8787", copy_transcripts=True))
+    assert load_client_config(tmp_path).copy_transcripts is True  # a laptop that turned it on keeps it

@@ -1,4 +1,4 @@
-// Granola Share for Mac: a native window around the pages granola-share already serves.
+// Study Stash for Mac: a native window around the pages granola-share already serves.
 //
 // "This Mac" is the laptop's page (setup and status) from the background service on 127.0.0.1.
 // "Library" is your library on the Mac mini, signed in with the password this Mac already has.
@@ -175,7 +175,7 @@ enum Screen {
     }
 
     static let welcome = page(
-        title: "Welcome to Granola Share",
+        title: "Welcome to Study Stash",
         text: "It sends the lectures you record in Granola to your library, where your own model writes their "
             + "study notes. First it installs a small helper that runs in the background. That takes about a minute.",
         buttons: [("Install and Continue", "install", true)])
@@ -220,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         library = makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1120, height: 780),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Granola Share"
+        window.title = "Study Stash"
         window.minSize = NSSize(width: 520, height: 460)
         window.delegate = self
         window.contentView = container
@@ -302,7 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
     }
 
     func startHelper(install: Bool) {
-        laptop.loadHTMLString(Screen.page(spinner: true, title: "Starting Granola Share", text: "This takes a few seconds."),
+        laptop.loadHTMLString(Screen.page(spinner: true, title: "Starting Study Stash", text: "This takes a few seconds."),
                               baseURL: nil)
         var args = ["--home", dataDir.path, "client", "open", "--no-browser"]
         if install { args.append("--install") }
@@ -311,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
                 self.place = Place.read()
                 self.laptop.load(URLRequest(url: pageURL()))
             } else {
-                self.problem(self.laptop, "Granola Share didn't start",
+                self.problem(self.laptop, "Study Stash didn't start",
                              "Its background helper didn't answer. Try again, or look at its log.", out)
             }
         }
@@ -483,16 +483,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
             if mine { i.target = self }
             return i
         }
-        _ = menu("Granola Share", [
-            item("About Granola Share", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+        _ = menu("Study Stash", [
+            item("About Study Stash", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             .separator(),
             item("Open Data Folder", #selector(openDataFolder), mine: true),
             .separator(),
-            item("Hide Granola Share", #selector(NSApplication.hide(_:)), "h"),
+            item("Hide Study Stash", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Show All", #selector(NSApplication.unhideAllApplications(_:))),
             .separator(),
-            item("Quit Granola Share", #selector(NSApplication.terminate(_:)), "q"),
+            item("Quit Study Stash", #selector(NSApplication.terminate(_:)), "q"),
         ])
         _ = menu("Edit", [
             item("Undo", Selector(("undo:")), "z"),
@@ -561,7 +561,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         let e = error as NSError
         if e.code == NSURLErrorCancelled || (e.domain == "WebKitErrorDomain" && e.code == 102) { return }  // a download
         if v === laptop {
-            problem(v, "Granola Share isn't answering", "Its background helper may be restarting. Try again in a moment.")
+            problem(v, "Study Stash isn't answering", "Its background helper may be restarting. Try again in a moment.")
         } else {
             let host = place.library?.host ?? "your library"
             problem(v, "Can't reach your library",

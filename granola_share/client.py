@@ -102,7 +102,7 @@ class ShareClient:
         # "not now", or None when the laptop didn't see it end.
         self.handled_since = handled_since or (lambda started: None)
         self.clock = clock
-        self.last_error: str | None = None  # the latest check's failure, shown on the Granola Share page
+        self.last_error: str | None = None  # the latest check's failure, shown on the Study Stash page
         # Why the library didn't take the last lecture: "password", "unreachable", "other", or None.
         self.send_problem: str | None = None
         self.send_problem_kind: str | None = None
@@ -150,7 +150,7 @@ class ShareClient:
         if self.cc.mode == "auto":
             return True
         text = f"Granola finished notes for:\n\n“{m.title}”\n{m.date[:10]}\n\nSend it to {self.library}?"
-        return self.ask("granola-share", text, yes="Send", no="Skip", timeout=self.cc.dialog_timeout_seconds)
+        return self.ask("Study Stash", text, yes="Send", no="Skip", timeout=self.cc.dialog_timeout_seconds)
 
     def ask_save(self, m: Meeting, copy_state: str) -> str | None:
         """A finished lecture without its transcript: 'save', 'without', 'skip', or None (no answer)."""
@@ -164,7 +164,7 @@ class ShareClient:
                          "transcript, and brings you back.")
             go = "Save"
         buttons = (["Skip"] if self.cc.mode == "ask" else []) + ["Without transcript", go]
-        answer = self.choose("granola-share", "\n".join(lines), buttons, default=go,
+        answer = self.choose("Study Stash", "\n".join(lines), buttons, default=go,
                              timeout=self.cc.dialog_timeout_seconds)
         return {go: "save", "Without transcript": "without", "Skip": "skip"}.get(answer) if answer else None
 
@@ -193,10 +193,10 @@ class ShareClient:
         with_t = " with its transcript" if m.transcript.strip() else ""
         self.log(f"[client] shared '{m.title}'{with_t}" + (f" → {cls}" if cls else ""))
         if message:
-            self.notify("granola-share", message)  # otherwise the one notification is "it's filed"
+            self.notify("Study Stash", message)  # otherwise the one notification is "it's filed"
 
     def _send_failed(self, e: Exception) -> None:
-        """Say why where it's seen: on the Granola Share page, plus one notification when only the user
+        """Say why where it's seen: on the Study Stash page, plus one notification when only the user
         can fix it (the Mac mini has a new password). Lectures wait here and are retried either way."""
         if getattr(getattr(e, "response", None), "status_code", None) == 401:
             kind, text = "password", f"{self.library} turned down this laptop's password, so lectures are waiting here."
@@ -206,7 +206,7 @@ class ShareClient:
         else:
             kind, text = "other", f"Couldn't send to {self.library}: {e}"
         if kind == "password" and self.send_problem_kind != "password":
-            self.notify("granola-share", f"{text} Open Granola Share to enter the new one.")
+            self.notify("Study Stash", f"{text} Open Study Stash to enter the new one.")
         self.send_problem, self.send_problem_kind = text, kind
 
     # -- main loop ---------------------------------------------------------
@@ -338,7 +338,7 @@ class ShareClient:
             how = (" Its notes were rewritten from the transcript." if entry.get("resent") else
                    " Notes written from the transcript." if info.get("summary_model") else "")
             rep.filed.append((entry.get("title", ""), entry.get("class_name") or ""))
-            self.notify("granola-share", f"“{entry.get('title')}” is in {self.library}{where}.{how}")
+            self.notify("Study Stash", f"“{entry.get('title')}” is in {self.library}{where}.{how}")
 
     def _busy(self) -> bool:
         """Something to follow up on soon: the library finishing what was just sent."""

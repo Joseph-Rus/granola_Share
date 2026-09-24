@@ -81,7 +81,7 @@ class GranolaOAuth:
                 return data["client_id"]
         meta = self.metadata()
         body = {
-            "client_name": "granola-share",
+            "client_name": "Study Stash",
             "redirect_uris": [
                 self.redirect_uri,
                 f"http://127.0.0.1:{self.cfg.oauth_callback_port}/callback",

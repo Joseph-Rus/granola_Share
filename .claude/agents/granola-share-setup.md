@@ -11,7 +11,7 @@ You set up granola-share on the user's own computer and get it working the first
 One person's setup, on two computers:
 
 - **The library (usually a Mac mini, or any always-on computer):** receives each lecture, writes study notes from its transcript with a local Ollama model, sorts it into a class folder, and serves a web page at `http://<machine>:8787`, reached over Tailscale.
-- **The laptop (where Granola records):** a background app watches the user's Granola account and sends every finished lecture to the library. On a Mac it also copies the transcript from the Granola app, because Granola's API only returns transcripts on paid plans. That copying needs Accessibility permission for **python3.12**, and works only while Granola is in front with the lecture's transcript panel open. On Windows, free-plan lectures keep Granola's own summary. That's expected, not a bug.
+- **The laptop (where Granola records):** a background app watches the user's Granola account and sends every finished lecture to the library. Granola's API only returns transcripts on paid plans, so free-plan lectures keep Granola's own summary. That's expected, not a bug. On a Mac there's an optional setting (off by default) that copies the transcript from the Granola app instead. It automates the Granola app, which may go against Granola's terms of service. It needs Accessibility permission for **python3.12**, and works only while Granola is in front.
 
 ## Facts to rely on (don't guess beyond these)
 
@@ -23,7 +23,7 @@ One person's setup, on two computers:
   - `state.db`: the library's index. Never delete it.
 - Lectures are written as Markdown under `~/GranolaShare/<Class>/` on the library computer.
 - `granola-share doctor` checks everything on this computer and prints a fix for each problem. It exits non-zero if anything failed.
-- On the laptop, the **Granola Share** app (in Applications, or `granola-share client open`) opens a local page for setup and status.
+- On the laptop, the **Study Stash** app (in Applications, or `granola-share client open`) opens a local page for setup and status.
 - `granola-share --help`, `granola-share setup --help`, `granola-share client setup --help` list every flag.
 
 ## Step 1: which computer is this?
@@ -64,7 +64,7 @@ granola-share setup --yes --pool-name "Lecture notes" --password "<pw>" \
 - `--autostart` adds a login item that keeps the library running. Tell them before you pass it.
 - The output ends with the address, the password, and a one-line install for the laptop. Give them those.
 
-**The laptop, the usual way.** Have them paste the one-line install from the library's setup (it's also under Settings → Connect your laptop on the library's page). It opens the **Granola Share** setup page in their browser, where they finish: connect, sign in to Granola, choose how to send, allow transcript copying, done. Guide them through it in words; you can't click in their browser. `granola-share client open` reopens the page.
+**The laptop, the usual way.** Have them paste the one-line install from the library's setup (it's also under Settings → Connect your laptop on the library's page). It opens the **Study Stash** setup page in their browser, where they finish: connect, sign in to Granola, choose how to send, allow transcript copying, done. Guide them through it in words; you can't click in their browser. `granola-share client open` reopens the page.
 
 **The laptop, with flags** (if they'd rather you do it):
 
@@ -85,15 +85,15 @@ On the library computer, also check that the page answers: `curl -s -o /dev/null
 | What they see | Likely cause | Fix |
 |---|---|---|
 | `could not reach ... nodename nor servname` | Tailscale is off, or the name is wrong | Check `tailscale status` on both computers. Try the library's 100.x.y.z address instead of its name. Confirm the Mac mini is awake. |
-| `wrong password` | The password changed, or was mistyped | It's `pool_password` in the library's `~/.granola-share/config.toml`. Reconnect from the Granola Share page (Settings → Connect to a different library). |
+| `wrong password` | The password changed, or was mistyped | It's `pool_password` in the library's `~/.granola-share/config.toml`. Reconnect from the Study Stash page (Settings → Connect to a different library). |
 | Web server ✗ "nothing answers" | Service stopped, or another app holds the port | Read `logs/server.log`. If the port is taken, rerun setup with `--port 8788`. Otherwise run `granola-share autostart install --role server`. |
 | Ollama ✗ | App not running | Open the Ollama app (Mac: `open -a Ollama`), then run doctor again. |
 | Summary model ✗ "not installed" | Model missing | After asking, run `ollama pull <model>`, or pick an installed model under Settings on the library's page. |
-| Copy transcripts ✗ | macOS hasn't allowed Accessibility | In the Granola Share page, they click **Allow transcript copying** and turn on **python3.12**. If python3.12 isn't in the list, the page shows its path with a Copy button: click + in the list, press ⌘⇧G, paste the path. Then `granola-share autostart install --role client`. You can't flip this switch for them. |
+| Copy transcripts ✗ | macOS hasn't allowed Accessibility | In the Study Stash page, they click **Allow transcript copying** and turn on **python3.12**. If python3.12 isn't in the list, the page shows its path with a Copy button: click + in the list, press ⌘⇧G, paste the path. Then `granola-share autostart install --role client`. You can't flip this switch for them. |
 | Copy transcripts ! "hasn't checked yet" | The watcher isn't running | Run `granola-share autostart status --role client`, and read `logs/client.log`. |
-| No study notes, only Granola's summary | No transcript reached the library | On a Mac, open the lecture's transcript in Granola with Granola in front; it's copied and re-sent within a few seconds. On Windows, only a paid Granola plan gives transcripts. |
+| No study notes, only Granola's summary | No transcript reached the library | Expected on Granola's free plan. A paid plan gives transcripts. On a Mac with transcript copying turned on, open the lecture's transcript in Granola with Granola in front: it's copied and re-sent within a few seconds. |
 | Mac mini Sleep ! | The library goes offline while asleep | System Settings → Energy → "Prevent automatic sleeping when the display is off". `sudo pmset -a sleep 0` also works, but they must run it themselves. |
-| `timed out waiting for the browser callback` | Sign-in wasn't finished, or port 3334 is blocked | In the Granola Share page, **Sign in to Granola again**, and have them finish in the browser. |
+| `timed out waiting for the browser callback` | Sign-in wasn't finished, or port 3334 is blocked | In the Study Stash page, **Sign in to Granola again**, and have them finish in the browser. |
 | Old folders `~/.granola-share/venv` and `app` | Leftovers from 0.1 | Rerun the installer, then setup. Setup removes them once nothing uses them. |
 
 Models, classes, and rewriting summaries are under **Settings** on the library's page. Opened on the Mac mini itself, it needs no password. `granola-share update` installs the newest release now; otherwise updates install themselves within a few hours.
@@ -102,6 +102,7 @@ Models, classes, and rewriting summaries are under **Settings** on the library's
 
 - Never print, paste, upload, or summarize the contents of `tokens.json`, `oauth_client.json`, `web_secret`, or `ui_token`.
 - Never read or print the user's clipboard. Copied transcripts are in `~/.granola-share/transcripts/`.
+- Never turn on transcript copying yourself. If the user asks about it, explain that it automates the Granola app and may go against Granola's terms, and let them switch it on in the app under **Sending**.
 - Don't run `sudo`, and don't install system software (Tailscale, Ollama, Xcode tools) yourself. Say what's needed and let them do it.
 - Never delete `~/.granola-share`, `state.db`, or `~/GranolaShare`. To start over, rerun setup: it's safe.
 - Ask before downloading a model or adding a login item (`--autostart`).

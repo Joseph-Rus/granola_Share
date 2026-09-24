@@ -2,7 +2,7 @@
 #   Every push and pull request: tests on macOS, Linux, and Windows, then the real one-line
 #   installer on each, then a server that boots and answers.
 #   Push to main with a new version in granola_share/__init__.py: once all of that passes,
-#   publish release v<version>, with the Mac app attached (Granola-Share.dmg, and a zip the
+#   publish release v<version>, with the Mac app attached (Study-Stash.dmg, and a zip the
 #   installer and auto-update use). Installed copies pick it up within a few hours
 #   (auto_update), or right away with `granola-share update`.
 name: ci
@@ -88,7 +88,7 @@ jobs:
           echo "$S" | grep -q '"done":1'
           curl -fsS http://127.0.0.1:8799/ | grep -q "CS101 lecture 1"
           granola-share --home "$H" doctor --role server || true
-          # the laptop's Granola Share page comes up before any setup
+          # the laptop's Study Stash page comes up before any setup
           granola-share --home "$RUNNER_TEMP/laptop" client run > "$RUNNER_TEMP/client.log" 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/healthz && break; sleep 2; done
           curl -fsS http://127.0.0.1:8765/healthz | grep -q granola-share
@@ -102,13 +102,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Granola Share.app, its zip, and the DMG
+      - name: Build Study Stash.app, its zip, and the DMG
         run: sh macos/build.sh "" dist
       - name: The app starts
         run: |
-          file "dist/Granola Share.app/Contents/MacOS/Granola Share" | grep -q "universal binary"
-          codesign --verify --deep "dist/Granola Share.app"
-          GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/Granola Share.app/Contents/MacOS/Granola Share" &
+          file "dist/Study Stash.app/Contents/MacOS/Study Stash" | grep -q "universal binary"
+          codesign --verify --deep "dist/Study Stash.app"
+          GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/Study Stash.app/Contents/MacOS/Study Stash" &
           sleep 8
           kill -0 $!   # still running after 8 seconds: it launched and showed its window
           kill $!
@@ -116,8 +116,8 @@ jobs:
         with:
           name: mac-app
           path: |
-            dist/Granola-Share.dmg
-            dist/Granola-Share-mac.zip
+            dist/Study-Stash.dmg
+            dist/Study-Stash-mac.zip
 
   release:
     name: publish release
@@ -145,4 +145,4 @@ jobs:
             exit 0
           fi
           gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
-            dist/Granola-Share.dmg dist/Granola-Share-mac.zip
+            dist/Study-Stash.dmg dist/Study-Stash-mac.zip

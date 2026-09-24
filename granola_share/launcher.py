@@ -1,4 +1,4 @@
-"""The "Granola Share" icon: an app in /Applications or ~/Applications (macOS), a Start Menu shortcut (Windows),
+"""The "Study Stash" icon: an app in /Applications or ~/Applications (macOS), a Start Menu shortcut (Windows),
 or a menu entry (Linux). Opening it runs `granola-share client open`, which starts the
 background service if needed and shows its page in the browser.
 """
@@ -13,7 +13,8 @@ import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-APP_NAME = "Granola Share"
+APP_NAME = "Study Stash"
+OLD_NAMES = ("Granola Share",)  # what 0.2 called it: replaced and removed on the next install
 BUNDLE_ID = "com.granola-share.app"
 
 
@@ -25,19 +26,21 @@ SYSTEM_APPS = Path("/Applications")
 
 
 def mac_app_paths() -> list[Path]:
-    return [SYSTEM_APPS / f"{APP_NAME}.app", Path.home() / "Applications" / f"{APP_NAME}.app"]
+    """Every place the app may be: today's name first, then older names, in both Applications folders."""
+    return [folder / f"{name}.app" for name in (APP_NAME, *OLD_NAMES)
+            for folder in (SYSTEM_APPS, Path.home() / "Applications")]
 
 
 def mac_app_path() -> Path:
     """/Applications when this account can write there (admins can), so it's in Finder's Applications;
     otherwise ~/Applications. Spotlight and Launchpad find it in either."""
-    system, personal = mac_app_paths()
+    system, personal = mac_app_paths()[:2]
     return system if os.access(SYSTEM_APPS, os.W_OK) else personal
 
 
-def windows_shortcut_path() -> Path:
+def windows_shortcut_path(name: str = APP_NAME) -> Path:
     return (Path(os.environ.get("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-            / f"{APP_NAME}.lnk")
+            / f"{name}.lnk")
 
 
 def linux_desktop_path() -> Path:
@@ -64,14 +67,14 @@ def render_info_plist() -> str:
 
 def render_mac_script(args: list[str]) -> str:
     quoted = " ".join("'" + a.replace("'", "'\\''") + "'" for a in args)
-    return f"#!/bin/sh\n# Opens the Granola Share page (starting its background service if needed).\nexec {quoted}\n"
+    return f"#!/bin/sh\n# Opens the Study Stash page (starting its background service if needed).\nexec {quoted}\n"
 
 
-NATIVE_EXE = "Granola Share"  # the native app's binary; the script launcher's is granola-share-app
+NATIVE_EXE = "Study Stash"  # the native app's binary; the script launcher's is granola-share-app
 
 
 def is_native(app: Path) -> bool:
-    return (app / "Contents" / "MacOS" / NATIVE_EXE).is_file()
+    return any((app / "Contents" / "MacOS" / exe).is_file() for exe in (NATIVE_EXE, *OLD_NAMES))
 
 
 def native_installed() -> Path | None:
@@ -96,17 +99,17 @@ def install_native(url: str, *, log=print, get=None, run=subprocess.run) -> Path
             p = run(["ditto", "-x", "-k", str(zip_path), str(unpacked)], capture_output=True, text=True)
             new = unpacked / f"{APP_NAME}.app"
             if p.returncode != 0 or not is_native(new):
-                log("The Granola Share app in that release didn't unpack; keeping the one you have.")
+                log("The Study Stash app in that release didn't unpack; keeping the one you have.")
                 return None
             dest = mac_app_path()
             for old in mac_app_paths():
                 shutil.rmtree(old, ignore_errors=True)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(new), str(dest))
-            log(f"Installed the Granola Share app in {dest.parent}.")
+            log(f"Installed the Study Stash app in {dest.parent}.")
             return dest
     except Exception as e:
-        log(f"Couldn't install the Granola Share app ({e}); the one in Applications still works.")
+        log(f"Couldn't install the Study Stash app ({e}); the one in Applications still works.")
         return None
 
 
@@ -134,12 +137,14 @@ def install(home: Path, *, system: str | None = None, python: str | None = None,
         if system == "Windows":
             link = windows_shortcut_path()
             link.parent.mkdir(parents=True, exist_ok=True)
+            for old in OLD_NAMES:
+                windows_shortcut_path(old).unlink(missing_ok=True)
             exe = Path(args[0])
             target = exe.with_name("pythonw.exe") if exe.with_name("pythonw.exe").exists() else exe
             arguments = subprocess.list2cmdline(args[1:]).replace("'", "''")
             ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{str(link).replace(chr(39), chr(39) * 2)}');"
                   f"$s.TargetPath='{str(target).replace(chr(39), chr(39) * 2)}';$s.Arguments='{arguments}';"
-                  f"$s.Description='Open Granola Share';$s.Save()")
+                  f"$s.Description='Open Study Stash';$s.Save()")
             run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
             return link
         desktop = linux_desktop_path()
@@ -160,7 +165,8 @@ def uninstall(system: str | None = None) -> None:
             for app in mac_app_paths():
                 shutil.rmtree(app, ignore_errors=True)
         elif system == "Windows":
-            windows_shortcut_path().unlink(missing_ok=True)
+            for name in (APP_NAME, *OLD_NAMES):
+                windows_shortcut_path(name).unlink(missing_ok=True)
         else:
             linux_desktop_path().unlink(missing_ok=True)
     except OSError:
