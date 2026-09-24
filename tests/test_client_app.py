@@ -161,6 +161,19 @@ def test_launcher_icons(tmp_path, monkeypatch):
     assert link.name == "Granola Share.lnk" and "CreateShortcut" in ran[0][-1] and "client open" in ran[0][-1]
 
 
+def test_mac_app_goes_where_finder_shows_it_when_allowed(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    old = launcher.install(tmp_path / ".granola-share", system="Darwin", python="/py")  # /Applications not writable
+    assert old == tmp_path / "Applications" / "Granola Share.app"
+    (tmp_path / "SystemApps").mkdir()
+    monkeypatch.setattr(launcher, "SYSTEM_APPS", tmp_path / "SystemApps")  # an admin account can write there
+    app = launcher.install(tmp_path / ".granola-share", system="Darwin", python="/py")
+    assert app == tmp_path / "SystemApps" / "Granola Share.app" and app.exists()
+    assert not old.exists() and launcher.installed(system="Darwin")  # one copy, not two
+    launcher.uninstall(system="Darwin")
+    assert not launcher.installed(system="Darwin")
+
+
 def test_status_page_asks_to_sign_in_again_when_granola_signed_out(tmp_path):
     cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall pool",
                       display_name="Alex")

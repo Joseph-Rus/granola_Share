@@ -1,4 +1,4 @@
-"""The "Granola Share" icon: an app in ~/Applications (macOS), a Start Menu shortcut (Windows),
+"""The "Granola Share" icon: an app in /Applications or ~/Applications (macOS), a Start Menu shortcut (Windows),
 or a menu entry (Linux). Opening it runs `granola-share client open`, which starts the
 background service if needed and shows its page in the browser.
 """
@@ -21,8 +21,18 @@ def _command(home: Path, python: str | None = None) -> list[str]:
     return [python or sys.executable, "-m", "granola_share.cli", "--home", str(home), "client", "open"]
 
 
+SYSTEM_APPS = Path("/Applications")
+
+
+def mac_app_paths() -> list[Path]:
+    return [SYSTEM_APPS / f"{APP_NAME}.app", Path.home() / "Applications" / f"{APP_NAME}.app"]
+
+
 def mac_app_path() -> Path:
-    return Path.home() / "Applications" / f"{APP_NAME}.app"
+    """/Applications when this account can write there (admins can), so it's in Finder's Applications;
+    otherwise ~/Applications. Spotlight and Launchpad find it in either."""
+    system, personal = mac_app_paths()
+    return system if os.access(SYSTEM_APPS, os.W_OK) else personal
 
 
 def windows_shortcut_path() -> Path:
@@ -68,6 +78,9 @@ def install(home: Path, *, system: str | None = None, python: str | None = None,
             exe = app / "Contents" / "MacOS" / "granola-share-app"
             exe.write_text(render_mac_script(args), encoding="utf-8")
             exe.chmod(0o755)
+            for other in mac_app_paths():
+                if other != app:
+                    shutil.rmtree(other, ignore_errors=True)  # one copy only: 0.2.0 used ~/Applications
             return app
         if system == "Windows":
             link = windows_shortcut_path()
@@ -95,7 +108,8 @@ def uninstall(system: str | None = None) -> None:
     system = system or platform.system()
     try:
         if system == "Darwin":
-            shutil.rmtree(mac_app_path(), ignore_errors=True)
+            for app in mac_app_paths():
+                shutil.rmtree(app, ignore_errors=True)
         elif system == "Windows":
             windows_shortcut_path().unlink(missing_ok=True)
         else:
@@ -106,5 +120,7 @@ def uninstall(system: str | None = None) -> None:
 
 def installed(system: str | None = None) -> bool:
     system = system or platform.system()
-    path = {"Darwin": mac_app_path(), "Windows": windows_shortcut_path()}.get(system, linux_desktop_path())
+    if system == "Darwin":
+        return any(app.exists() for app in mac_app_paths())
+    path = windows_shortcut_path() if system == "Windows" else linux_desktop_path()
     return path.exists()
