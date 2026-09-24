@@ -545,7 +545,8 @@ class TranscriptGrabber:
     """
 
     def __init__(self, home: Path, ui=None, store: TranscriptStore | None = None, *, on_new=None,
-                 log=print, clock=time.time, open_url=None, ask_save=None, sleep=time.sleep, now=datetime.now):
+                 log=print, clock=time.time, open_url=None, ask_save=None, sleep=time.sleep, now=datetime.now,
+                 allowed_now=None, restart=None):
         self.home = Path(home)
         self.ui = ui
         self.store = store or TranscriptStore(home)
@@ -570,6 +571,18 @@ class TranscriptGrabber:
         self.stopped_at: datetime | None = None  # the same moment, wall-clock
         self.handled: list[tuple[datetime, str]] = []  # (recording end, "copied" | "asking" | "saved" | "not now")
         self.status: dict = {}
+        # macOS applies the Accessibility switch to new processes only: a fresh one is asked, and the
+        # service restarts itself once the answer is yes (at most once every 30 minutes).
+        self.allowed_now = allowed_now or _allowed_in_fresh_process
+        self.restart = restart or _restart_service
+        self.asked_at: float | None = None
+        self.fresh_checked = -1e9
+        try:
+            restarted = json.loads(self.status_path.read_text()).get("restarted_for_access")
+        except (OSError, ValueError, AttributeError):
+            restarted = None
+        if restarted:
+            self.status["restarted_for_access"] = restarted
 
     @property
     def status_path(self) -> Path:
@@ -594,6 +607,7 @@ class TranscriptGrabber:
         from .dialogs import ACCESSIBILITY_SETTINGS, open_url
 
         self.ui.trusted(prompt=True)  # macOS adds this Python to the list (switched off) and may show its own alert
+        self.asked_at = self.clock()
         (self.open_url or open_url)(ACCESSIBILITY_SETTINGS)
         self.log("[transcripts] opened System Settings → Privacy & Security → Accessibility")
 
@@ -606,6 +620,22 @@ class TranscriptGrabber:
             if started <= t <= started + timedelta(hours=5):
                 return outcome
         return None
+
+    def _allowed_after_restart(self) -> bool:
+        """Has the user switched this Python on since it started? Asked every few seconds for 15 minutes
+        after they clicked Allow (they're in System Settings), else every 5 minutes."""
+        now = self.clock()
+        soon = self.asked_at is not None and now - self.asked_at < 900
+        if now - self.fresh_checked < (5 if soon else 300):
+            return False
+        self.fresh_checked = now
+        try:
+            last = datetime.fromisoformat(self.status.get("restarted_for_access") or "")
+            if datetime.now() - last < timedelta(minutes=30):
+                return False  # a restart didn't help last time; don't loop
+        except ValueError:
+            pass
+        return self.allowed_now()
 
     def _handled(self, stopped: datetime, outcome: str) -> None:
         self.handled = [h for h in self.handled if h[0] != stopped][-19:] + [(stopped, outcome)]
@@ -694,6 +724,11 @@ class TranscriptGrabber:
         ui = self.ui
         if not ui.trusted():
             self._write_status(trusted=False)
+            if self._allowed_after_restart():
+                self._write_status(restarted_for_access=datetime.now().isoformat(timespec="seconds"))
+                self.log("[transcripts] Accessibility is on now; restarting to use it")
+                self.restart()
+                return "restarting"
             return "not allowed"
         if self.status.get("trusted") is not True:
             self._write_status(trusted=True)
@@ -747,6 +782,27 @@ class TranscriptGrabber:
         t = threading.Thread(target=self.run, args=(stop,), name="transcripts", daemon=True)
         t.start()
         return t
+
+
+def _allowed_in_fresh_process() -> bool:
+    """What a brand-new process of this same Python is told: macOS caches "not allowed" per process."""
+    import subprocess
+    import sys
+
+    code = "import sys, ApplicationServices as A; sys.exit(0 if A.AXIsProcessTrusted() else 1)"
+    try:
+        return subprocess.run([sys.executable, "-c", code], capture_output=True, timeout=30).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _restart_service() -> None:
+    """launchd starts the background service again right away (KeepAlive). A copy started some other
+    way just keeps running; the next start picks the permission up."""
+    import os
+
+    if os.environ.get("GRANOLA_SHARE_SERVICE") == "1":
+        os._exit(0)
 
 
 def available() -> str | None:

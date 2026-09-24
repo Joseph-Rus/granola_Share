@@ -619,6 +619,9 @@ def _clear_prefill(home: Path) -> None:
 def free_port(start: int = DEFAULT_PORT, tries: int = 10) -> int:
     for port in range(start, start + tries):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if os.name != "nt":  # like uvicorn: a restart isn't pushed off the port by its own closed
+                # connections. (On Windows this flag would allow sharing a port someone is listening on.)
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind(("127.0.0.1", port))
                 return port

@@ -167,7 +167,8 @@ def grabber(tmp_path, ui, ask=None):
     clock = {"t": 1000.0}
     got = []
     g = TranscriptGrabber(tmp_path, ui, on_new=got.append, log=lambda s: None, clock=lambda: clock["t"],
-                          ask_save=ask, sleep=lambda s: None, now=lambda: datetime(2026, 9, 24, 15, 50))
+                          ask_save=ask, sleep=lambda s: None, now=lambda: datetime(2026, 9, 24, 15, 50),
+                          allowed_now=lambda: False, restart=lambda: None)
     return g, clock, got
 
 
@@ -215,7 +216,7 @@ def test_grabber_waits_for_permission_and_asks_only_when_told(tmp_path):
     ui = FakeUI()
     ui.allowed = False
     opened = []
-    g = TranscriptGrabber(tmp_path, ui, log=lambda s: None, open_url=opened.append)
+    g = TranscriptGrabber(tmp_path, ui, log=lambda s: None, open_url=opened.append, allowed_now=lambda: False)
     assert g.tick() == "not allowed" and ui.prompts == 0 and ui.copies == []  # no surprise dialogs
     assert json.loads(g.status_path.read_text())["trusted"] is False
     assert g.copy_state() == "needs permission"
@@ -223,6 +224,39 @@ def test_grabber_waits_for_permission_and_asks_only_when_told(tmp_path):
     assert ui.prompts == 1 and opened == ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]
     ui.allowed = True
     assert g.copy_state() == "on" and g.tick() == "settling"
+
+
+def test_switching_python_on_restarts_the_service_so_it_takes_effect(tmp_path):
+    # macOS keeps telling a running process "not allowed" after the switch is turned on.
+    ui = FakeUI()
+    ui.allowed = False
+    clock, fresh, restarts = {"t": 0.0}, {"yes": False}, []
+    g = TranscriptGrabber(tmp_path, ui, log=lambda s: None, open_url=lambda u: None, clock=lambda: clock["t"],
+                          allowed_now=lambda: fresh["yes"], restart=lambda: restarts.append(1))
+    g.request_permission()
+    assert g.tick() == "not allowed"
+    fresh["yes"] = True  # the user turned python3.12 on in System Settings
+    clock["t"] += 3
+    assert g.tick() == "not allowed"  # a fresh process is asked every few seconds, not every tick
+    clock["t"] += 3
+    assert g.tick() == "restarting" and restarts == [1]
+    # Started again. If macOS still says no, it doesn't restart over and over.
+    again = TranscriptGrabber(tmp_path, ui, log=lambda s: None, allowed_now=lambda: True,
+                              restart=lambda: restarts.append(2))
+    assert again.tick() == "not allowed" and restarts == [1]
+
+
+def test_permission_switched_on_without_clicking_allow_is_noticed_too(tmp_path):
+    ui = FakeUI()
+    ui.allowed = False
+    clock, restarts = {"t": 0.0}, []
+    g = TranscriptGrabber(tmp_path, ui, log=lambda s: None, clock=lambda: clock["t"], allowed_now=lambda: True,
+                          restart=lambda: restarts.append(1))
+    g.fresh_checked = 0.0  # it just looked
+    clock["t"] = 60
+    assert g.tick() == "not allowed"  # only every 5 minutes when nobody clicked Allow
+    clock["t"] = 301
+    assert g.tick() == "restarting" and restarts == [1]
 
 
 def end_recording(g, ui, clock):
