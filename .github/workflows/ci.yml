@@ -70,6 +70,18 @@ jobs:
         run: |
           uv run python engine/tests/golden.py
           git diff --exit-code -- engine/tests/StudyStash.Core.Tests/Golden engine/src/StudyStash.Library/PageText.cs
+      # Whisper's smallest model, so the live tests hear real speech on each system (the app uses large-v3).
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/whisper
+          key: whisper-ggml-tiny-v1
+      - name: Whisper tiny, for the live transcription tests
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/whisper"
+          [ -f "$RUNNER_TEMP/whisper/ggml-tiny.bin" ] || curl -fsSL -o "$RUNNER_TEMP/whisper/ggml-tiny.bin" \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          echo "STUDYSTASH_WHISPER_MODEL=$RUNNER_TEMP/whisper/ggml-tiny.bin" >> "$GITHUB_ENV"
       - name: Run tests
         run: dotnet test engine/StudyStash.slnx
         env:

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/StudyStash.Audio/StudyStash.Audio.csproj" />
     <Project Path="src/StudyStash.Core/StudyStash.Core.csproj" />
     <Project Path="src/StudyStash.Engine/StudyStash.Engine.csproj" />
     <Project Path="src/StudyStash.Library/StudyStash.Library.csproj" />
