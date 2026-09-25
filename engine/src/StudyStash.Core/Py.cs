@@ -312,7 +312,7 @@ public static class Py
 
     internal static string IntText(string raw) => raw == "-0" ? "0" : raw;
 
-    internal static double NumberValue(JsonValue val) =>
+    public static double NumberValue(JsonValue val) =>
         double.Parse(NumberText(val), NumberStyles.Float, Inv);
 
     /// <summary>repr(str): single quotes unless the text has one and no double quote.</summary>

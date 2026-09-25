@@ -65,11 +65,11 @@ jobs:
           dotnet-version: "10.0.x"
       - name: The Python engine, in .venv, for the cross-engine test
         run: uv sync --python 3.12
-      - name: Golden files still match the Python engine
+      - name: Golden files and page text still match the Python engine
         if: runner.os == 'Linux'
         run: |
           uv run python engine/tests/golden.py
-          git diff --exit-code -- engine/tests/StudyStash.Core.Tests/Golden
+          git diff --exit-code -- engine/tests/StudyStash.Core.Tests/Golden engine/src/StudyStash.Library/PageText.cs
       - name: Run tests
         run: dotnet test engine/StudyStash.slnx
 

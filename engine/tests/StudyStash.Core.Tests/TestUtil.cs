@@ -30,6 +30,8 @@ public static class Golden
 {
     static readonly Lazy<JsonObject> cases = new(() => (JsonObject)JsonNode.Parse(Text("cases.json"))!);
     static readonly Lazy<JsonObject> granola = new(() => (JsonObject)JsonNode.Parse(Text("granola.json"))!);
+    static readonly Lazy<JsonObject> library = new(() => (JsonObject)JsonNode.Parse(Text("library.json"))!);
+    static readonly Lazy<JsonObject> pages = new(() => (JsonObject)JsonNode.Parse(Text("pages.json"))!);
 
     public static string Text(string name) =>
         new UTF8Encoding(false).GetString(File.ReadAllBytes(System.IO.Path.Combine(AppContext.BaseDirectory, "Golden", name)));
@@ -40,6 +42,12 @@ public static class Golden
 
     /// <summary>Stage 2's cases: Granola's replies, and signing in.</summary>
     public static JsonNode? Granola(string name) => granola.Value[name];
+
+    /// <summary>Stage 3's cases: the pieces the library's pages are made of.</summary>
+    public static JsonNode? Library(string name) => library.Value[name];
+
+    /// <summary>Whole pages the Python engine served: {"library": {path: {status, html, csp}}, "setup": {state: {draft, html}}}.</summary>
+    public static JsonObject PageCases() => pages.Value;
 
     /// <summary>Data compared as json.dumps writes it, so key order counts too.</summary>
     public static string Dump(JsonNode? node) => PyJson.Dumps(node);

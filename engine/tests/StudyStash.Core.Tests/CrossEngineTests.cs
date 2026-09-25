@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using Xunit.Abstractions;
 
 namespace StudyStash.Core.Tests;
@@ -118,6 +119,56 @@ public class CrossEngineTests(ITestOutputHelper output)
         }
 
         Assert.Equal("ok", Run(python, script, "verify", dir.Path).Trim());
+    }
+
+    [Fact]
+    public async Task The_python_laptop_talks_to_a_csharp_library()
+    {
+        string? root = RepoRoot();
+        string? python = root is null ? null : Python(root);
+        if (python is null)
+        {
+            Assert.True(Environment.GetEnvironmentVariable("STUDYSTASH_REQUIRE_PYTHON") != "1", "no Python engine to check against");
+            output.WriteLine("skipped: no .venv with the Python engine (set STUDYSTASH_PYTHON)");
+            return;
+        }
+        using var dir = new TempDir();
+        var cfg = new Config(dir["home"], dir["pool"])
+        {
+            PoolName = "Cross — engine", PoolPassword = "maple otter", OllamaEnabled = false, WebHost = "127.0.0.1",
+            Classes = [new ClassDef("CS 101", ["cs101"]), new ClassDef("Bio 110")],
+        };
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        cfg.WebPort = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var store = new Store(cfg.DbPath, cfg.PoolDir);
+        var pipeline = new Pipeline(cfg, store, log: _ => { });
+        var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        Microsoft.AspNetCore.Hosting.WebHostBuilderKestrelExtensions.ConfigureKestrel(builder.WebHost,
+            k => k.Listen(System.Net.IPAddress.Loopback, cfg.WebPort));
+        await using var app = StudyStash.Library.LibraryWeb.Build(builder, cfg, store, pipeline);
+        await app.StartAsync();
+
+        var psi = new ProcessStartInfo(python) { RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (string a in new[] { Path.Combine(root!, "engine", "tests", "laptop_check.py"), $"http://127.0.0.1:{cfg.WebPort}", cfg.PoolPassword, $"{cfg.WebPort}" })
+            psi.ArgumentList.Add(a);
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
+        using var p = Process.Start(psi)!;
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        string stderr = await p.StandardError.ReadToEndAsync();
+        await p.WaitForExitAsync();
+        output.WriteLine(await stdout + stderr);
+        Assert.True(p.ExitCode == 0, $"the laptop's checks failed:\n{stderr}");
+        Assert.Equal("ok", (await stdout).Trim());
+
+        // What the laptop sent is in the library, and files like any lecture.
+        Assert.Equal("queued", store.Get("laptop-1")!.Status);
+        Assert.Equal(1, await pipeline.RunPendingAsync());
+        var row = store.Get("laptop-1")!;
+        Assert.Equal(("done", "CS 101", "Sam"), (row.Status, row.ClassName, row.Owner));
+        Assert.Contains("We start with the base case.", Py.ReadText(row.MdPath!));
     }
 
     static List<string> Columns(string db)
