@@ -268,11 +268,18 @@ public sealed class ShareClient
         return answer == go ? "save" : answer == "Without transcript" ? "without" : answer == "Skip" ? "skip" : null;
     }
 
+    /// <summary>The class the timetable says was on when a lecture started. Granola's free plan shares no folders, so
+    /// this is what files a Granola lecture under its class without asking the AI (the library matches it as a folder).</summary>
+    string? TimetableClass(string date) =>
+        DateTimeOffset.TryParse(date, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var t)
+            ? Timetable.Load(Cc.Home).Now(t.LocalDateTime, TimeSpan.FromMinutes(15))?.Name : null;
+
     Task<JsonObject> Push(Meeting m)
     {
         var sent = m.WithNotes(m.NotesMarkdown);
         sent.Owner = Cc.DisplayName.Length > 0 ? Cc.DisplayName : m.Owner;
         if (!Cc.IncludeTranscripts) sent.Transcript = "";
+        if (sent.Folder.Length == 0 && TimetableClass(sent.Date) is string cls) sent.Folder = cls;
         return host.Post(Cc.ServerUrl.TrimEnd('/') + "/api/ingest", Granola.MeetingJson(sent), Cc.PoolKey);
     }
 
