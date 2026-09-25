@@ -181,6 +181,22 @@ public sealed partial class Crawl
         }
     }
 
+    /// <summary>The extension started afresh (installed, reloaded, or asked to sync): whatever it had taken is lost with
+    /// its old copy, so it goes back in the queue now instead of in ten minutes.</summary>
+    public void Requeue()
+    {
+        lock (gate)
+        {
+            if (Inflight.Count == 0) return;
+            foreach (var (id, rec) in Inflight.ToList())
+            {
+                Jobs.Add(rec!["job"]!.DeepClone());
+                Inflight.Remove(id);
+            }
+            Save();
+        }
+    }
+
     /// <summary>File one answer. False when it isn't one of this crawl's jobs.</summary>
     public bool Handle(CanvasResult r)
     {

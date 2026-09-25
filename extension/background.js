@@ -28,11 +28,28 @@ function b64(buf) {
   return btoa(s);
 }
 
+// Some files (often your own submissions) don't download through Canvas's /files/<id>/download redirect from a
+// service worker. Canvas's API hands out a signed link to the same file, which does.
+async function viaPublicUrl(url) {
+  const m = url.match(/\/files\/(\d+)\/download/);
+  if (!m) throw new Error('not a Canvas file');
+  const t = await (await fetch(`${STUDY_STASH.canvas}/api/v1/files/${m[1]}/public_url`, {credentials: 'include'})).text();
+  const signed = JSON.parse(t.replace(/^while\(1\);/, '')).public_url;
+  if (!signed || !allowed(signed)) throw new Error('no public link');
+  return fetch(signed);
+}
+
 async function run(job) {
   if (!allowed(job.url)) return {id: job.id, error: 'refused: not a Canvas URL'};
   try {
     const headers = job.kind === 'json' ? {Accept: 'application/json'} : {};
-    const r = await fetch(job.url, {credentials: 'include', headers});
+    let r;
+    try {
+      r = await fetch(job.url, {credentials: 'include', headers});
+    } catch (e) {
+      if (job.kind !== 'bytes') throw e;
+      r = await viaPublicUrl(job.url);
+    }
     const out = {id: job.id, status: r.status, link: r.headers.get('link') || '', type: r.headers.get('content-type') || '',
                  final: r.url};
     if (/\/login(\/|\?|$)/.test(new URL(r.url).pathname)) return {...out, status: 401};  // bounced to sign-in
@@ -57,7 +74,7 @@ async function pump(force) {
     let idle = 0;
     for (let round = 0; round < 5000; round++) {
       let work;
-      try { work = await app('/api/v2/canvas/work' + (force && round === 0 ? '?force=1' : '')); } catch (e) { return; }
+      try { work = await app('/api/v2/canvas/work?v=' + chrome.runtime.getManifest().version + (force && round === 0 ? '&force=1' : '')); } catch (e) { return; }
       // Study Stash keeps this folder up to date; when it holds a newer version, reload from disk to pick it up
       if (work.ext && work.ext !== chrome.runtime.getManifest().version) {
         try {

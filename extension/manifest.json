@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Study Stash \u00b7 Canvas",
-  "version": "1.0",
+  "version": "1.2",
   "description": "Lets your Study Stash library read your Canvas courses (assignments, your submissions, modules, files) with your own sign-in. Read-only.",
   "permissions": ["alarms"],
   "host_permissions": [],

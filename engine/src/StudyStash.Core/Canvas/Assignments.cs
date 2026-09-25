@@ -104,7 +104,8 @@ public static class Assignments
     /// overdue), plus anything with no due date that's open.</summary>
     public static List<Assignment> Upcoming(IEnumerable<Assignment> all, DateTime now, int days = 14, string? className = null) =>
         all.Where(a => (className is null || a.ClassName == className) && !a.Done && a.Status != "no submission")
-            .Where(a => a.Due.Length == 0 || DateTime.Parse(a.Due, CultureInfo.InvariantCulture) <= now.AddDays(days))
+            // By calendar day: "within a week" includes the whole of the seventh day.
+            .Where(a => a.Due.Length == 0 || DateTime.Parse(a.Due, CultureInfo.InvariantCulture) < now.Date.AddDays(days + 1))
             .Where(a => a.Due.Length == 0 || a.Status != "past due" || DateTime.Parse(a.Due, CultureInfo.InvariantCulture) >= now.AddDays(-21))
             .OrderBy(a => a.Due.Length == 0).ThenBy(a => a.Due, StringComparer.Ordinal).ThenBy(a => a.Name, StringComparer.Ordinal)
             .ToList();

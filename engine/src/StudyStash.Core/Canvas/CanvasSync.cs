@@ -59,6 +59,9 @@ public sealed partial class CanvasSync
                 st.NeedsLogin = true;
                 st.Error = "Chrome isn't signed in to Canvas. Open Canvas in Chrome and sign in; it syncs again within the hour.";
             });
+        // An extension older than the one here reloads itself as soon as it hears the version: give it nothing to lose.
+        if (extVersion is { Length: > 0 } && extVersion != Extension.Version()) return new CanvasWork([], true, Extension.Version());
+        if (force) Crawl.Requeue();
         var jobs = Agents.Take();
         if (jobs.Count == 0) jobs = Crawl.Next();
         return new CanvasWork(jobs, Agents.Hot || Crawl.Active, Extension.Version());
