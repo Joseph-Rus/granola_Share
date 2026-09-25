@@ -187,6 +187,10 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
         return true;
     }
 
+    /// <summary>Keep something jotted down (Capture): the library's AI files it under its class.</summary>
+    public async Task<JsonObject?> CaptureAsync(string text, string? className = null) =>
+        await SendAsync(HttpMethod.Post, "/capture", new JsonObject { ["text"] = text, ["class"] = className }) as JsonObject;
+
     /// <summary>Open a terminal with the AI in a class's folder, on the library's own computer. What happened.</summary>
     public async Task<string> TerminalAsync(string? className) =>
         (await SendAsync(HttpMethod.Post, "/terminal", new JsonObject { ["class"] = className }) as JsonObject)?["said"]?.GetValue<string>()

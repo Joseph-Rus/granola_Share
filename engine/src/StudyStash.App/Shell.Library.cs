@@ -476,6 +476,20 @@ public static partial class Shell
         await w.WriteAsync(text);
     }
 
+    static async Task CaptureAsync(string text)
+    {
+        if (host.Remote() is not { } lib) return;
+        try
+        {
+            var r = await lib.CaptureAsync(text);
+            Toast("Kept", r is null ? "Your library runs an older Study Stash." : "It's filed under its class in a minute.", null, null);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
+        {
+            Toast("Couldn't keep it", e.Message, null, null);
+        }
+    }
+
     // --- the quick panel ---------------------------------------------------------------------------------------------
 
     static async Task SearchAsync(string query)
@@ -493,6 +507,19 @@ public static partial class Shell
                 ? new QuickRow { Kind = QuickKind.Action, Title = cls.Length > 0 ? $"Record {cls}" : "Record", Meta = rec, Glyph = "mic", Run = () => { quickWindow?.Hide(); ToggleRecording(); } }
                 : new QuickRow { Kind = QuickKind.Action, Title = "Stop recording", Meta = rec, Glyph = "stop", Run = () => { quickWindow?.Hide(); StopRecording(); } });
             rows.Add(new QuickRow { Kind = QuickKind.Action, Title = "Open library", Glyph = "book_2", Run = () => { quickWindow?.Hide(); ShowLibrary(); } });
+            if (linkedClasses.Count > 0)
+                rows.Add(new QuickRow { Kind = QuickKind.Action, Title = "What's due", Glyph = "schedule", Run = () => { quickWindow?.Hide(); ShowLibrary(); _ = ShowDueAsync(); } });
+            // What's typed, kept: the library's AI files it under its class.
+            if (query.Trim().Length > 0)
+                rows.Add(new QuickRow
+                {
+                    Kind = QuickKind.Action, Title = $"Capture “{Py.Head(query.Trim(), 60)}”", Glyph = "inbox",
+                    Run = () =>
+                    {
+                        quickWindow?.Hide();
+                        _ = CaptureAsync(query.Trim());
+                    },
+                });
         }
         quick.Note = null;
         if (query.Trim().Length > 0 && host.Remote() is { } lib)
