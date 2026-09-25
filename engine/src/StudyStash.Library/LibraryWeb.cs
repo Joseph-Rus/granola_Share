@@ -38,6 +38,8 @@ public sealed class LibraryWebOptions
     public StudyStash.Core.Canvas.Scout? Scout { get; init; }
     /// <summary>File search. Null: made here (and brought up to date only when folders change).</summary>
     public StudyStash.Core.Ai.FileIndex? Files { get; init; }
+    /// <summary>Capture's Inbox. Null: made here.</summary>
+    public StudyStash.Core.Ai.Inbox? Inbox { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -225,6 +227,7 @@ public sealed partial class LibraryWeb
             PoolName = cfg.PoolName, Classes = classes, Total = counts.Values.Sum(), Processing = store.Processing().Count,
             Admin = role == "admin", Current = current, Password = cfg.PoolPassword.Length > 0, Back = back, Nonce = options.Nonce(),
             Chat = ChatOn,
+            Inbox = ChatOn ? (Directory.Exists(Path.Combine(cfg.PoolDir, "Inbox")) ? Directory.EnumerateFiles(Path.Combine(cfg.PoolDir, "Inbox"), "*.md").Count() : 0) : null,
             Due = CanvasOn ? StudyStash.Core.Canvas.Assignments.Upcoming(StudyStash.Core.Canvas.Assignments.Load(cfg.Home), DateTime.Now, 7).Count : null,
         };
     }
@@ -386,6 +389,7 @@ public sealed partial class LibraryWeb
         MapCanvas(app);
         MapChat(app);
         MapFiles(app);
+        MapInbox(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 

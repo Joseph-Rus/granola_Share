@@ -177,6 +177,7 @@ public static class Cli
             {
                 Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
                 AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas, Scout = scout, Files = fileIndex,
+                Inbox = new Inbox(cfg.PoolDir, () => cfg.ClassNames(), c => store.ClassDir(c), ai, new History(cfg.PoolDir)),
             });
             await app.StartAsync(stop.Token);
             // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.

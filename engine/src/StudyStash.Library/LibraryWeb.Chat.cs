@@ -205,13 +205,15 @@ public sealed partial class LibraryWeb
     {
         string dir = store.ClassDir(name);
         var lectures = store.ListNotes(name).Select(r => r.MdPath).Where(p => !string.IsNullOrEmpty(p)).Select(p => Path.GetFullPath(p!)).ToHashSet();
+        string notes = Path.Combine(dir, "Notes");
         var files = Directory.EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.Exists(notes) ? Directory.EnumerateFiles(notes, "*", SearchOption.AllDirectories) : [])
             .Where(f => !lectures.Contains(Path.GetFullPath(f)) && !Path.GetFileName(f).StartsWith('.'))
             .OrderByDescending(File.GetLastWriteTime).ToList();
         if (files.Count == 0) return "";
         string cq = Ui.Quote(name, "");
         return "<h2>Files</h2><div class=\"group\">" + string.Concat(files.Select(f =>
-            $"<a class=\"row\" href=\"/files/{cq}/{Ui.Quote(Path.GetFileName(f), "")}\"><div class=\"grow\"><div class=\"title\">{Ui.Esc(Path.GetFileNameWithoutExtension(f))}</div>"
+            $"<a class=\"row\" href=\"/files/{cq}/{Ui.Quote(Path.GetRelativePath(dir, f).Replace('\\', '/'), "/")}\"><div class=\"grow\"><div class=\"title\">{Ui.Esc(Path.GetFileNameWithoutExtension(f))}</div>"
             + $"<div class=\"subtitle\">{Ui.Esc(File.GetLastWriteTime(f).ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture))}</div></div></a>")) + "</div>";
     }
 

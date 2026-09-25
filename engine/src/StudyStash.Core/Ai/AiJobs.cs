@@ -36,6 +36,9 @@ public sealed class AiJobs(string home, Func<string>? ollamaHost = null)
         return FirstObject(text) ?? throw new InvalidDataException("the answer wasn't JSON");
     }
 
+    /// <summary>A JSON answer from the AI picked for <paramref name="job"/>, for work that returns a plan.</summary>
+    public Task<string> PlanAsync(string job, string prompt, JsonObject schema) => JsonAnswerAsync(job, prompt, schema);
+
     /// <summary>The first whole {...} in a text (models like to wrap JSON in a code fence or a sentence).</summary>
     public static string? FirstObject(string text)
     {
@@ -120,6 +123,9 @@ public sealed class AiJobs(string home, Func<string>? ollamaHost = null)
             Session = session, ReadDirs = readDirs ?? [],
         }, ct: ct);
     }
+
+    /// <summary>The name of the AI that does agent work ("Claude").</summary>
+    public string AgentName => AiProviders.Get(Settings.For("agent").Provider, ollamaHost).Name;
 
     /// <summary>Whether agent work can run: its AI is installed (a local model needs Codex to act as an agent).</summary>
     public (bool Ok, string Why) AgentReady()
