@@ -36,6 +36,8 @@ public sealed class LibraryWebOptions
     public StudyStash.Core.Canvas.CanvasSync? Canvas { get; init; }
     /// <summary>The course scout. Null: exploring isn't offered (tests, and `serve` without an AI).</summary>
     public StudyStash.Core.Canvas.Scout? Scout { get; init; }
+    /// <summary>File search. Null: made here (and brought up to date only when folders change).</summary>
+    public StudyStash.Core.Ai.FileIndex? Files { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -236,11 +238,14 @@ public sealed partial class LibraryWeb
 
     static string Plural(int n, string one, string many) => n != 1 ? many : one;
 
+    /// <summary>What writes the notes: the Ollama model, or the AI picked in Settings.</summary>
+    string NotesWriter => options.Ai?.Describe("notes", cfg) ?? cfg.EffectiveSummaryModel;
+
     string QueuePanel(bool adminView)
     {
         var rows = store.Processing();
         if (rows.Count == 0) return "";
-        string model = cfg.EffectiveSummaryModel;
+        string model = NotesWriter;
         var items = new List<string>();
         foreach (var r in rows)
         {
@@ -374,12 +379,13 @@ public sealed partial class LibraryWeb
         app.MapGet("/api/status", (HttpContext ctx) => WithMember(ctx, _ => Http.Json(new JsonObject
         {
             ["counts"] = new JsonObject(store.StatusCounts().Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)kv.Value))),
-            ["working_on"] = pipeline.Current, ["summary_model"] = cfg.EffectiveSummaryModel, ["version"] = Engine.Version,
+            ["working_on"] = pipeline.Current, ["summary_model"] = NotesWriter, ["version"] = Engine.Version,
         })));
 
         MapApp(app);
         MapCanvas(app);
         MapChat(app);
+        MapFiles(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 
@@ -487,9 +493,11 @@ public sealed partial class LibraryWeb
             snippets[r.Id] = Ui.Snippet(text, q);
         }
         string found = q.Length > 0 ? $"{rows.Count} lecture{Plural(rows.Count, "", "s")} mention “{Ui.Esc(q)}”." : "";
+        string fileHits = FileResults(q);
         string body = "<h1>Search</h1>" + $"<div class=\"only-narrow\">{Ui.SearchBox(q)}</div>"
             + (q.Length > 0 ? $"<p class=\"sub\">{found}</p>" : "")
-            + (q.Length > 0 ? Ui.NoteList(rows, "No matches", "Try a shorter word, a topic, or a name.", snippets) : "");
+            + (fileHits.Length > 0 && rows.Count == 0 ? "" : q.Length > 0 ? Ui.NoteList(rows, "No matches", "Try a shorter word, a topic, or a name.", snippets) : "")
+            + fileHits;
         return Show(q.Length > 0 ? $"Search: {q}" : "Search", body, c);
     }
 
@@ -531,7 +539,7 @@ public sealed partial class LibraryWeb
         string notice = "";
         if (r.Status is Store.Queued or Store.Working)
             notice = "<div class=\"notice\" data-refresh=\"15\"><div>A new summary is being written with "
-                + $"{Ui.Esc(cfg.EffectiveSummaryModel)}. This page refreshes on its own.</div></div>";
+                + $"{Ui.Esc(NotesWriter)}. This page refreshes on its own.</div></div>";
         else if (!string.IsNullOrEmpty(r.Error))
         {
             string retry = role == "admin" ? $"<form method=\"post\" action=\"/note/{nid}/resummarize\"><button>Try again</button></form>" : "";
@@ -611,7 +619,7 @@ public sealed partial class LibraryWeb
         return $"<select id=\"{field}\" name=\"{field}\">{string.Concat(opts)}</select>";
     }
 
-    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued, string? canvas) => await WithMemberAsync(ctx, async role =>
+    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued, string? canvas, string? folders) => await WithMemberAsync(ctx, async role =>
     {
         var c = Context(role, "settings", ("/", cfg.PoolName));
         var models = await options.ListModels(cfg.OllamaHost);
@@ -743,8 +751,8 @@ public sealed partial class LibraryWeb
             + "<p class=\"group-foot\">Set with auto_update in config.toml.</p>"
             + "<div class=\"group-head\">Rewrite every summary</div><div class=\"group\">"
             + "<form class=\"row\" method=\"post\" action=\"/settings/resummarize-all\" data-confirm=\"Rewrite all "
-            + $"{c.Total} summaries with {Ui.Esc(cfg.EffectiveSummaryModel)}? This can take a while.\">"
-            + $"<span class=\"grow\">Rewrite all summaries with {Ui.Esc(cfg.EffectiveSummaryModel)}</span>"
+            + $"{c.Total} summaries with {Ui.Esc(NotesWriter)}? This can take a while.\">"
+            + $"<span class=\"grow\">Rewrite all summaries with {Ui.Esc(NotesWriter)}</span>"
             + "<button>Rewrite all</button></form></div>"
             + "<p class=\"group-foot\">Useful after switching models. Lectures stay readable while they are "
             + "rewritten, one at a time.</p>"
@@ -753,7 +761,7 @@ public sealed partial class LibraryWeb
         string canvasGroup = CanvasOn || canvas is not null || Canvas.Settings.On ? CanvasSettingsGroup(canvas)
             : "<div class=\"group-head\" id=\"canvas\">Canvas</div><div class=\"group\"><form class=\"row\" method=\"get\" action=\"/settings#canvas\">"
               + "<input type=\"hidden\" name=\"canvas\" value=\"start\"><span class=\"grow\">Bring in assignments, feedback and course files from Canvas</span><button>Set up Canvas</button></form></div>";
-        string body = $"<h1>Settings</h1>{flash}{form}{canvasGroup}{invite}{maintenance}";
+        string body = $"<h1>Settings</h1>{flash}{form}{canvasGroup}{FoldersSettingsGroup(folders)}{invite}{maintenance}";
         return Show("Settings", body, c);
     });
 

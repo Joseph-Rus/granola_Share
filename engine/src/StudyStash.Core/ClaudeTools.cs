@@ -20,13 +20,19 @@ public interface ILibrarySource
     /// kind, save_to), or the assignments ("assignments": class, days). Libraries without Canvas say so.</summary>
     bool HasCanvas => false;
 
+    /// <summary>Files that aren't lectures, and readable folders' files, matching a search ([] where unsupported).</summary>
+    Task<JsonArray> SearchFilesAsync(string query, int limit) => Task.FromResult(new JsonArray());
+
     Task<JsonNode> CanvasAsync(string what, JsonObject? body = null) =>
         Task.FromResult<JsonNode>(new JsonObject { ["error"] = "This library can't read Canvas." });
 }
 
 /// <summary>The library on this computer.</summary>
-public sealed class LocalLibrary(LibraryReader reader, Canvas.CanvasSync? canvas = null, string? home = null) : ILibrarySource
+public sealed class LocalLibrary(LibraryReader reader, Canvas.CanvasSync? canvas = null, string? home = null, Ai.FileIndex? files = null) : ILibrarySource
 {
+    public Task<JsonArray> SearchFilesAsync(string query, int limit) => Task.FromResult(new JsonArray((files?.Search(query, limit) ?? [])
+        .Select(h => (JsonNode)new JsonObject { ["root"] = h.Root, ["path"] = h.Path, ["title"] = h.Title, ["snippet"] = System.Net.WebUtility.HtmlDecode(h.Snippet.Replace("<mark>", "").Replace("</mark>", "")) }).ToArray()));
+
     public bool HasCanvas => canvas is not null;
 
     public async Task<JsonNode> CanvasAsync(string what, JsonObject? body = null)
@@ -119,6 +125,18 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
         await SendAsync(method, "/claude" + path, body) as JsonObject;
 
     public bool HasCanvas => true; // a library from before Canvas answers each tool with why not
+
+    public async Task<JsonArray> SearchFilesAsync(string query, int limit)
+    {
+        try
+        {
+            return await SendAsync(HttpMethod.Get, $"/files/search?q={Q(query)}&limit={limit}") as JsonArray ?? [];
+        }
+        catch (LibraryRefusedException)
+        {
+            return [];
+        }
+    }
 
     public async Task<JsonNode> CanvasAsync(string what, JsonObject? body = null)
     {
@@ -304,6 +322,12 @@ public static class ClaudeTools
         return sb.Length == 0 ? "Nothing was said in that stretch." : sb.ToString().TrimEnd();
     }
 
+    static async Task<string> SearchFilesText(ILibrarySource lib, string query, int limit)
+    {
+        var hits = await lib.SearchFilesAsync(query, Math.Clamp(limit, 1, 30));
+        return hits.Count == 0 ? "No files match." : string.Join("\n", hits.OfType<JsonObject>().Select(h => $"- {S(h["path"])} ({S(h["root"])}): {S(h["snippet"])}"));
+    }
+
     static async Task<string> CanvasText(ILibrarySource lib, string what, JsonObject? body = null)
     {
         var r = await lib.CanvasAsync(what, body);
@@ -350,6 +374,12 @@ public static class ClaudeTools
                     GetTranscriptAsync(lib, lecture_id, start, end),
                 Named("get_transcript", "Read a lecture's transcript", "What was said in a lecture, line by line with the time of each line, from a given time.")),
         ];
+        if (lib.HasCanvas)
+            tools.Add(McpServerTool.Create(
+                ([Description("Words to look for.")] string query, [Description("How many files (1 to 30).")] int limit = 10) => SearchFilesText(lib, query, limit),
+                Named("search_files", "Search files", "Full-text search of everything in the library that isn't a lecture (Canvas files and "
+                    + "pages, slides, PDFs, study guides) and the folders the user lets Study Stash read. Returns each file's full path, "
+                    + "to open with your file tools.")));
         if (lib.HasCanvas)
             tools.AddRange(
             [

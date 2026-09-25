@@ -160,6 +160,9 @@ public static class Cli
             // Settings' "Update now": on a Mac or Linux this restarts the service onto the new version, this copy included.
             // One record of who may read through Claude, for the library's Settings and for Claude's door alike.
             var access = new ClaudeAccess(home);
+            // Search over files that aren't lectures (the Canvas mirror, the AI's files, readable folders).
+            var fileIndex = LibraryWeb.MakeFileIndex(cfg, store);
+            var indexing = fileIndex.RunAsync(Console.WriteLine, stop.Token);
             // Canvas, through the Chrome extension: one queue for the sync and for AIs' reads.
             var canvas = new StudyStash.Core.Canvas.CanvasSync(home, c => store.ClassDir(c)) { KnownClass = c => cfg.ClassNames().Contains(c) };
             // After a sync, an AI explores each class it hasn't explored yet (Settings can ask again).
@@ -173,14 +176,14 @@ public static class Cli
             var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions
             {
                 Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
-                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas, Scout = scout,
+                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas, Scout = scout, Files = fileIndex,
             });
             await app.StartAsync(stop.Token);
             // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.
             var claudeBuilder = WebApplication.CreateSlimBuilder();
             claudeBuilder.Logging.ClearProviders();
             claudeBuilder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, ClaudeWeb.PortFor(cfg)));
-            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access, canvas);
+            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access, canvas, fileIndex);
             try
             {
                 await claude.StartAsync(stop.Token);
@@ -194,7 +197,7 @@ public static class Cli
             await Until(stop.Token);
             await app.StopAsync(CancellationToken.None);
             await claude.StopAsync(CancellationToken.None);
-            await Task.WhenAll(working, syncing, updating);
+            await Task.WhenAll(working, syncing, updating, indexing);
             return 0;
         }
 
