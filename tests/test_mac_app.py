@@ -60,7 +60,8 @@ def test_client_open_shows_the_app_not_the_browser(tmp_path, monkeypatch):
     monkeypatch.setattr(client_app, "wait_for_app", lambda home: "http://127.0.0.1:8765/?t=x")
     opened = []
     monkeypatch.setattr(client_app.dialogs, "open_app", lambda name: opened.append(("app", name)) or True)
-    monkeypatch.setattr(client_app.dialogs, "open_url", lambda url: opened.append(("url", url)))
+    # no app yet: the page opens in the browser (as its own window, when Edge or Chrome is there)
+    monkeypatch.setattr(client_app.dialogs, "open_window", lambda url: opened.append(("url", url)))
     assert client_app.open_app(tmp_path) and opened == [("url", "http://127.0.0.1:8765/?t=x")]  # no app yet
     opened.clear()
     app = native_app(tmp_path / "Applications")

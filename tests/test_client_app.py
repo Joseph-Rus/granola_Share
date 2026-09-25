@@ -59,10 +59,15 @@ def login(c, home):
     c.cookies.set("gs_app", token)
 
 
-def test_page_needs_the_token_and_this_computer(tmp_path):
+def test_page_needs_the_token_and_this_computer(tmp_path, monkeypatch):
     rt, c = app(tmp_path)
-    assert "Applications folder" in c.get("/").text  # no token: nothing about the setup
-    assert "Applications folder" in c.get("/?t=wrong").text
+    here = client_app._where_the_app_is()
+    assert f"from your {here} to see this page" in c.get("/").text  # no token: nothing about the setup
+    assert f"from your {here} to see this page" in c.get("/?t=wrong").text
+    for system, said in (("Darwin", "Applications folder"), ("Windows", "Start Menu"), ("Linux", "apps menu")):
+        monkeypatch.setattr(client_app.platform, "system", lambda s=system: s)
+        assert client_app._where_the_app_is() == said
+    monkeypatch.undo()
     assert c.post("/api/pool", json={"server": "x"}, headers=H).status_code == 403
     assert c.get("/", headers={"host": "evil.example:8765"}).status_code == 403  # DNS rebinding
     login(c, tmp_path)

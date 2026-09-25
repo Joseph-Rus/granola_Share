@@ -104,6 +104,10 @@ def windows() -> bool:
     return platform.system() == "Windows"
 
 
+def _where_the_app_is() -> str:
+    return "Applications folder" if mac() else "Start Menu" if windows() else "apps menu"
+
+
 def native_app() -> Path | None:
     """The Study Stash app, when it's installed: the Mac app, or the Windows one."""
     from . import launcher
@@ -427,8 +431,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             return resp
         if not authed(request):
             return respond("Study Stash", "<header><h1>Study Stash</h1></header><p class=sub>Open "
-                           "<strong>Study Stash</strong> from your " + ("Applications folder" if mac() else "Start Menu")
-                           + " to see this page.</p>")
+                           "<strong>Study Stash</strong> from your " + _where_the_app_is() + " to see this page.</p>")
         return status_page() if runtime.configured() and runtime.watching else setup_page()
 
     # -- setup
