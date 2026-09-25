@@ -46,6 +46,7 @@ try
         "logout" => Logout(),
         "sync" => await SyncCommand(),
         "tools" => await Tools(),
+        "mcp" => await Mcp(),
         "client run" => await ClientRun(),
         "client open" => await ClientOpen(),
         "client once" => await ClientOnce(),
@@ -60,12 +61,22 @@ try
             + "       | client run [--no-ui] | client open [--install] [--server URL] [--key KEY] [--no-browser]\n"
             + "       | client once [--auto] | client login [--no-browser]\n"
             + "       | doctor [--role server|client] | update [--check] [--force]\n"
-            + "       | autostart install|uninstall|status --role server|client | config-check | version   (each takes --home DIR)", 2),
+            + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
+            + "       | mcp   (the MCP server for Claude, over stdin and stdout)   (each takes --home DIR)", 2),
     };
 }
 catch (OAuthException e)
 {
     return Print(e.Message, 1);
+}
+
+// Where `mcp` reads the library: the laptop's library, or this computer's own.
+static (string? Url, string Key) McpTarget(string home)
+{
+    var cc = Configs.LoadClient(home);
+    if (cc.ServerUrl.Length > 0) return (cc.ServerUrl, cc.PoolKey);
+    var cfg = Configs.Load(home);
+    return File.Exists(cfg.ConfigPath) ? ($"http://127.0.0.1:{cfg.WebPort}", cfg.PoolPassword) : (null, "");
 }
 
 static int Print(string text, int code = 0)
@@ -117,13 +128,44 @@ async Task<int> Library(bool ownSync, bool updates)
     builder.WebHost.ConfigureKestrel(k => k.Listen(
         IPAddress.TryParse(cfg.WebHost, out var ip) ? ip : IPAddress.Any, cfg.WebPort, o => o.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1));
     // Settings' "Update now": on a Mac or Linux this restarts the service onto the new version, this copy included.
-    var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions { Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()) });
+    // One record of who may read through Claude, for the library's Settings and for Claude's door alike.
+    var access = new ClaudeAccess(home);
+    var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions
+    {
+        Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
+    });
     await app.StartAsync(stop.Token);
+    // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.
+    var claudeBuilder = WebApplication.CreateSlimBuilder();
+    claudeBuilder.Logging.ClearProviders();
+    claudeBuilder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, ClaudeWeb.PortFor(cfg)));
+    var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access);
+    try
+    {
+        await claude.StartAsync(stop.Token);
+    }
+    catch (IOException e)
+    {
+        Console.WriteLine($"Claude's port {ClaudeWeb.PortFor(cfg)} is taken ({e.Message}); Claude can't connect until it's free.");
+    }
     // Under launchd or systemd, a new version is installed and this copy stops: the service manager starts the new one.
     if (updates) updating = Updates.StartAutoUpdate(home, () => Configs.Load(home).AutoUpdate, _ => stop.Cancel(), Console.WriteLine, stop.Token);
     await Until(stop.Token);
     await app.StopAsync(CancellationToken.None);
+    await claude.StopAsync(CancellationToken.None);
     await Task.WhenAll(working, syncing, updating);
+    return 0;
+}
+
+// --- Claude -------------------------------------------------------------------------------------------------------
+
+// The MCP server over stdin/stdout, for Claude Code and Claude Desktop on this computer. A laptop reads its library
+// with the password it already has; the library's own computer reads itself.
+async Task<int> Mcp()
+{
+    var (url, key) = McpTarget(home);
+    if (url is null) return Print("Study Stash isn't set up on this computer yet: open the Study Stash app first.", 1);
+    await ClaudeTools.RunStdioAsync(new RemoteLibrary(url, key), stop.Token);
     return 0;
 }
 

@@ -25,11 +25,14 @@ MAX_NOTES_TOKENS = 4096
 
 STRUCTURE = """Use exactly this structure, and skip any section the lecture has nothing for:
 
-## Overview
+## Summary
 Two to four sentences: what the lecture covered and how it fits the course.
 
-## Key concepts
-Bullets. Bold the term, then explain it in one or two sentences the way the lecturer did.
+## Key points
+Bullets: the ideas to remember, each in one or two sentences, the way the lecturer explained them.
+
+## Definitions
+Bullets: the bold term, a colon, then what it means in one sentence.
 
 ## Details and examples
 Worked examples, derivations, formulas (LaTeX in $...$), code, and demonstrations, in the order they were taught.
@@ -37,8 +40,8 @@ Worked examples, derivations, formulas (LaTeX in $...$), code, and demonstration
 ## Announcements
 Deadlines, exams, assignments, and readings, with dates exactly as said.
 
-## Review questions
-Three to five questions a student should be able to answer after this lecture."""
+## Questions to review
+Three to five numbered questions a student should be able to answer after this lecture."""
 
 RULES = """Rules:
 - Use only what is in the transcript. Never invent facts, dates, or examples.

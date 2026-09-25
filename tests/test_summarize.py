@@ -51,7 +51,7 @@ def test_short_transcript_is_one_call_with_chosen_model(tmp_path):
     out = summarize_transcript(m, cfg, chat=chat, show=lambda c, model: 131072)
     assert out == "## Overview\nDerivatives."
     assert len(calls) == 1 and calls[0][0] == "big:35b" and calls[0][1] == 32768  # capped at max_context
-    assert "## Key concepts" in calls[0][2] and "Calc lecture 3" in calls[0][2] and "derivative" in calls[0][2]
+    assert "## Key points" in calls[0][2] and "Calc lecture 3" in calls[0][2] and "derivative" in calls[0][2]
 
 
 def test_long_transcript_is_split_then_merged(tmp_path):

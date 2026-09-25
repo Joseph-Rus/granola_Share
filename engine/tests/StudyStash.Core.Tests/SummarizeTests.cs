@@ -76,7 +76,7 @@ public class SummarizeTests
         Assert.Equal("## Overview\nDerivatives.", output);
         Assert.Single(calls);
         Assert.Equal(("big:35b", 32768), (calls[0].Model, calls[0].Ctx)); // capped at max_context
-        Assert.Contains("## Key concepts", calls[0].Prompt);
+        Assert.Contains("## Key points", calls[0].Prompt);
         Assert.Contains("Calc lecture 3", calls[0].Prompt);
         Assert.Contains("derivative", calls[0].Prompt);
     }

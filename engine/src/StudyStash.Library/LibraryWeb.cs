@@ -23,6 +23,12 @@ public sealed class LibraryWebOptions
     public Func<double?> RamGb { get; init; } = Machine.TotalRamGb;
     public Func<string> HostName { get; init; } = Machine.HostName;
     public Func<string> Nonce { get; init; } = () => Http.TokenUrlSafe(16);
+    /// <summary>Who may read the library through Claude (claude.json). Null: kept beside the config.</summary>
+    public ClaudeAccess? Claude { get; init; }
+    /// <summary>Putting the Claude port on the tailnet or the internet (off unless the service turns it on).</summary>
+    public ClaudeReach Reach { get; init; } = new();
+    /// <summary>Asking your notes: the model's answer to a prompt. Null asks the library's Ollama.</summary>
+    public LibraryReader.AskChatFn? AskChat { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -96,7 +102,7 @@ public static class Http
 /// address, form field, cookie, and JSON key is the Python engine's, so a laptop or a browser can't tell which
 /// engine answers.
 /// </summary>
-public sealed class LibraryWeb
+public sealed partial class LibraryWeb
 {
     static readonly Dictionary<string, string> SortedBy = new()
     {
@@ -345,7 +351,7 @@ public sealed class LibraryWeb
             {
                 ["id"] = noteId, ["status"] = string.IsNullOrEmpty(r.Status) ? Store.Done : r.Status, ["class_name"] = r.ClassName,
                 ["summary_model"] = r.SummaryModel, ["has_transcript"] = r.HasTranscript is > 0,
-                ["path"] = $"/note/{Ui.Quote(noteId, "")}",
+                ["path"] = $"/note/{Ui.Quote(noteId, "")}", ["lecture_title"] = r.LectureTitle,
             });
         });
         app.MapGet("/api/notes", (HttpContext ctx, string? class_name) => WithMember(ctx, _ => Http.Json(new JsonArray(
@@ -362,6 +368,7 @@ public sealed class LibraryWeb
             ["working_on"] = pipeline.Current, ["summary_model"] = cfg.EffectiveSummaryModel, ["version"] = Engine.Version,
         })));
 
+        MapApp(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 

@@ -566,7 +566,7 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
             raise HTTPException(404, "no such note")
         return {"id": note_id, "status": r["status"] or "done", "class_name": r["class_name"],
                 "summary_model": r["summary_model"], "has_transcript": bool(r["has_transcript"]),
-                "path": f"/note/{quote(note_id, safe='')}"}
+                "path": f"/note/{quote(note_id, safe='')}", "lecture_title": r["lecture_title"]}
 
     @app.get("/api/notes")
     def api_notes(class_name: str | None = None, role: str = Depends(member)):
