@@ -1,0 +1,41 @@
+# granola-share server config. Edit freely, or rerun `granola-share setup`.
+pool_name = "Lecture notes"
+pool_dir = "/srv/notes"
+poll_interval_seconds = 300
+web_host = "0.0.0.0"
+web_port = 8787
+# Your laptop and browser use this. Blank = no login (only safe if nothing else can reach this computer).
+pool_password = ""
+# From 0.2: a second password that also logs in to the web UI. Not needed any more.
+admin_password = ""
+# true = this server also pulls notes from its own Granola account (needs `granola-share login`).
+server_sync = false
+# Install new releases automatically (checked every few hours by the background service).
+auto_update = true
+include_transcripts = true
+mcp_url = "https://mcp.granola.ai/mcp"
+oauth_callback_port = 3334
+# "login" always shows Granola's account picker when signing in. Blank = let the sign-in page decide.
+oauth_prompt = "login"
+
+[ollama]
+enabled = true
+host = "http://localhost:11434"
+# Model that sorts notes into classes.
+model = "qwen3.6:35b-a3b"
+# Below this confidence a note goes to Unsorted for a human to file.
+min_confidence = 0.6
+
+[summary]
+# Write our own lecture notes from the transcript instead of using Granola's summary.
+# Granola only hands out transcripts on paid plans; notes without one keep Granola's summary.
+enabled = true
+# Ollama model that writes the summary. Blank = same as the sorting model.
+model = ""
+# Largest context (tokens) to ask for; longer transcripts are summarized in parts, then merged.
+max_context = 32768
+# true = also keep Granola's own summary in the note file.
+keep_granola_notes = false
+
+# Classes notes get sorted into. Aliases match Granola folder names and note titles
+# before the model is asked.
