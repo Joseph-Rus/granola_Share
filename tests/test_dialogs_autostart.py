@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace
 
 from granola_share import autostart
@@ -90,3 +91,19 @@ def test_status_and_restart(tmp_path, monkeypatch):
 def test_windows_process_filter_tells_roles_apart():
     assert "-like '*client*run*'" in autostart._ps_filter("client")
     assert "-notlike '*client*run*'" in autostart._ps_filter("server")
+
+
+def test_windows_service_starts_without_a_pipe_it_would_hold_open(tmp_path):
+    """The Startup .cmd starts the service in the background, and it inherits the .cmd's output. A pipe
+    there never closes, so `autostart install` would wait forever (it did, in CI)."""
+    calls = []
+
+    def run(args, **kw):
+        calls.append((args, kw))
+        return SimpleNamespace(returncode=0, stdout="0")
+
+    autostart.install("server", tmp_path / "h", system="Windows", startup_dir=tmp_path / "Startup", run_cmd=run,
+                      python="C:\\py.exe")
+    started = [kw for args, kw in calls if args[:2] == ["cmd", "/c"]]
+    assert started and all(kw.get(k) == subprocess.DEVNULL for kw in started for k in ("stdin", "stdout", "stderr"))
+    assert not any(kw.get("capture_output") for kw in started)

@@ -81,7 +81,9 @@
   $Startup = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
   if ($env:GRANOLA_SHARE_NO_SETUP -eq "1") {
     # put back whatever was running before the update
-    Get-ChildItem $Startup -Filter "granola-share-*.cmd" -ErrorAction SilentlyContinue | ForEach-Object { cmd /c $_.FullName }
+    # (Start-Process, not `cmd /c`: the service would hold on to the output PowerShell waits on.)
+    Get-ChildItem $Startup -Filter "granola-share-*.cmd" -ErrorAction SilentlyContinue |
+      ForEach-Object { Start-Process -FilePath $_.FullName -WindowStyle Hidden }
     Write-Host "Skipping setup. Next: granola-share setup (the library) or granola-share client open (your laptop)."
     return
   }

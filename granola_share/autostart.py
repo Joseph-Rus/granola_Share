@@ -136,7 +136,7 @@ def install(role: str, home: Path, *, system: str | None = None, launch_agents_d
         cmd = d / f"granola-share-{role}.cmd"
         _stop_windows(run_cmd, role)  # an older copy may still be running
         cmd.write_text(render_cmd(args))
-        _quiet(run_cmd, ["cmd", "/c", str(cmd)])  # start it right away too
+        _start_windows(run_cmd, cmd)  # start it right away too
         return cmd
     d = systemd_dir or default_systemd_dir()
     d.mkdir(parents=True, exist_ok=True)
@@ -190,6 +190,17 @@ def _ps_filter(role: str | None) -> str:
     return base
 
 
+def _start_windows(run_cmd, cmd: Path) -> None:
+    """Run a Startup .cmd now. It starts the service in the background, and that program inherits
+    whatever the .cmd's output goes to: a pipe we read would stay open as long as the service runs,
+    and waiting for its end would never finish. So the output goes nowhere."""
+    try:
+        run_cmd(["cmd", "/c", str(cmd)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=60)
+    except Exception:
+        pass
+
+
 def _stop_windows(run_cmd, role: str | None = None) -> None:
     ps = (f"Get-CimInstance Win32_Process | Where-Object {{ {_ps_filter(role)} }} | "
           "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
@@ -227,7 +238,7 @@ def restart(role: str, *, system: str | None = None, run_cmd=subprocess.run) -> 
             _quiet(run_cmd, ["launchctl", "bootstrap", target, str(path)])
     elif system == "Windows":
         _stop_windows(run_cmd, role)
-        _quiet(run_cmd, ["cmd", "/c", str(path)])
+        _start_windows(run_cmd, path)
     else:
         _quiet(run_cmd, ["systemctl", "--user", "restart", path.name])
 

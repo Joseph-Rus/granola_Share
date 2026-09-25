@@ -32,6 +32,7 @@ jobs:
         include:
           - os: ubuntu-latest
             python: "3.11"
+    timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +47,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    timeout-minutes: 20  # a hang fails fast instead of holding everything up for hours
     runs-on: ${{ matrix.os }}
     env:
       GRANOLA_SHARE_SRC: ${{ github.workspace }}
@@ -116,6 +118,7 @@ jobs:
 
   mac-app:
     name: Mac app (DMG)
+    timeout-minutes: 20
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +141,7 @@ jobs:
 
   windows-app:
     name: Windows app (Setup.exe)
+    timeout-minutes: 20
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,6 +186,7 @@ jobs:
     name: publish release
     needs: [test, install, mac-app, windows-app]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: write
