@@ -32,6 +32,7 @@ public static class Golden
     static readonly Lazy<JsonObject> granola = new(() => (JsonObject)JsonNode.Parse(Text("granola.json"))!);
     static readonly Lazy<JsonObject> library = new(() => (JsonObject)JsonNode.Parse(Text("library.json"))!);
     static readonly Lazy<JsonObject> pages = new(() => (JsonObject)JsonNode.Parse(Text("pages.json"))!);
+    static readonly Lazy<JsonObject> platform = new(() => (JsonObject)JsonNode.Parse(Text("platform.json"))!);
 
     public static string Text(string name) =>
         new UTF8Encoding(false).GetString(File.ReadAllBytes(System.IO.Path.Combine(AppContext.BaseDirectory, "Golden", name)));
@@ -48,6 +49,9 @@ public static class Golden
 
     /// <summary>Whole pages the Python engine served: {"library": {path: {status, html, csp}}, "setup": {state: {draft, html}}}.</summary>
     public static JsonObject PageCases() => pages.Value;
+
+    /// <summary>Stage 5: service files, the firewall rule, doctor's scenarios.</summary>
+    public static JsonObject Platform() => platform.Value;
 
     /// <summary>Data compared as json.dumps writes it, so key order counts too.</summary>
     public static string Dump(JsonNode? node) => PyJson.Dumps(node);
@@ -77,5 +81,34 @@ public sealed class FakeOllama(Func<string, JsonObject, object> answer) : HttpMe
             _ => throw new ArgumentException("answer with a string or JSON"),
         };
         return new HttpResponseMessage(status) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
+    }
+}
+
+/// <summary>Stands in for a download server: bytes for each URL, a 404 for anything else. Keeps what was asked for.</summary>
+public sealed class FakeDownloads(Dictionary<string, byte[]> files) : HttpMessageHandler
+{
+    public List<string> Asked { get; } = [];
+
+    public HttpClient Client() => new(this);
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        string url = request.RequestUri!.ToString();
+        Asked.Add(url);
+        return Task.FromResult(files.TryGetValue(url, out var bytes)
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }
+            : new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("") });
+    }
+}
+
+/// <summary>A command runner that answers from a function and keeps every command it was given.</summary>
+public sealed class FakeRunner(Func<string, IReadOnlyList<string>, ProcResult?>? answer = null)
+{
+    public List<List<string>> Calls { get; } = [];
+
+    public ProcResult? Run(string exe, IReadOnlyList<string> args, TimeSpan timeout)
+    {
+        lock (Calls) Calls.Add([exe, .. args]);
+        return answer is null ? new ProcResult(0, "") : answer(exe, args);
     }
 }

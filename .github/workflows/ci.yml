@@ -72,6 +72,9 @@ jobs:
           git diff --exit-code -- engine/tests/StudyStash.Core.Tests/Golden engine/src/StudyStash.Library/PageText.cs
       - name: Run tests
         run: dotnet test engine/StudyStash.slnx
+        env:
+          # Windows: also run the library as a real background service, from the Startup folder with no window.
+          STUDYSTASH_LIVE_SERVICE: ${{ runner.os == 'Windows' && '1' || '' }}
 
   install:
     name: installer (${{ matrix.os }})

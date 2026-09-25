@@ -1,0 +1,1476 @@
+{
+ "services": {
+  "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.granola-share.server</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/Study Stash/studystash</string>\n        <string>--home</string>\n        <string>/home/student/.granola-share</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>GRANOLA_SHARE_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
+  "plist_odd": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.granola-share.client</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/a&amp;b &lt;c&gt;/studystash</string>\n        <string>--home</string>\n        <string>/home/student/x &amp; y</string>\n        <string>client</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>GRANOLA_SHARE_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
+  "systemd": "[Unit]\nDescription=granola-share server\n\n[Service]\nExecStart=\"/opt/Study Stash/studystash\" --home /home/student/.granola-share run\nEnvironment=GRANOLA_SHARE_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
+  "systemd_odd": "[Unit]\nDescription=granola-share client\n\n[Service]\nExecStart=\"/opt/a&b <c>/studystash\" --home \"/home/student/x & y\" client run\nEnvironment=GRANOLA_SHARE_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
+  "args": [
+   "/opt/Study Stash/studystash",
+   "--home",
+   "/home/student/.granola-share",
+   "run"
+  ],
+  "odd": [
+   "/opt/a&b <c>/studystash",
+   "--home",
+   "/home/student/x & y",
+   "client",
+   "run"
+  ],
+  "log": "/home/student/.granola-share/logs/server.log",
+  "user_home": "/home/student"
+ },
+ "firewall": {
+  "script": "Remove-NetFirewallRule -DisplayName 'Study Stash library' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'Study Stash library' -Description 'Lets your laptop reach your Study Stash library. Added by granola-share setup.' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8790 -RemoteAddress 100.64.0.0/10,LocalSubnet -Profile Any | Out-Null; $py = @('C:\\Program Files\\Study Stash\\studystash.exe','C:\\Users\\it''s me\\studystash.exe'); Get-NetFirewallApplicationFilter | Where-Object { $py -contains $_.Program } | Get-NetFirewallRule | Where-Object { $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' } | Remove-NetFirewallRule",
+  "elevate": "try { Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','UgBlAG0AbwB2AGUALQBOAGUAdABGAGkAcgBlAHcAYQBsAGwAUgB1AGwAZQAgAC0ARABpAHMAcABsAGEAeQBOAGEAbQBlACAAJwBTAHQAdQBkAHkAIABTAHQAYQBzAGgAIABsAGkAYgByAGEAcgB5ACcAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAOwAgAE4AZQB3AC0ATgBlAHQARgBpAHIAZQB3AGEAbABsAFIAdQBsAGUAIAAtAEQAaQBzAHAAbABhAHkATgBhAG0AZQAgACcAUwB0AHUAZAB5ACAAUwB0AGEAcwBoACAAbABpAGIAcgBhAHIAeQAnACAALQBEAGUAcwBjAHIAaQBwAHQAaQBvAG4AIAAnAEwAZQB0AHMAIAB5AG8AdQByACAAbABhAHAAdABvAHAAIAByAGUAYQBjAGgAIAB5AG8AdQByACAAUwB0AHUAZAB5ACAAUwB0AGEAcwBoACAAbABpAGIAcgBhAHIAeQAuACAAQQBkAGQAZQBkACAAYgB5ACAAZwByAGEAbgBvAGwAYQAtAHMAaABhAHIAZQAgAHMAZQB0AHUAcAAuACcAIAAtAEQAaQByAGUAYwB0AGkAbwBuACAASQBuAGIAbwB1AG4AZAAgAC0AQQBjAHQAaQBvAG4AIABBAGwAbABvAHcAIAAtAFAAcgBvAHQAbwBjAG8AbAAgAFQAQwBQACAALQBMAG8AYwBhAGwAUABvAHIAdAAgADgANwA5ADAAIAAtAFIAZQBtAG8AdABlAEEAZABkAHIAZQBzAHMAIAAxADAAMAAuADYANAAuADAALgAwAC8AMQAwACwATABvAGMAYQBsAFMAdQBiAG4AZQB0ACAALQBQAHIAbwBmAGkAbABlACAAQQBuAHkAIAB8ACAATwB1AHQALQBOAHUAbABsADsAIAAkAHAAeQAgAD0AIABAACgAJwBDADoAXABQAHIAbwBnAHIAYQBtACAARgBpAGwAZQBzAFwAUwB0AHUAZAB5ACAAUwB0AGEAcwBoAFwAcwB0AHUAZAB5AHMAdABhAHMAaAAuAGUAeABlACcALAAnAEMAOgBcAFUAcwBlAHIAcwBcAGkAdAAnACcAcwAgAG0AZQBcAHMAdAB1AGQAeQBzAHQAYQBzAGgALgBlAHgAZQAnACkAOwAgAEcAZQB0AC0ATgBlAHQARgBpAHIAZQB3AGEAbABsAEEAcABwAGwAaQBjAGEAdABpAG8AbgBGAGkAbAB0AGUAcgAgAHwAIABXAGgAZQByAGUALQBPAGIAagBlAGMAdAAgAHsAIAAkAHAAeQAgAC0AYwBvAG4AdABhAGkAbgBzACAAJABfAC4AUAByAG8AZwByAGEAbQAgAH0AIAB8ACAARwBlAHQALQBOAGUAdABGAGkAcgBlAHcAYQBsAGwAUgB1AGwAZQAgAHwAIABXAGgAZQByAGUALQBPAGIAagBlAGMAdAAgAHsAIAAkAF8ALgBEAGkAcgBlAGMAdABpAG8AbgAgAC0AZQBxACAAJwBJAG4AYgBvAHUAbgBkACcAIAAtAGEAbgBkACAAJABfAC4AQQBjAHQAaQBvAG4AIAAtAGUAcQAgACcAQgBsAG8AYwBrACcAIAB9ACAAfAAgAFIAZQBtAG8AdgBlAC0ATgBlAHQARgBpAHIAZQB3AGEAbABsAFIAdQBsAGUA'; exit 0 } catch { exit 1 }",
+  "programs": [
+   "C:\\Program Files\\Study Stash\\studystash.exe",
+   "C:\\Users\\it's me\\studystash.exe"
+  ]
+ },
+ "server": {
+  "all-good": {
+   "given": {
+    "system": "Linux",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "running",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ],
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {
+     "running": true,
+     "dns": "mini.ts.net",
+     "ips": [
+      "100.1.1.1"
+     ]
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Summary model",
+     "ok",
+     "big:35b",
+     ""
+    ],
+    [
+     "Sorting model",
+     "ok",
+     "qwen3:1.7b",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "your laptop can reach http://mini.ts.net:8787",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ✓ Background service  starts at login and restarts if it stops\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ✓ Tailscale           your laptop can reach http://mini.ts.net:8787\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n  ok Background service  starts at login and restarts if it stops\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n  ok Tailscale           your laptop can reach http://mini.ts.net:8787\n  ok Version             0.4.4"
+  },
+  "problems": {
+   "given": {
+    "system": "Darwin",
+    "health": null,
+    "service": "stopped",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ]
+    ],
+    "tailscale": {
+     "installed": false
+    },
+    "sleep": 10,
+    "cfg": {
+     "classes": []
+    },
+    "log": "started\n\nOSError: [Errno 48] address already in use\n"
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 0 classes",
+     ""
+    ],
+    [
+     "Classes",
+     "warn",
+     "none yet, so everything lands in Unsorted",
+     "add them in the web UI under Settings, or rerun `granola-share setup`"
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "fail",
+     "nothing answers on port 8787",
+     "it is installed but not answering; recent log:\nstarted\nOSError: [Errno 48] address already in use"
+    ],
+    [
+     "Background service",
+     "fail",
+     "installed but not running",
+     "`granola-share autostart install --role server`, then check {root}/home/logs/server.log"
+    ],
+    [
+     "Summary model",
+     "fail",
+     "big:35b is not installed",
+     "`ollama pull big:35b`, or pick an installed one in Settings"
+    ],
+    [
+     "Sorting model",
+     "ok",
+     "qwen3:1.7b",
+     ""
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "not installed; your laptop can only reach this computer on the same Wi-Fi",
+     "rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account"
+    ],
+    [
+     "Sleep",
+     "warn",
+     "this computer sleeps after 10 min idle, and the library goes offline with it",
+     "System Settings → Energy: turn on \"Prevent automatic sleeping when the display is off\""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 0 classes\n   ! Classes             none yet, so everything lands in Unsorted\n                         → add them in the web UI under Settings, or rerun `granola-share setup`\n   ✓ Notes folder        {root}/pool\n   ✗ Web server          nothing answers on port 8787\n                         → it is installed but not answering; recent log:\n                           started\n                           OSError: [Errno 48] address already in use\n   ✗ Background service  installed but not running\n                         → `granola-share autostart install --role server`, then check {root}/home/logs/server.log\n   ✗ Summary model       big:35b is not installed\n                         → `ollama pull big:35b`, or pick an installed one in Settings\n   ✓ Sorting model       qwen3:1.7b\n   ! Tailscale           not installed; your laptop can only reach this computer on the same Wi-Fi\n                         → rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account\n   ! Sleep               this computer sleeps after 10 min idle, and the library goes offline with it\n                         → System Settings → Energy: turn on \"Prevent automatic sleeping when the display is off\"\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 0 classes\n   ! Classes             none yet, so everything lands in Unsorted\n                         -> add them in the web UI under Settings, or rerun `granola-share setup`\n  ok Notes folder        {root}/pool\n   X Web server          nothing answers on port 8787\n                         -> it is installed but not answering; recent log:\n                           started\n                           OSError: [Errno 48] address already in use\n   X Background service  installed but not running\n                         -> `granola-share autostart install --role server`, then check {root}/home/logs/server.log\n   X Summary model       big:35b is not installed\n                         -> `ollama pull big:35b`, or pick an installed one in Settings\n  ok Sorting model       qwen3:1.7b\n   ! Tailscale           not installed; your laptop can only reach this computer on the same Wi-Fi\n                         -> rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account\n   ! Sleep               this computer sleeps after 10 min idle, and the library goes offline with it\n                         -> System Settings → Energy: turn on \"Prevent automatic sleeping when the display is off\"\n  ok Version             0.4.4"
+  },
+  "old-version": {
+   "given": {
+    "system": "Linux",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true
+     }
+    },
+    "service": "running",
+    "models": null,
+    "ollama_installed": true,
+    "tailscale": {
+     "running": false,
+     "installed": true
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "warn",
+     "answering on port 8787 (running an old version)",
+     "restart it to load this version: `granola-share autostart install --role server`"
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Ollama",
+     "fail",
+     "installed, but not answering at http://localhost:11434; study notes and AI sorting are paused",
+     "run `ollama serve`"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "installed, but not running; your laptop can only reach this computer on the same Wi-Fi",
+     "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ! Web server          answering on port 8787 (running an old version)\n                         → restart it to load this version: `granola-share autostart install --role server`\n   ✓ Background service  starts at login and restarts if it stops\n   ✗ Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         → run `ollama serve`\n   ! Tailscale           installed, but not running; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n   ! Web server          answering on port 8787 (running an old version)\n                         -> restart it to load this version: `granola-share autostart install --role server`\n  ok Background service  starts at login and restarts if it stops\n   X Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         -> run `ollama serve`\n   ! Tailscale           installed, but not running; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n  ok Version             0.4.4"
+  },
+  "no-ollama-mac": {
+   "given": {
+    "system": "Darwin",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "running",
+    "models": null,
+    "ollama_installed": false,
+    "tailscale": {
+     "installed": true,
+     "running": false,
+     "state": "NeedsLogin"
+    },
+    "sleep": 0
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Ollama",
+     "fail",
+     "not installed, so study notes and AI sorting are paused",
+     "rerun `granola-share setup`: it installs Ollama for you (or get it from https://ollama.com)"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "installed, but signed out; your laptop can only reach this computer on the same Wi-Fi",
+     "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ✓ Background service  starts at login and restarts if it stops\n   ✗ Ollama              not installed, so study notes and AI sorting are paused\n                         → rerun `granola-share setup`: it installs Ollama for you (or get it from https://ollama.com)\n   ! Tailscale           installed, but signed out; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n  ok Background service  starts at login and restarts if it stops\n   X Ollama              not installed, so study notes and AI sorting are paused\n                         -> rerun `granola-share setup`: it installs Ollama for you (or get it from https://ollama.com)\n   ! Tailscale           installed, but signed out; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n  ok Version             0.4.4"
+  },
+  "closed-ollama-mac": {
+   "given": {
+    "system": "Darwin",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "running",
+    "models": null,
+    "ollama_installed": true,
+    "tailscale": {
+     "installed": true,
+     "state": "Stopped"
+    },
+    "sleep": 0
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Ollama",
+     "fail",
+     "installed, but not answering at http://localhost:11434; study notes and AI sorting are paused",
+     "open the Ollama app (`open -a Ollama`)"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "installed, but turned off; your laptop can only reach this computer on the same Wi-Fi",
+     "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ✓ Background service  starts at login and restarts if it stops\n   ✗ Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         → open the Ollama app (`open -a Ollama`)\n   ! Tailscale           installed, but turned off; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n  ok Background service  starts at login and restarts if it stops\n   X Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         -> open the Ollama app (`open -a Ollama`)\n   ! Tailscale           installed, but turned off; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n  ok Version             0.4.4"
+  },
+  "closed-ollama-windows": {
+   "given": {
+    "system": "Windows",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "missing",
+    "models": null,
+    "ollama_installed": true,
+    "tailscale": {
+     "installed": true,
+     "running": true,
+     "dns": "pc.ts.net"
+    },
+    "firewall": null,
+    "sleep": 0
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "warn",
+     "not installed, so the library stops when you log out or reboot",
+     "`granola-share autostart install --role server`"
+    ],
+    [
+     "Ollama",
+     "fail",
+     "installed, but not answering at http://localhost:11434; study notes and AI sorting are paused",
+     "open Ollama from the Start menu"
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "your laptop can reach http://pc.ts.net:8787",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         → `granola-share autostart install --role server`\n   ✗ Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         → open Ollama from the Start menu\n   ✓ Tailscale           your laptop can reach http://pc.ts.net:8787\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         -> `granola-share autostart install --role server`\n   X Ollama              installed, but not answering at http://localhost:11434; study notes and AI sorting are paused\n                         -> open Ollama from the Start menu\n  ok Tailscale           your laptop can reach http://pc.ts.net:8787\n  ok Version             0.4.4"
+  },
+  "windows-blocked": {
+   "given": {
+    "system": "Windows",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "running",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ],
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {
+     "installed": true,
+     "running": true,
+     "dns": "pc.ts.net",
+     "ips": []
+    },
+    "firewall": false,
+    "sleep": 30
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Summary model",
+     "ok",
+     "big:35b",
+     ""
+    ],
+    [
+     "Sorting model",
+     "ok",
+     "qwen3:1.7b",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "your laptop can reach http://pc.ts.net:8787",
+     ""
+    ],
+    [
+     "Firewall",
+     "warn",
+     "Windows Firewall has no rule for port 8787, so it may block your laptop",
+     "rerun `granola-share setup` and let it add the rule (Windows asks for permission)"
+    ],
+    [
+     "Sleep",
+     "warn",
+     "this computer sleeps after 30 min idle, and the library goes offline with it",
+     "Settings → System → Power: when plugged in, put the device to sleep after Never"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ✓ Background service  starts at login and restarts if it stops\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ✓ Tailscale           your laptop can reach http://pc.ts.net:8787\n   ! Firewall            Windows Firewall has no rule for port 8787, so it may block your laptop\n                         → rerun `granola-share setup` and let it add the rule (Windows asks for permission)\n   ! Sleep               this computer sleeps after 30 min idle, and the library goes offline with it\n                         → Settings → System → Power: when plugged in, put the device to sleep after Never\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n  ok Background service  starts at login and restarts if it stops\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n  ok Tailscale           your laptop can reach http://pc.ts.net:8787\n   ! Firewall            Windows Firewall has no rule for port 8787, so it may block your laptop\n                         -> rerun `granola-share setup` and let it add the rule (Windows asks for permission)\n   ! Sleep               this computer sleeps after 30 min idle, and the library goes offline with it\n                         -> Settings → System → Power: when plugged in, put the device to sleep after Never\n  ok Version             0.4.4"
+  },
+  "windows-fine": {
+   "given": {
+    "system": "Windows",
+    "health": {
+     "status": 200,
+     "body": {
+      "ok": true,
+      "version": "0.4.4"
+     }
+    },
+    "service": "running",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ],
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {
+     "installed": true,
+     "running": true,
+     "ips": [
+      "100.9.9.9"
+     ]
+    },
+    "firewall": true,
+    "sleep": 0
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "ok",
+     "answering on port 8787 (running 0.4.4)",
+     ""
+    ],
+    [
+     "Background service",
+     "ok",
+     "starts at login and restarts if it stops",
+     ""
+    ],
+    [
+     "Summary model",
+     "ok",
+     "big:35b",
+     ""
+    ],
+    [
+     "Sorting model",
+     "ok",
+     "qwen3:1.7b",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "your laptop can reach http://100.9.9.9:8787",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✓ Web server          answering on port 8787 (running 0.4.4)\n   ✓ Background service  starts at login and restarts if it stops\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ✓ Tailscale           your laptop can reach http://100.9.9.9:8787\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n  ok Web server          answering on port 8787 (running 0.4.4)\n  ok Background service  starts at login and restarts if it stops\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n  ok Tailscale           your laptop can reach http://100.9.9.9:8787\n  ok Version             0.4.4"
+  },
+  "port-taken": {
+   "given": {
+    "system": "Linux",
+    "health": {
+     "status": 404,
+     "body": {}
+    },
+    "service": "missing",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ],
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {
+     "installed": true,
+     "state": "NeedsMachineAuth"
+    },
+    "latest": "v9.9.9",
+    "cfg": {
+     "pool_password": "",
+     "server_sync": true
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "warn",
+     "{root}/home/config.toml, 1 class",
+     "no pool password: anyone who can reach the server can read and add notes"
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "fail",
+     "port 8787 answered 404",
+     "another app may be using the port; change web_port in config.toml"
+    ],
+    [
+     "Background service",
+     "warn",
+     "not installed, so the library stops when you log out or reboot",
+     "`granola-share autostart install --role server`"
+    ],
+    [
+     "Summary model",
+     "ok",
+     "big:35b",
+     ""
+    ],
+    [
+     "Sorting model",
+     "ok",
+     "qwen3:1.7b",
+     ""
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi",
+     "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"
+    ],
+    [
+     "Server's Granola",
+     "fail",
+     "server_sync is on but this server isn't signed in",
+     "`granola-share login`"
+    ],
+    [
+     "Version",
+     "warn",
+     "0.4.4 installed, v9.9.9 is out",
+     "run `granola-share update`"
+    ]
+   ],
+   "unicode": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         → no pool password: anyone who can reach the server can read and add notes\n   ✓ Notes folder        {root}/pool\n   ✗ Web server          port 8787 answered 404\n                         → another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         → `granola-share autostart install --role server`\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ✗ Server's Granola    server_sync is on but this server isn't signed in\n                         → `granola-share login`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         → run `granola-share update`",
+   "ascii": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         -> no pool password: anyone who can reach the server can read and add notes\n  ok Notes folder        {root}/pool\n   X Web server          port 8787 answered 404\n                         -> another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         -> `granola-share autostart install --role server`\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   X Server's Granola    server_sync is on but this server isn't signed in\n                         -> `granola-share login`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         -> run `granola-share update`"
+  },
+  "down-not-installed": {
+   "given": {
+    "system": "Linux",
+    "health": null,
+    "service": "missing",
+    "models": [
+     [
+      "qwen3:1.7b",
+      1.4
+     ],
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {
+     "running": true,
+     "ips": [
+      "100.1.1.1"
+     ]
+    },
+    "log": "something\n",
+    "cfg": {
+     "ollama_enabled": false
+    },
+    "latest": "v0.0.1"
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "fail",
+     "nothing answers on port 8787",
+     "start it: `granola-share autostart install --role server` (or `granola-share run` to watch it)"
+    ],
+    [
+     "Background service",
+     "warn",
+     "not installed, so the library stops when you log out or reboot",
+     "`granola-share autostart install --role server`"
+    ],
+    [
+     "Ollama",
+     "warn",
+     "AI is off: only folder and title rules sort lectures, and no summaries are written",
+     "turn it on in Settings"
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "your laptop can reach http://100.1.1.1:8787",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4 (newest)",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ✗ Web server          nothing answers on port 8787\n                         → start it: `granola-share autostart install --role server` (or `granola-share run` to watch it)\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         → `granola-share autostart install --role server`\n   ! Ollama              AI is off: only folder and title rules sort lectures, and no summaries are written\n                         → turn it on in Settings\n   ✓ Tailscale           your laptop can reach http://100.1.1.1:8787\n   ✓ Version             0.4.4 (newest)",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n   X Web server          nothing answers on port 8787\n                         -> start it: `granola-share autostart install --role server` (or `granola-share run` to watch it)\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         -> `granola-share autostart install --role server`\n   ! Ollama              AI is off: only folder and title rules sort lectures, and no summaries are written\n                         -> turn it on in Settings\n  ok Tailscale           your laptop can reach http://100.1.1.1:8787\n  ok Version             0.4.4 (newest)"
+  },
+  "no-summaries": {
+   "given": {
+    "system": "Linux",
+    "health": {
+     "status": 200,
+     "body": {
+      "version": "0.0.9"
+     }
+    },
+    "service": "stopped",
+    "models": [
+     [
+      "big:35b",
+      23
+     ]
+    ],
+    "tailscale": {},
+    "cfg": {
+     "summary_enabled": false
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/config.toml, 1 class",
+     ""
+    ],
+    [
+     "Notes folder",
+     "ok",
+     "{root}/pool",
+     ""
+    ],
+    [
+     "Web server",
+     "warn",
+     "answering on port 8787 (running 0.0.9)",
+     "restart it to load this version: `granola-share autostart install --role server`"
+    ],
+    [
+     "Background service",
+     "fail",
+     "installed but not running",
+     "`granola-share autostart install --role server`, then check {root}/home/logs/server.log"
+    ],
+    [
+     "Sorting model",
+     "fail",
+     "qwen3:1.7b is not installed",
+     "`ollama pull qwen3:1.7b`, or pick an installed one in Settings"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "not installed; your laptop can only reach this computer on the same Wi-Fi",
+     "rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/config.toml, 1 class\n   ✓ Notes folder        {root}/pool\n   ! Web server          answering on port 8787 (running 0.0.9)\n                         → restart it to load this version: `granola-share autostart install --role server`\n   ✗ Background service  installed but not running\n                         → `granola-share autostart install --role server`, then check {root}/home/logs/server.log\n   ✗ Sorting model       qwen3:1.7b is not installed\n                         → `ollama pull qwen3:1.7b`, or pick an installed one in Settings\n   ! Tailscale           not installed; your laptop can only reach this computer on the same Wi-Fi\n                         → rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/config.toml, 1 class\n  ok Notes folder        {root}/pool\n   ! Web server          answering on port 8787 (running 0.0.9)\n                         -> restart it to load this version: `granola-share autostart install --role server`\n   X Background service  installed but not running\n                         -> `granola-share autostart install --role server`, then check {root}/home/logs/server.log\n   X Sorting model       qwen3:1.7b is not installed\n                         -> `ollama pull qwen3:1.7b`, or pick an installed one in Settings\n   ! Tailscale           not installed; your laptop can only reach this computer on the same Wi-Fi\n                         -> rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; sign in on both computers with one account\n  ok Version             0.4.4"
+  }
+ },
+ "client": {
+  "not-signed-in": {
+   "given": {
+    "system": "Linux",
+    "server": {
+     "ok": {}
+    },
+    "service": "running",
+    "tokens": false
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected",
+     ""
+    ],
+    [
+     "Library",
+     "ok",
+     "'None' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "fail",
+     "not signed in",
+     "`granola-share client login`"
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✓ Tailscale           connected\n   ✓ Library             'None' at http://mini:8787\n   ✗ Granola             not signed in\n                         → `granola-share client login`\n   ✓ Background watcher  checks for finished notes every few minutes\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n  ok Tailscale           connected\n  ok Library             'None' at http://mini:8787\n   X Granola             not signed in\n                         -> `granola-share client login`\n  ok Background watcher  checks for finished notes every few minutes\n  ok Version             0.4.4"
+  },
+  "free-plan": {
+   "given": {
+    "system": "Linux",
+    "server": {
+     "ok": {
+      "pool_name": "Fall"
+     }
+    },
+    "probe": {
+     "ok": [
+      4,
+      false
+     ]
+    },
+    "service": "running"
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected",
+     ""
+    ],
+    [
+     "Library",
+     "ok",
+     "'Fall' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 4 notes in the last 7 days",
+     ""
+    ],
+    [
+     "Transcripts",
+     "warn",
+     "your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures",
+     "a paid Granola plan unlocks them"
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✓ Tailscale           connected\n   ✓ Library             'Fall' at http://mini:8787\n   ✓ Granola             signed in, 4 notes in the last 7 days\n   ! Transcripts         your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures\n                         → a paid Granola plan unlocks them\n   ✓ Background watcher  checks for finished notes every few minutes\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n  ok Tailscale           connected\n  ok Library             'Fall' at http://mini:8787\n  ok Granola             signed in, 4 notes in the last 7 days\n   ! Transcripts         your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures\n                         -> a paid Granola plan unlocks them\n  ok Background watcher  checks for finished notes every few minutes\n  ok Version             0.4.4"
+  },
+  "unreachable": {
+   "given": {
+    "system": "Linux",
+    "server": {
+     "error": "could not reach http://mini:8787/api/health"
+    },
+    "probe": {
+     "ok": [
+      0,
+      true
+     ]
+    },
+    "service": "missing"
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected",
+     ""
+    ],
+    [
+     "Library",
+     "fail",
+     "http://mini:8787: could not reach http://mini:8787/api/health",
+     "is Tailscale on on both computers, and is the library's computer awake? Wrong address or password: `granola-share client setup`"
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 0 notes in the last 7 days",
+     ""
+    ],
+    [
+     "Transcripts",
+     "ok",
+     "shared, so the library writes its own summaries",
+     ""
+    ],
+    [
+     "Background watcher",
+     "warn",
+     "not installed, so notes are only shared while you run it",
+     "`granola-share autostart install --role client`"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✓ Tailscale           connected\n   ✗ Library             http://mini:8787: could not reach http://mini:8787/api/health\n                         → is Tailscale on on both computers, and is the library's computer awake? Wrong address or password: `granola-share client setup`\n   ✓ Granola             signed in, 0 notes in the last 7 days\n   ✓ Transcripts         shared, so the library writes its own summaries\n   ! Background watcher  not installed, so notes are only shared while you run it\n                         → `granola-share autostart install --role client`\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n  ok Tailscale           connected\n   X Library             http://mini:8787: could not reach http://mini:8787/api/health\n                         -> is Tailscale on on both computers, and is the library's computer awake? Wrong address or password: `granola-share client setup`\n  ok Granola             signed in, 0 notes in the last 7 days\n  ok Transcripts         shared, so the library writes its own summaries\n   ! Background watcher  not installed, so notes are only shared while you run it\n                         -> `granola-share autostart install --role client`\n  ok Version             0.4.4"
+  },
+  "mac-copying": {
+   "given": {
+    "system": "Darwin",
+    "server": {
+     "ok": {
+      "pool_name": "Fall"
+     }
+    },
+    "probe": {
+     "ok": [
+      1,
+      false
+     ]
+    },
+    "service": "stopped",
+    "laptop": {
+     "granola": "/Applications/Granola.app",
+     "granola_here": true,
+     "tailscale": {
+      "installed": true,
+      "running": true,
+      "dns": "air.ts.net"
+     }
+    },
+    "cfg": {
+     "copy_transcripts": true,
+     "mode": "ask"
+    },
+    "status": {
+     "trusted": true,
+     "last_copy": {
+      "title": "Cells",
+      "chars": 5210,
+      "at": "10:02"
+     }
+    },
+    "log": "line one\nline two\n"
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: ask each time",
+     ""
+    ],
+    [
+     "Granola app",
+     "ok",
+     "/Applications/Granola.app",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected as air.ts.net",
+     ""
+    ],
+    [
+     "Library",
+     "ok",
+     "'Fall' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 1 note in the last 7 days",
+     ""
+    ],
+    [
+     "Transcripts",
+     "ok",
+     "your Granola plan doesn't share them through its API, so they're copied from the Granola app instead",
+     ""
+    ],
+    [
+     "Copy transcripts",
+     "ok",
+     "last copied 'Cells' (5210 chars) at 10:02",
+     ""
+    ],
+    [
+     "Background watcher",
+     "fail",
+     "installed but not running",
+     "`granola-share autostart install --role client`; recent log:\nline one\nline two"
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: ask each time\n   ✓ Granola app         /Applications/Granola.app\n   ✓ Tailscale           connected as air.ts.net\n   ✓ Library             'Fall' at http://mini:8787\n   ✓ Granola             signed in, 1 note in the last 7 days\n   ✓ Transcripts         your Granola plan doesn't share them through its API, so they're copied from the Granola app instead\n   ✓ Copy transcripts    last copied 'Cells' (5210 chars) at 10:02\n   ✗ Background watcher  installed but not running\n                         → `granola-share autostart install --role client`; recent log:\n                           line one\n                           line two\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: ask each time\n  ok Granola app         /Applications/Granola.app\n  ok Tailscale           connected as air.ts.net\n  ok Library             'Fall' at http://mini:8787\n  ok Granola             signed in, 1 note in the last 7 days\n  ok Transcripts         your Granola plan doesn't share them through its API, so they're copied from the Granola app instead\n  ok Copy transcripts    last copied 'Cells' (5210 chars) at 10:02\n   X Background watcher  installed but not running\n                         -> `granola-share autostart install --role client`; recent log:\n                           line one\n                           line two\n  ok Version             0.4.4"
+  },
+  "mac-untrusted": {
+   "given": {
+    "system": "Darwin",
+    "server": {
+     "ok": {}
+    },
+    "probe": {
+     "ok": [
+      2,
+      null
+     ]
+    },
+    "service": "running",
+    "laptop": {
+     "granola": null,
+     "granola_here": true,
+     "tailscale": {
+      "installed": false
+     }
+    },
+    "cfg": {
+     "copy_transcripts": true
+    },
+    "status": {
+     "trusted": false
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Granola app",
+     "fail",
+     "not installed on this computer, so there's nothing to record lectures with",
+     "get it from https://www.granola.ai/download"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "not installed; this computer reaches the library only on the same Wi-Fi",
+     "install it from https://tailscale.com/download (or with the button in Study Stash)"
+    ],
+    [
+     "Library",
+     "ok",
+     "'None' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 2 notes in the last 7 days",
+     ""
+    ],
+    [
+     "Copy transcripts",
+     "fail",
+     "macOS hasn't allowed Accessibility access yet",
+     "System Settings → Privacy & Security → Accessibility: turn on python3.12, then `granola-share autostart install --role client`"
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✗ Granola app         not installed on this computer, so there's nothing to record lectures with\n                         → get it from https://www.granola.ai/download\n   ! Tailscale           not installed; this computer reaches the library only on the same Wi-Fi\n                         → install it from https://tailscale.com/download (or with the button in Study Stash)\n   ✓ Library             'None' at http://mini:8787\n   ✓ Granola             signed in, 2 notes in the last 7 days\n   ✗ Copy transcripts    macOS hasn't allowed Accessibility access yet\n                         → System Settings → Privacy & Security → Accessibility: turn on python3.12, then `granola-share autostart install --role client`\n   ✓ Background watcher  checks for finished notes every few minutes\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n   X Granola app         not installed on this computer, so there's nothing to record lectures with\n                         -> get it from https://www.granola.ai/download\n   ! Tailscale           not installed; this computer reaches the library only on the same Wi-Fi\n                         -> install it from https://tailscale.com/download (or with the button in Study Stash)\n  ok Library             'None' at http://mini:8787\n  ok Granola             signed in, 2 notes in the last 7 days\n   X Copy transcripts    macOS hasn't allowed Accessibility access yet\n                         -> System Settings → Privacy & Security → Accessibility: turn on python3.12, then `granola-share autostart install --role client`\n  ok Background watcher  checks for finished notes every few minutes\n  ok Version             0.4.4"
+  },
+  "mac-watcher-new": {
+   "given": {
+    "system": "Darwin",
+    "server": {
+     "ok": {
+      "pool_name": "Fall"
+     }
+    },
+    "probe": {
+     "error": "401 Unauthorized xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "service": "running",
+    "laptop": {
+     "granola": null,
+     "granola_here": true,
+     "tailscale": {
+      "installed": true,
+      "state": "NeedsLogin"
+     }
+    },
+    "cfg": {
+     "copy_transcripts": true
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Granola app",
+     "fail",
+     "not installed on this computer, so there's nothing to record lectures with",
+     "get it from https://www.granola.ai/download"
+    ],
+    [
+     "Tailscale",
+     "warn",
+     "installed, but signed out; this computer reaches the library only on the same Wi-Fi",
+     "open Tailscale and sign in with the same account as your library's computer"
+    ],
+    [
+     "Library",
+     "ok",
+     "'Fall' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "fail",
+     "signed in, but Granola refused: 401 Unauthorized xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "sign in again: `granola-share client login`"
+    ],
+    [
+     "Copy transcripts",
+     "warn",
+     "the background watcher hasn't checked yet",
+     "it starts with the watcher; run `granola-share autostart install --role client` if that isn't running"
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✗ Granola app         not installed on this computer, so there's nothing to record lectures with\n                         → get it from https://www.granola.ai/download\n   ! Tailscale           installed, but signed out; this computer reaches the library only on the same Wi-Fi\n                         → open Tailscale and sign in with the same account as your library's computer\n   ✓ Library             'Fall' at http://mini:8787\n   ✗ Granola             signed in, but Granola refused: 401 Unauthorized xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n                         → sign in again: `granola-share client login`\n   ! Copy transcripts    the background watcher hasn't checked yet\n                         → it starts with the watcher; run `granola-share autostart install --role client` if that isn't running\n   ✓ Background watcher  checks for finished notes every few minutes\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n   X Granola app         not installed on this computer, so there's nothing to record lectures with\n                         -> get it from https://www.granola.ai/download\n   ! Tailscale           installed, but signed out; this computer reaches the library only on the same Wi-Fi\n                         -> open Tailscale and sign in with the same account as your library's computer\n  ok Library             'Fall' at http://mini:8787\n   X Granola             signed in, but Granola refused: 401 Unauthorized xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n                         -> sign in again: `granola-share client login`\n   ! Copy transcripts    the background watcher hasn't checked yet\n                         -> it starts with the watcher; run `granola-share autostart install --role client` if that isn't running\n  ok Background watcher  checks for finished notes every few minutes\n  ok Version             0.4.4"
+  },
+  "mac-copy-off": {
+   "given": {
+    "system": "Darwin",
+    "server": {
+     "ok": {
+      "pool_name": "Fall"
+     }
+    },
+    "probe": {
+     "ok": [
+      3,
+      false
+     ]
+    },
+    "service": "running",
+    "latest": "v9.9.9",
+    "status": {
+     "trusted": true
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected",
+     ""
+    ],
+    [
+     "Library",
+     "ok",
+     "'Fall' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 3 notes in the last 7 days",
+     ""
+    ],
+    [
+     "Transcripts",
+     "warn",
+     "your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures",
+     "a paid Granola plan unlocks them"
+    ],
+    [
+     "Copy transcripts",
+     "ok",
+     "off (the default), so lectures keep Granola's summary",
+     "optional: turn it on in Study Stash, under Sending (read the note there first)"
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "warn",
+     "0.4.4 installed, v9.9.9 is out",
+     "run `granola-share update`"
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✓ Tailscale           connected\n   ✓ Library             'Fall' at http://mini:8787\n   ✓ Granola             signed in, 3 notes in the last 7 days\n   ! Transcripts         your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures\n                         → a paid Granola plan unlocks them\n   ✓ Copy transcripts    off (the default), so lectures keep Granola's summary\n   ✓ Background watcher  checks for finished notes every few minutes\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         → run `granola-share update`",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n  ok Tailscale           connected\n  ok Library             'Fall' at http://mini:8787\n  ok Granola             signed in, 3 notes in the last 7 days\n   ! Transcripts         your Granola plan doesn't share transcripts, so the library keeps Granola's summary for your lectures\n                         -> a paid Granola plan unlocks them\n  ok Copy transcripts    off (the default), so lectures keep Granola's summary\n  ok Background watcher  checks for finished notes every few minutes\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         -> run `granola-share update`"
+  },
+  "mac-allowed": {
+   "given": {
+    "system": "Darwin",
+    "server": {
+     "ok": {
+      "pool_name": "Fall"
+     }
+    },
+    "probe": {
+     "ok": [
+      1,
+      true
+     ]
+    },
+    "service": "running",
+    "cfg": {
+     "copy_transcripts": true
+    },
+    "status": {
+     "trusted": true
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "ok",
+     "{root}/home/client.toml, mode: share everything",
+     ""
+    ],
+    [
+     "Tailscale",
+     "ok",
+     "connected",
+     ""
+    ],
+    [
+     "Library",
+     "ok",
+     "'Fall' at http://mini:8787",
+     ""
+    ],
+    [
+     "Granola",
+     "ok",
+     "signed in, 1 note in the last 7 days",
+     ""
+    ],
+    [
+     "Transcripts",
+     "ok",
+     "shared, so the library writes its own summaries",
+     ""
+    ],
+    [
+     "Copy transcripts",
+     "ok",
+     "allowed; a transcript is copied when you have it open in Granola",
+     ""
+    ],
+    [
+     "Background watcher",
+     "ok",
+     "checks for finished notes every few minutes",
+     ""
+    ],
+    [
+     "Version",
+     "ok",
+     "0.4.4",
+     ""
+    ]
+   ],
+   "unicode": "title\n\n   ✓ Config              {root}/home/client.toml, mode: share everything\n   ✓ Tailscale           connected\n   ✓ Library             'Fall' at http://mini:8787\n   ✓ Granola             signed in, 1 note in the last 7 days\n   ✓ Transcripts         shared, so the library writes its own summaries\n   ✓ Copy transcripts    allowed; a transcript is copied when you have it open in Granola\n   ✓ Background watcher  checks for finished notes every few minutes\n   ✓ Version             0.4.4",
+   "ascii": "title\n\n  ok Config              {root}/home/client.toml, mode: share everything\n  ok Tailscale           connected\n  ok Library             'Fall' at http://mini:8787\n  ok Granola             signed in, 1 note in the last 7 days\n  ok Transcripts         shared, so the library writes its own summaries\n  ok Copy transcripts    allowed; a transcript is copied when you have it open in Granola\n  ok Background watcher  checks for finished notes every few minutes\n  ok Version             0.4.4"
+  },
+  "no-config": {
+   "given": {
+    "system": "Linux",
+    "server": {
+     "ok": {}
+    },
+    "service": "running",
+    "cfg": {
+     "server_url": ""
+    }
+   },
+   "checks": [
+    [
+     "Config",
+     "fail",
+     "no {root}/home/client.toml",
+     "run `granola-share client setup`"
+    ]
+   ],
+   "unicode": "title\n\n   ✗ Config  no {root}/home/client.toml\n             → run `granola-share client setup`",
+   "ascii": "title\n\n   X Config  no {root}/home/client.toml\n             -> run `granola-share client setup`"
+  }
+ },
+ "nothing": [
+  "Nothing is set up in {root} yet.\n  The computer that keeps the library:  granola-share setup\n  Your laptop (records in Granola):     granola-share client open"
+ ]
+}

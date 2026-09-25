@@ -288,7 +288,7 @@ public static class SetupWeb
     public static async Task ServeAsync(string home, bool browser = true, Action<string>? log = null, CancellationToken stop = default)
     {
         log ??= Console.WriteLine;
-        var s = new LibrarySetup(home);
+        var s = new LibrarySetup(home, SetupHost.ThisComputer());
         int port = AppPage.FreePort(LibrarySetup.SetupPort);
         string portFile = Path.Combine(s.Home, "setup_port");
         Directory.CreateDirectory(s.Home);

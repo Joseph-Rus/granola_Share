@@ -5,11 +5,12 @@ using System.Text.RegularExpressions;
 
 namespace StudyStash.Core;
 
-/// <summary>A published release, and where its downloads are.</summary>
+/// <summary>A published release, and where its downloads are. Assets has every download by file name: this engine's
+/// own come for each system (<see cref="Updates.EngineAsset"/>).</summary>
 public sealed record Release(string Tag, int[] Version, string Url, string Page, string MacApp = "", string WindowsApp = "",
-    string MacLibraryApp = "", string WindowsHelper = "");
+    string MacLibraryApp = "", string WindowsHelper = "", IReadOnlyDictionary<string, string>? Assets = null);
 
-/// <summary>New releases on GitHub. Installing one is the platform stage; this only finds out about it.</summary>
+/// <summary>New releases on GitHub (update.py): finding them here, installing them in Updater.cs.</summary>
 public static partial class Updates
 {
     public const string RepoSlug = "Joseph-Rus/study-stash";
@@ -65,7 +66,7 @@ public static partial class Updates
             if (a is JsonObject o) assets[Py.Str(o["name"])] = Py.Truthy(o["browser_download_url"]) ? Py.Str(o["browser_download_url"]) : "";
         string Asset(string name) => assets.GetValueOrDefault(name, "");
         return new Release(tag, ParseVersion(tag), ArchiveUrl(tag), Py.Truthy(data["html_url"]) ? Py.Str(data["html_url"]) : "",
-            Asset(MacAppAsset), Asset(WindowsAppAsset), Asset(MacLibraryAppAsset), Asset(WindowsHelperAsset));
+            Asset(MacAppAsset), Asset(WindowsAppAsset), Asset(MacLibraryAppAsset), Asset(WindowsHelperAsset), assets);
     }
 
     static readonly SemaphoreSlim CacheGate = new(1, 1);

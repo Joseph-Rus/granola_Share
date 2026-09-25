@@ -18,6 +18,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\StudyStash.Core\StudyStash.Core.csproj" />
     <ProjectReference Include="..\..\src\StudyStash.Library\StudyStash.Library.csproj" />
+    <!-- Built first, not referenced: the live service test runs the engine itself, and `dotnet test` builds only what
+         the tests depend on, so without this nothing compiled the command. -->
+    <ProjectReference Include="..\..\src\StudyStash.Engine\StudyStash.Engine.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>

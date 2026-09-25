@@ -99,7 +99,7 @@ public sealed class GranolaClient(Func<CancellationToken, Task<IGranolaSession>>
     }
 
     /// <summary>The first of these names the server has, or else a tool whose name contains one of them.</summary>
-    static string? FindTool(Dictionary<string, ToolInfo> tools, params string[] names)
+    public static string? FindTool(Dictionary<string, ToolInfo> tools, params string[] names)
     {
         foreach (string n in names)
             if (tools.ContainsKey(n)) return n;

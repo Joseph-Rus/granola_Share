@@ -38,11 +38,70 @@ public static partial class Machine
                 try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
                 return null;
             }
-            return new ProcResult(p.ExitCode, stdout.Result);
+            // Something it started in the background may still hold its output open: don't wait for that forever.
+            return new ProcResult(p.ExitCode, stdout.Wait(timeout) ? stdout.Result : "");
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             return null;
+        }
+    }
+
+    /// <summary>A command that talks to the person in this terminal (an installer asking for a password): its exit
+    /// code, or null when it didn't start.</summary>
+    public static int? RunAttached(string exe, IReadOnlyList<string> args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(exe) { UseShellExecute = false };
+            foreach (string a in args) psi.ArgumentList.Add(a);
+            using var p = Process.Start(psi);
+            if (p is null) return null;
+            p.WaitForExit();
+            return p.ExitCode;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Open a file the way double-clicking it would: on Windows an installer asks to run as administrator.</summary>
+    public static void Open(string path)
+    {
+        using var _ = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getuid")]
+    private static extern uint GetUid();
+
+    /// <summary>os.getuid(): launchd names each person's services by it.</summary>
+    public static string Uid()
+    {
+        if (OperatingSystem.IsWindows()) return "0";
+        try
+        {
+            return GetUid().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return "0";
+        }
+    }
+
+    /// <summary>os.access(dir, W_OK), by trying: can this account make files here?</summary>
+    public static bool Writable(string dir)
+    {
+        string probe = Path.Combine(dir, $".study-stash-{Guid.NewGuid():N}");
+        try
+        {
+            File.WriteAllBytes(probe, []);
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -89,7 +148,7 @@ public static partial class Machine
         }
     }
 
-    // --- sleep and the firewall: read only here; changing them is the platform stage --------------------
+    // --- sleep and the firewall (Ready changes them) -----------------------------------------------------------
 
     public static readonly Dictionary<string, string> SleepFix = new()
     {
