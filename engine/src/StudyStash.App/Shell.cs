@@ -201,7 +201,7 @@ public static partial class Shell
         library.OnMove = MoveLecture;
         library.OnExport = () => _ = ExportAsync();
         library.OnScope = CycleScope;
-        library.OnMore = ShowSettings;
+        library.OnMore = MoreMenu;
         library.OnSource = chip => Play(chip.LectureId, chip.At);
     }
 

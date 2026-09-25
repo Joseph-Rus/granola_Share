@@ -394,6 +394,45 @@ public static partial class Shell
         foreach (var s in into.Sources) library.Sources.Add(s);
     }
 
+    /// <summary>The ••• menu: open the class in a terminal with the AI (when the library is on this computer), the
+    /// library's web page (chat, capture, history), and Settings.</summary>
+    static void MoreMenu()
+    {
+        if (mainWindow?.Content is not Control anchor) return;
+        var menu = new ContextMenu();
+        string? cls = dueOpen ? null : openClass is { } o && o != Configs.Unsorted ? o : null;
+        if (host.Remote() is { } lib && Uri.TryCreate(lib.ServerUrl, UriKind.Absolute, out var u) && (u.IsLoopback || host.Settings.LibraryHere))
+        {
+            var term = new MenuItem { Header = cls is null ? "Open the library in Claude Code" : $"Open {cls} in Claude Code" };
+            term.Click += async (_, _) =>
+            {
+                try
+                {
+                    Toast("Study Stash", await lib.TerminalAsync(cls), null, null);
+                }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
+                {
+                    Toast("Couldn't open it", e.Message, null, null);
+                }
+            };
+            menu.Items.Add(term);
+        }
+        foreach (var (label, path) in new[] { ("Chat in the browser", "/chat"), ("Capture…", "/inbox"), ("What the AI changed", "/history") })
+        {
+            var item = new MenuItem { Header = label };
+            item.Click += (_, _) =>
+            {
+                if (host.Remote() is { } l) Machine.Open(l.ServerUrl + path + (path == "/chat" && cls is not null ? "?class=" + Uri.EscapeDataString(cls) : ""));
+            };
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new Separator());
+        var settings = new MenuItem { Header = "Settings" };
+        settings.Click += (_, _) => ShowSettings();
+        menu.Items.Add(settings);
+        menu.Open(anchor);
+    }
+
     static void MoveLecture()
     {
         if (library.Note is not { } note || mainWindow?.Content is not Control anchor) return;

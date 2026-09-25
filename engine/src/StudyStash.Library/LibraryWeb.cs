@@ -459,19 +459,27 @@ public sealed partial class LibraryWeb
         return Show(cfg.PoolName, body, c);
     });
 
-    IResult ClassPage(string name, string role, string current, string lede)
+    IResult ClassPage(string name, string role, string current, string lede, bool terminal = false, string? said = null)
     {
         var c = Context(role, current, ("/", cfg.PoolName));
         var rows = store.ListNotes(name);
         string canvasPart = ClassCanvas(name) + ClassFiles(name);
-        string zip = rows.Count > 0
-            ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\"><a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a></div>"
+        // On the library's own computer, a class can open in a terminal with the AI (Claude Code by default).
+        string open = terminal
+            ? $"<form method=\"post\" action=\"/terminal\"><input type=\"hidden\" name=\"class\" value=\"{Ui.Esc(name)}\"><button>Open in {Ui.Esc(AgentCli)}</button></form>"
+            : "";
+        string zip = rows.Count > 0 || open.Length > 0
+            ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\">{(rows.Count > 0 ? $"<a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a>" : "")}{open}</div>"
+              + (said is not null ? $"<div class=\"notice\"><div>{Ui.Esc(said)}</div></div>" : "")
             : "";
         string body = $"<h1>{Ui.Esc(name)}</h1><p class=\"sub\"><span class=\"tag\" style=\"{Ui.HueStyle(name)}\">{lede}</span></p>"
             + zip + canvasPart + (canvasPart.Length > 0 ? "<h2>Lectures</h2>" : "") + Ui.NoteList(rows, "Nothing here yet",
                 name != Configs.Unsorted ? "Lectures sorted into this class show up here." : "Every lecture found its class.");
         return Show(name, body, c);
     }
+
+    /// <summary>"Claude Code", "Codex" or "Antigravity": what Open in… starts.</summary>
+    string AgentCli => AiSettings.Load(cfg.Home).For("agent").Provider switch { "codex" or "ollama" => "Codex", "gemini" => "Antigravity", _ => "Claude Code" };
 
     IResult ByClass(HttpContext ctx, string name) => WithMember(ctx, role =>
     {
@@ -480,7 +488,7 @@ public sealed partial class LibraryWeb
         int n = store.ListNotes(name).Count;
         string lede = Ui.Esc(desc + (desc.Length > 0 && !desc.EndsWith('.') ? ". " : desc.Length > 0 ? " " : ""))
             + $"{n} lecture{Plural(n, "", "s")}.";
-        return ClassPage(name, role, $"class:{name}", lede);
+        return ClassPage(name, role, $"class:{name}", lede, terminal: ChatOn && IsLocal(ctx), said: ctx.Request.Query["said"].FirstOrDefault());
     });
 
     IResult Search(string role, string query)
@@ -669,6 +677,10 @@ public sealed partial class LibraryWeb
             + $"<div class=\"row\"><label class=\"grow\" for=\"ai_provider\">Does the work</label>{tested}{ProviderSelect("ai_provider", picked.Provider, null)}</div>"
             + (main.Id == "ollama" ? "" : $"<div class=\"row\"><label class=\"grow\" for=\"ai_model\">Model</label><select id=\"ai_model\" name=\"ai_model\">{modelOpts}</select></div>")
             + JobRow("notes", "Writes study notes") + JobRow("sort", "Sorts lectures") + JobRow("ask", "Answers questions")
+            + (Terminal.Available() is { Count: > 0 } terms
+                ? "<div class=\"row\"><label class=\"grow\" for=\"terminal\">Open in… uses</label><select id=\"terminal\" name=\"terminal\">"
+                  + string.Concat(terms.Select(t => $"<option value=\"{t.Id}\"{(t.Id == picked.Terminal ? " selected" : "")}>{Ui.Esc(t.Name)}</option>")) + "</select></div>"
+                : "")
             + "</div><p class=\"group-foot\">Claude, ChatGPT and Gemini run through their own apps (Claude Code, Codex, "
             + "Antigravity), signed in with your own account, so they use your plan. The local model stays on this computer "
             + "and costs nothing.</p>";
@@ -804,6 +816,7 @@ public sealed partial class LibraryWeb
                 else if (f.ContainsKey("ai_model")) picked.Models[provider] = Py.Strip(f.Get("ai_model"));
                 picked.Provider = provider;
             }
+            if (Terminal.Available().Any(t => t.Id == f.Get("terminal"))) picked.Terminal = f.Get("terminal");
             foreach (string job in new[] { "notes", "sort", "ask" })
             {
                 string p = Py.Strip(f.Get($"ai_job_{job}"));

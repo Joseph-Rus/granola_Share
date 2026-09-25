@@ -28,6 +28,8 @@ public sealed class AiSettings
     public Dictionary<string, string> Models { get; set; } = [];
     /// <summary>Per provider: "works", or what went wrong the last time it was tried.</summary>
     public Dictionary<string, string> Tests { get; set; } = [];
+    /// <summary>The terminal "Open in Claude Code" uses (ghostty, terminal, iterm, warp).</summary>
+    public string Terminal { get; set; } = "ghostty";
 
     public static string PathIn(string home) => System.IO.Path.Combine(home, "ai.json");
 

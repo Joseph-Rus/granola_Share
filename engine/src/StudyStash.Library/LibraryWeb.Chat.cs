@@ -115,6 +115,19 @@ public sealed partial class LibraryWeb
             LibraryChats.Delete(id);
             return Http.SeeOther("/chat");
         }));
+        app.MapPost("/api/v2/terminal", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            if (!IsLocal(ctx)) return Http.Detail(403, "Open it on the library's own computer.");
+            var (ok, said) = OpenTerminal(S((await Http.JsonBodyAsync(ctx.Request))?["class"]));
+            return ok ? Http.Json(new JsonObject { ["said"] = said }) : Http.Detail(409, said);
+        })));
+        app.MapPost("/terminal", Http.Handle(ctx => WithMemberAsync(ctx, async _ =>
+        {
+            string cls = (await Http.FormAsync(ctx.Request)).Get("class");
+            if (!IsLocal(ctx)) return Http.SeeOther(Ui.ClassUrl(cls));
+            var (ok, said) = OpenTerminal(cls);
+            return Http.SeeOther(Ui.ClassUrl(cls) + "?said=" + Uri.EscapeDataString(said));
+        })));
         app.MapGet("/history", (HttpContext ctx, string? undone, string? problem) => WithMember(ctx, role => HistoryPage(role, undone, problem)));
         app.MapPost("/history/{sha}/undo", (HttpContext ctx, string sha) => WithMember(ctx, _ =>
         {
@@ -198,6 +211,23 @@ public sealed partial class LibraryWeb
         + "else if(ev.kind==='error'){live.textContent=ev.text;ai.classList.add('failed');}});}\n"
         + "}catch(err){live.textContent='The library stopped answering.';}\n"
         + "location.href='/chat/'+id;});})();";
+
+    /// <summary>Open a terminal with the agent AI in a class's folder (or the library's), on this computer only.</summary>
+    (bool Ok, string Said) OpenTerminal(string? cls)
+    {
+        try
+        {
+            string folder = cls is { Length: > 0 } && cfg.ClassNames().Contains(cls) ? store.ClassDir(cls) : cfg.PoolDir;
+            var ai = AiSettings.Load(cfg.Home);
+            string name = Terminal.Open(cfg.Home, folder, cfg.PoolDir, cls is { Length: > 0 } ? cls : null, ai.Terminal, ai.For("agent").Provider,
+                (options.Ai ?? new AiJobs(cfg.Home)).McpCommand);
+            return (true, $"Opened in {name}.");
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            return (false, e.Message);
+        }
+    }
 
     /// <summary>Files in a class's folder that aren't its lectures (a study guide the AI wrote, your own notes), for
     /// its page. Empty when there are none.</summary>

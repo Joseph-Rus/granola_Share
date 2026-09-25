@@ -187,6 +187,11 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
         return true;
     }
 
+    /// <summary>Open a terminal with the AI in a class's folder, on the library's own computer. What happened.</summary>
+    public async Task<string> TerminalAsync(string? className) =>
+        (await SendAsync(HttpMethod.Post, "/terminal", new JsonObject { ["class"] = className }) as JsonObject)?["said"]?.GetValue<string>()
+        ?? "Your library runs an older Study Stash.";
+
     /// <summary>A chat turn can take minutes (an AI reading around): its own client with no time limit.</summary>
     static readonly HttpClient ChatClient = new() { Timeout = Timeout.InfiniteTimeSpan };
 
