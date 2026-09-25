@@ -89,8 +89,9 @@ def test_status_and_restart(tmp_path, monkeypatch):
 
 
 def test_windows_process_filter_tells_roles_apart():
-    assert "-like '*client*run*'" in autostart._ps_filter("client")
-    assert "-notlike '*client*run*'" in autostart._ps_filter("server")
+    assert autostart._CLIENT_RUN in autostart._ps_filter("client")
+    assert f"-notmatch '{autostart._CLIENT_RUN}'" in autostart._ps_filter("server")  # the server's isn't the laptop's
+    assert autostart._ps_filter("client") in autostart._ps_filter(None)
 
 
 def test_windows_service_starts_without_a_pipe_it_would_hold_open(tmp_path):
@@ -107,3 +108,26 @@ def test_windows_service_starts_without_a_pipe_it_would_hold_open(tmp_path):
     started = [kw for args, kw in calls if args[:2] == ["cmd", "/c"]]
     assert started and all(kw.get(k) == subprocess.DEVNULL for kw in started for k in ("stdin", "stdout", "stderr"))
     assert not any(kw.get("capture_output") for kw in started)
+
+
+def test_windows_services_are_told_apart_from_commands():
+    """`autostart install` stops the service it replaces, and `status` counts services. On Windows the
+    command running that is python -m granola_share.cli too, so only a command line ending in the
+    service's own command counts (it once stopped itself, in CI)."""
+    import re
+
+    def matches(pattern, line):
+        return re.search(pattern, line, re.IGNORECASE) is not None
+
+    def service(line):
+        client = matches(autostart._CLIENT_RUN, line)
+        server = matches(autostart._SERVER_RUN, line) and not client
+        return "client" if client else "server" if server else ""
+
+    py = r'"C:\Users\x\AppData\Local\Programs\granola-share\python\pythonw.exe"'
+    assert service(f'{py} "-u" "-m" "granola_share.cli" "--home" "C:\\Users\\x\\.granola-share" "run"') == "server"
+    assert service(f'{py} -u -m granola_share.cli --home C:\\x client run') == "client"
+    assert service(f'{py} "-u" "-m" "granola_share.cli" "--home" "C:\\x" "client" "run"') == "client"
+    for command in ("autostart install --role server", "autostart status --role client", "doctor --role server",
+                    "client open --install --no-browser", "update"):
+        assert service(f"{py} -m granola_share.cli --home C:\\x {command}") == "", command

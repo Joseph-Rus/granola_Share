@@ -180,14 +180,22 @@ def installed_roles(system: str | None = None) -> list[str]:
     return [r for r in ROLES if service_path(r, system).exists()]
 
 
+# A background service's command line ends in its command: `... granola_share.cli --home X run` (the
+# library, or `serve`) or `... client run` (the laptop), often with every argument quoted. Nothing else
+# counts, so a `granola-share autostart install` or `status` running right now never stops or counts itself.
+_CLIENT_RUN = r"granola_share\.cli.*\bclient\x22?\s+\x22?run\x22?\s*$"
+_SERVER_RUN = r"granola_share\.cli.*\b(run|serve)\x22?\s*$"
+
+
 def _ps_filter(role: str | None) -> str:
-    """PowerShell test for "this process is the granola-share <role> service" (args are quoted one by one)."""
-    base = "$_.CommandLine -like '*granola_share.cli*'"
+    """PowerShell test for "this process is the granola-share <role> service"."""
+    client = f"$_.CommandLine -match '{_CLIENT_RUN}'"
+    server = f"($_.CommandLine -match '{_SERVER_RUN}' -and $_.CommandLine -notmatch '{_CLIENT_RUN}')"
     if role == "client":
-        return base + " -and $_.CommandLine -like '*client*run*'"
+        return client
     if role == "server":
-        return base + " -and $_.CommandLine -notlike '*client*run*'"
-    return base
+        return server
+    return f"({client} -or {server})"
 
 
 def _start_windows(run_cmd, cmd: Path) -> None:
