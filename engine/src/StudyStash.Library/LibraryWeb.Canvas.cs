@@ -285,7 +285,7 @@ public sealed partial class LibraryWeb
         string dir = Path.GetRelativePath(root, Path.GetDirectoryName(full)!).Replace('\\', '/');
         string html = Ui.RenderMd(text).Replace("href=\"", "href=\"\u0001").Replace("href=\"\u0001http", "href=\"http").Replace("href=\"\u0001#", "href=\"#")
             .Replace("href=\"\u0001mailto", "href=\"mailto").Replace("\u0001", $"/files/{Ui.Quote(cls, "")}/{(dir == "." ? "" : Ui.Quote(dir, "/") + "/")}");
-        return Show(Path.GetFileNameWithoutExtension(full), $"{bar}<article class=\"note\">{html}</article>", c, math: true);
+        return Show(Path.GetFileNameWithoutExtension(full), $"{bar}<article class=\"prose\">{html}</article>", c, math: true);
     }
 
     string CanvasSettingsGroup(string? flash)

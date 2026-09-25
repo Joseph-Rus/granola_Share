@@ -222,6 +222,7 @@ public sealed partial class LibraryWeb
         {
             PoolName = cfg.PoolName, Classes = classes, Total = counts.Values.Sum(), Processing = store.Processing().Count,
             Admin = role == "admin", Current = current, Password = cfg.PoolPassword.Length > 0, Back = back, Nonce = options.Nonce(),
+            Chat = ChatOn,
             Due = CanvasOn ? StudyStash.Core.Canvas.Assignments.Upcoming(StudyStash.Core.Canvas.Assignments.Load(cfg.Home), DateTime.Now, 7).Count : null,
         };
     }
@@ -378,6 +379,7 @@ public sealed partial class LibraryWeb
 
         MapApp(app);
         MapCanvas(app);
+        MapChat(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 
@@ -451,7 +453,7 @@ public sealed partial class LibraryWeb
     {
         var c = Context(role, current, ("/", cfg.PoolName));
         var rows = store.ListNotes(name);
-        string canvasPart = ClassCanvas(name);
+        string canvasPart = ClassCanvas(name) + ClassFiles(name);
         string zip = rows.Count > 0
             ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\"><a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a></div>"
             : "";
