@@ -40,6 +40,7 @@ public static partial class Shell
         library.Classes.Clear();
         foreach (var (name, color, count) in host.Classes())
             library.Classes.Add(new ClassItem { Name = name, Dot = Skin.ClassDot(color), Count = count });
+        await AddDueAsync();
         int unsorted = host.Overview?["unsorted"]?.GetValue<int>() ?? 0;
         library.Unsorted = unsorted > 0 ? new ClassItem { Name = Configs.Unsorted, IsUnsorted = true, Count = unsorted } : null;
         if (host.Library != LibraryState.Connected || host.OlderLibrary)
@@ -57,14 +58,20 @@ public static partial class Shell
             };
             return;
         }
-        string pick = openClass ?? library.Classes.FirstOrDefault(c => c.Count > 0)?.Name ?? library.Classes.FirstOrDefault()?.Name ?? Configs.Unsorted;
+        if (dueOpen && library.Classes.FirstOrDefault(c => c.IsDue) is not null)
+        {
+            await ShowDueAsync();
+            return;
+        }
+        string pick = openClass ?? library.Classes.FirstOrDefault(c => c.Count > 0 && !c.IsDue)?.Name ?? library.Classes.FirstOrDefault(c => !c.IsDue)?.Name ?? Configs.Unsorted;
         await ShowClassAsync(pick);
     }
 
     static async Task ShowClassAsync(string name)
     {
         openClass = name;
-        foreach (var c in library.Classes) c.Selected = c.Name == name;
+        dueOpen = false;
+        foreach (var c in library.Classes) c.Selected = c.Name == name && !c.IsDue;
         if (library.Unsorted is { } u) u.Selected = name == Configs.Unsorted;
         library.ClassTitle = name;
         if (host.Remote() is not { } lib) return;
@@ -90,6 +97,15 @@ public static partial class Shell
             if (d >= weekStart) return "This week";
             if (d >= weekStart.AddDays(-7)) return "Last week";
             return d.ToString("MMMM yyyy", CultureInfo.InvariantCulture) is var m && d.Year == today.Year ? d.ToString("MMMM", CultureInfo.InvariantCulture) : m;
+        }
+        // With Canvas: what's still to hand in for this class comes first.
+        var todo = linkedClasses.Contains(name) ? await AssignmentCardsAsync(lib, name, null) : [];
+        if (todo.Count > 0)
+        {
+            var due = new LectureGroup { Label = "To hand in", First = true };
+            foreach (var card in todo) due.Items.Add(card);
+            library.Groups.Add(due);
+            library.Empty = null;
         }
         foreach (var g in lectures.GroupBy(GroupOf))
         {
@@ -118,6 +134,11 @@ public static partial class Shell
         foreach (var g in library.Groups)
             foreach (var c in g.Items) c.Selected = c.Id == id;
         if (host.Remote() is not { } lib) return;
+        if (assignments.TryGetValue(id, out var asg))
+        {
+            await ShowAssignmentAsync(lib, id, asg);
+            return;
+        }
         JsonObject? l;
         try
         {
@@ -148,6 +169,129 @@ public static partial class Shell
             note.Transcript.Add(new HeardLine { Time = TimedText.HasTimes(S(l["transcript"])) ? TimedText.Clock(line.Start) : "", Text = line.Text });
         library.Note = note;
         library.Scope = "This lecture";
+    }
+
+    // --- Canvas: what's due, and each assignment's instructions and feedback --------------------------------------
+
+    static bool dueOpen;
+    /// <summary>For the self-test: whether "Due" is in the sidebar, and showing it.</summary>
+    public static bool HasDue => library.Classes.Any(c => c.IsDue);
+    public static Task ShowDuePublic() => ShowDueAsync();
+    static HashSet<string> linkedClasses = [];
+    static readonly Dictionary<string, JsonObject> assignments = [];
+
+    /// <summary>With Canvas set up, "Due" heads the sidebar with how many are due within a week.</summary>
+    static async Task AddDueAsync()
+    {
+        linkedClasses = [];
+        if (host.Remote() is not { } lib || host.Library != LibraryState.Connected) return;
+        try
+        {
+            if (await lib.CanvasSettingsAsync(HttpMethod.Get) is not { } c || S(c["url"]).Length == 0 || c["courses"] is not JsonObject courses || courses.Count == 0) return;
+            linkedClasses = courses.Select(kv => kv.Key).ToHashSet();
+            int soon = (await lib.AssignmentsAsync(null, 7)).Count;
+            library.Classes.Insert(0, new ClassItem { Name = "Due", IsDue = true, Dot = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#E5484D")), Count = soon, Selected = dueOpen });
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
+        {
+        }
+    }
+
+    static string StatusWords(string status) => status switch
+    {
+        "missing" => "Missing", "past due" => "Past due", "open" => "To do", "graded" => "Graded", "submitted" => "Submitted",
+        "late" => "Submitted late", "excused" => "Excused", _ => "Nothing to hand in",
+    };
+
+    static string DueWords(string due) => Core.Canvas.Assignments.Say(due, DateTime.Now);
+
+    /// <summary>Cards for what's still to hand in: one class's, or (with <paramref name="days"/>) every class's.</summary>
+    static async Task<List<LectureCard>> AssignmentCardsAsync(RemoteLibrary lib, string? className, int? days)
+    {
+        JsonArray list;
+        try
+        {
+            list = await lib.AssignmentsAsync(className, days ?? 30);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
+        {
+            return [];
+        }
+        var cards = new List<LectureCard>();
+        var rows = list.OfType<JsonObject>().ToList();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var a = rows[i];
+            string id = $"asg:{S(a["class"])}:{a["id"]}";
+            assignments[id] = a;
+            cards.Add(new LectureCard
+            {
+                Id = id, Title = S(a["name"]), Meta = (className is null ? S(a["class"]) + " · " : "") + DueWords(S(a["due"])),
+                Summary = StatusWords(S(a["status"])) + (a["points"] is JsonValue p && p.TryGetValue(out double pts) ? $" · {pts:0.##} points" : ""),
+                Last = i == rows.Count - 1,
+            });
+        }
+        return cards;
+    }
+
+    static async Task ShowDueAsync()
+    {
+        dueOpen = true;
+        foreach (var c in library.Classes) c.Selected = c.IsDue;
+        if (library.Unsorted is { } u) u.Selected = false;
+        library.ClassTitle = "Due";
+        if (host.Remote() is not { } lib) return;
+        var cards = await AssignmentCardsAsync(lib, null, 30);
+        library.ClassCount = cards.Count == 1 ? "1 to hand in" : $"{cards.Count} to hand in";
+        library.Groups.Clear();
+        library.Empty = cards.Count == 0 ? "Nothing due in the next month." : null;
+        var now = DateTime.Now;
+        DateTime When(LectureCard c) => S(assignments[c.Id]["due"]) is { Length: > 0 } d ? DateTime.Parse(d, CultureInfo.InvariantCulture) : DateTime.MaxValue;
+        foreach (var (label, test) in new (string, Func<DateTime, bool>)[]
+                 {
+                     ("Overdue", d => d < now), ("Next 7 days", d => d >= now && d < now.Date.AddDays(8)),
+                     ("Later", d => d >= now.Date.AddDays(8) && d != DateTime.MaxValue), ("No due date", d => d == DateTime.MaxValue),
+                 })
+        {
+            var these = cards.Where(c => test(When(c))).ToList();
+            if (these.Count == 0) continue;
+            var g = new LectureGroup { Label = label, First = library.Groups.Count == 0 };
+            foreach (var c in these) g.Items.Add(new LectureCard { Id = c.Id, Title = c.Title, Meta = c.Meta, Summary = c.Summary, Last = c == these[^1] });
+            library.Groups.Add(g);
+        }
+        if (library.Groups.FirstOrDefault()?.Items.FirstOrDefault() is { } first) await ShowLectureAsync(first.Id);
+        else library.Note = null;
+    }
+
+    static string WithoutFrontMatter(string text) =>
+        text.StartsWith("---\n", StringComparison.Ordinal) && text.IndexOf("\n---\n", 4, StringComparison.Ordinal) is int end and > 0 ? text[(end + 5)..] : text;
+
+    static async Task ShowAssignmentAsync(RemoteLibrary lib, string id, JsonObject a)
+    {
+        string cls = S(a["class"]), folder = S(a["folder"]);
+        string spec = "", feedback = "";
+        try
+        {
+            if (folder.Length > 0)
+            {
+                spec = WithoutFrontMatter(await lib.FileTextAsync(cls, folder + "/spec.md") ?? "");
+                feedback = WithoutFrontMatter(await lib.FileTextAsync(cls, folder + "/feedback.md") ?? "");
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
+        {
+        }
+        // The spec starts with its own title: the page shows it above already.
+        string body = System.Text.RegularExpressions.Regex.Replace(spec, "^# .*\n+", "");
+        if (feedback.Length > 0) body += "\n\n## My submission\n\n" + System.Text.RegularExpressions.Regex.Replace(feedback, "^# .*\n+", "");
+        library.Note = new NoteModel
+        {
+            Id = id, ClassName = cls, Dot = DotFor(cls), Title = S(a["name"]),
+            Meta = string.Join(" · ", new[] { cls, DueWords(S(a["due"])), StatusWords(S(a["status"])) }.Where(x => x.Length > 0)),
+            Markdown = body.Trim(),
+            Pending = body.Trim().Length == 0 ? "Canvas hasn't been read for this assignment yet." : null,
+        };
+        library.Scope = "This class";
     }
 
     static void OpenLecture(string id, bool transcript = false)

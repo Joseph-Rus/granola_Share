@@ -38,6 +38,22 @@ public sealed partial class AiChoiceRow : ObservableObject
     [ObservableProperty] public partial bool Works { get; set; }
 }
 
+/// <summary>A Canvas course a class can be linked to ("Not on Canvas" has id 0).</summary>
+public sealed record CanvasCourse(long Id, string Name)
+{
+    public override string ToString() => Name;
+}
+
+/// <summary>A class and the Canvas course it is.</summary>
+public sealed partial class CanvasLink : ObservableObject
+{
+    public string ClassName { get; init; } = "";
+    public List<CanvasCourse> Courses { get; init; } = [];
+    [ObservableProperty] public partial CanvasCourse? Course { get; set; }
+    public Func<CanvasLink, Task>? OnChanged { get; set; }
+    partial void OnCourseChanged(CanvasCourse? value) => OnChanged?.Invoke(this);
+}
+
 /// <summary>A connection Claude has to the library, for the Claude section's list.</summary>
 public sealed class ClaudeConnection
 {
@@ -87,6 +103,14 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool AiBusy { get; set; }
     public bool HasAiModels => AiModels.Count > 1;
 
+    // Canvas
+    [ObservableProperty] public partial string CanvasUrl { get; set; } = "";
+    [ObservableProperty] public partial string? CanvasSay { get; set; }
+    [ObservableProperty] public partial string CanvasLine { get; set; } = "";
+    [ObservableProperty] public partial bool CanvasBusy { get; set; }
+    public ObservableCollection<CanvasLink> CanvasLinks { get; } = [];
+    public bool HasCanvasLinks => CanvasLinks.Count > 0;
+
     // Claude
     [ObservableProperty] public partial string? ClaudeSay { get; set; }
     [ObservableProperty] public partial string ClaudeCommand { get; set; } = "";
@@ -105,6 +129,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     public bool OnRecording => Section == "Recording";
     public bool OnClasses => Section == "Classes";
     public bool OnAi => Section == "AI";
+    public bool OnCanvas => Section == "Canvas";
     public bool OnClaude => Section == "Claude";
     public bool OnGeneral => Section == "General";
     public bool HasWebUrl => !string.IsNullOrEmpty(WebUrl);
@@ -135,6 +160,8 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         Connections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasConnections));
         host.Changed += OnHostChanged;
         AiModels.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAiModels));
+        CanvasLinks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasCanvasLinks));
+        _ = LoadCanvasAsync();
         Refresh();
         _ = LoadClaudeAsync();
         _ = LoadAiAsync();
@@ -165,7 +192,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
 
     partial void OnSectionChanged(string value)
     {
-        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnAi), nameof(OnClaude), nameof(OnGeneral) }) OnPropertyChanged(p);
+        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnAi), nameof(OnCanvas), nameof(OnClaude), nameof(OnGeneral) }) OnPropertyChanged(p);
     }
 
     partial void OnWebUrlChanged(string? value) => OnPropertyChanged(nameof(HasWebUrl));
@@ -434,6 +461,142 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         AiSay = "Trying it…";
         return AiCallAsync(lib => lib.AiAsync(HttpMethod.Post, "/test", new JsonObject()));
     }
+
+    // --- Canvas -----------------------------------------------------------------------------------------------------
+
+    async Task<JsonObject?> CanvasCallAsync(Func<RemoteLibrary, Task<JsonObject?>> call)
+    {
+        if (host.Remote() is not { } lib)
+        {
+            CanvasSay = "Connect to your library first.";
+            return null;
+        }
+        CanvasBusy = true;
+        try
+        {
+            var r = await call(lib);
+            if (r is null) CanvasSay = "Your library runs an older Study Stash: update it to use Canvas.";
+            else ShowCanvas(r);
+            return r;
+        }
+        catch (LibraryRefusedException e)
+        {
+            CanvasSay = e.Message;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            CanvasSay = "Your library didn't answer.";
+        }
+        finally
+        {
+            CanvasBusy = false;
+        }
+        return null;
+    }
+
+    Task LoadCanvasAsync() => CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Get));
+
+    bool showingCanvas;
+
+    void ShowCanvas(JsonObject c)
+    {
+        showingCanvas = true;
+        CanvasUrl = c["url"]?.GetValue<string>() ?? "";
+        var available = (c["available"] as JsonObject ?? []).Select(kv => new CanvasCourse(long.Parse(kv.Key, System.Globalization.CultureInfo.InvariantCulture), kv.Value?.GetValue<string>() ?? kv.Key))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var linked = (c["courses"] as JsonObject ?? []).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<long>());
+        CanvasLinks.Clear();
+        foreach (var (name, _, _) in host.Classes())
+        {
+            var options = new List<CanvasCourse> { new(0, "Not on Canvas") };
+            options.AddRange(available);
+            if (linked.TryGetValue(name, out long id) && options.All(o => o.Id != id)) options.Add(new CanvasCourse(id, $"Course {id}"));
+            var link = new CanvasLink { ClassName = name, Courses = options, Course = options.First(o => o.Id == linked.GetValueOrDefault(name)) };
+            link.OnChanged = LinkChangedAsync;
+            CanvasLinks.Add(link);
+        }
+        string error = c["error"]?.GetValue<string>() ?? "";
+        string seen = c["extension_seen"]?.GetValue<string>() ?? "";
+        bool live = DateTimeOffset.TryParse(seen, out var t) && DateTimeOffset.Now - t < TimeSpan.FromMinutes(5);
+        bool syncing = c["syncing"]?.GetValue<bool>() == true;
+        CanvasLine = error.Length > 0 ? error
+            : syncing ? $"Syncing Canvas… {c["left"]} left."
+            : !live ? (seen.Length == 0 ? "The Chrome extension isn't set up yet." : "Chrome hasn't checked in lately. Is it open?")
+            : DateTimeOffset.TryParse(c["last_sync"]?.GetValue<string>(), out var last) ? $"Chrome is connected. Last sync {Shell.When(last.LocalDateTime)}." : "Chrome is connected.";
+        showingCanvas = false;
+    }
+
+    async Task LinkChangedAsync(CanvasLink link)
+    {
+        if (showingCanvas) return;
+        await CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Post, "", new JsonObject
+        {
+            ["courses"] = new JsonObject { [link.ClassName] = link.Course?.Id ?? 0 }, ["sync"] = true,
+        }));
+        CanvasSay = link.Course is { Id: > 0 } c ? $"{link.ClassName} is {c.Name} on Canvas. It syncs within a minute." : $"{link.ClassName} isn't linked to Canvas now.";
+    }
+
+    [RelayCommand]
+    async Task SaveCanvasUrl()
+    {
+        if (await CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Post, "", new JsonObject { ["url"] = CanvasUrl })) is not null)
+            CanvasSay = "Saved.";
+    }
+
+    /// <summary>Write the extension's folder on this computer, pointed at the library, and open Chrome's extensions page.</summary>
+    [RelayCommand]
+    async Task SetUpExtension()
+    {
+        var key = await CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Get, "/extension"));
+        if (key is null) return;
+        string url = key["canvas"]?.GetValue<string>() ?? "";
+        if (url.Length == 0)
+        {
+            CanvasSay = "Add your school's Canvas address first.";
+            await LoadCanvasAsync();
+            return;
+        }
+        string dir = Core.Canvas.Extension.Prepare(Core.Canvas.Extension.Folder(host.Home), host.Client().ServerUrl, key["key"]!.GetValue<string>(), url);
+        await LoadCanvasAsync();
+        CanvasSay = $"Ready. In Chrome: turn on Developer mode, click Load unpacked, and choose {dir} (it's open in Finder).";
+        try
+        {
+            Machine.Open(dir);
+            if (OperatingSystem.IsMacOS()) Machine.Run("open", ["-a", "Google Chrome", "chrome://extensions"], TimeSpan.FromSeconds(10));
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+        }
+    }
+
+    [RelayCommand]
+    async Task FindCourses()
+    {
+        CanvasSay = "Asking Canvas through Chrome…";
+        var r = await CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Post, "/courses"));
+        if (r is null) return;
+        if (r["error"] is JsonValue e) CanvasSay = e.GetValue<string>();
+        else
+        {
+            AutoLink(r);
+            CanvasSay = "Found your courses. Check each class's below.";
+        }
+    }
+
+    /// <summary>Link classes that aren't linked yet to the course whose name contains the class's name.</summary>
+    void AutoLink(JsonObject r)
+    {
+        foreach (var link in CanvasLinks.Where(l => l.Course is null or { Id: 0 }))
+        {
+            string want = link.ClassName.ToLowerInvariant();
+            var match = link.Courses.Where(c => c.Id > 0 && c.Name.Contains(want, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (match.Count == 1) link.Course = match[0];
+        }
+    }
+
+    [RelayCommand]
+    Task SyncCanvas() => CanvasCallAsync(lib => lib.CanvasSettingsAsync(HttpMethod.Post, "", new JsonObject { ["sync"] = true }))
+        .ContinueWith(_ => CanvasSay = "Syncing on Chrome's next check, within a minute.", TaskScheduler.FromCurrentSynchronizationContext());
 
     [RelayCommand] static void Quit() => Shell.Quit();
 

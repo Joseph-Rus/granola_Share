@@ -76,6 +76,12 @@ public static class SelfTest
         await Until(() => host.Library != Services.LibraryState.NotSetUp || host.Client().ServerUrl.Length == 0, 10);
         await Wait(2);
         Shot(Shell.Windows.Main, "library");
+        if (Shell.HasDue)
+        {
+            await Shell.ShowDuePublic();
+            await Wait(2);
+            Shot(Shell.Windows.Main, "library-due");
+        }
 
         Shell.Windows.TogglePanel();
         await Wait(1);
@@ -90,7 +96,7 @@ public static class SelfTest
         Shell.ShowSettings();
         await Wait(1);
         Shot(Shell.Windows.Settings, "settings");
-        foreach (string section in new[] { "AI" })
+        foreach (string section in new[] { "AI", "Canvas" })
         {
             if ((Shell.Windows.Settings?.Content as Control)?.DataContext is not Services.SettingsModel sm) break;
             sm.Section = section;

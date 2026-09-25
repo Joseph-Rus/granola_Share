@@ -138,6 +138,19 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
         }
     }
 
+    /// <summary>Canvas's settings for the app: GET, or POST {url, courses, sync}; "/extension" (the extension's key),
+    /// "/courses" (POST: look up the person's Canvas courses through Chrome).</summary>
+    public async Task<JsonObject?> CanvasSettingsAsync(HttpMethod method, string path = "", JsonObject? body = null) =>
+        await SendAsync(method, "/canvas" + path, body) as JsonObject;
+
+    /// <summary>A class's assignments (all of them), or what's due soon everywhere (<paramref name="days"/>).</summary>
+    public async Task<JsonArray> AssignmentsAsync(string? className, int? days = null) =>
+        await SendAsync(HttpMethod.Get, "/assignments?" + (className is null ? "" : "class=" + Q(className) + "&") + (days is int d ? $"days={d}" : "")) as JsonArray ?? [];
+
+    /// <summary>A text file in a class's folder (an assignment's spec.md, modules.md): its text, or null.</summary>
+    public async Task<string?> FileTextAsync(string className, string path) =>
+        (await SendAsync(HttpMethod.Get, $"/files?class={Q(className)}&path={Q(path)}") as JsonObject)?["text"]?.GetValue<string>();
+
     /// <summary>Which AI does the library's work: /api/v2/ai (GET, or POST a choice), and "/test" to try one.</summary>
     public async Task<JsonObject?> AiAsync(HttpMethod method, string path = "", JsonObject? body = null) =>
         await SendAsync(method, "/ai" + path, body) as JsonObject;

@@ -192,7 +192,7 @@ public static partial class Shell
         quick.OnOpen = OpenQuickRow;
         quick.OnClose = () => quickWindow?.Hide();
 
-        library.OnClass = c => _ = ShowClassAsync(c.Name);
+        library.OnClass = c => _ = c.IsDue ? ShowDueAsync() : ShowClassAsync(c.Name);
         library.OnLecture = l => _ = ShowLectureAsync(l.Id);
         library.OnAsk = AskLibrary;
         library.OnSearch = ToggleQuick;

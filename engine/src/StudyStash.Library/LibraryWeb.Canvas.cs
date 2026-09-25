@@ -99,6 +99,16 @@ public sealed partial class LibraryWeb
             return Http.Json(new JsonArray(list.Select(a => (JsonNode)AssignmentJson(a)).ToArray()));
         }));
 
+        app.MapGet("/api/v2/files", (HttpContext ctx, string? @class, string? path) => Api(ctx, () =>
+        {
+            if (@class is null || path is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(404, "no such file");
+            string root = Path.GetFullPath(store.ClassDir(@class)), full = Path.GetFullPath(Path.Combine(root, path));
+            if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(full)
+                || new FileInfo(full).Length > 2_000_000 || !(full.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || full.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)))
+                return Http.Detail(404, "no such file");
+            return Http.Json(new JsonObject { ["text"] = File.ReadAllText(full) });
+        }));
+
         // The pages.
         app.MapGet("/due", (HttpContext ctx) => WithMember(ctx, DuePage));
         app.MapGet("/files/{cls}/{**path}", (HttpContext ctx, string cls, string path) => WithMember(ctx, role => FilePage(role, RouteName(cls), path)));

@@ -11,6 +11,8 @@ public sealed partial class ClassItem : ObservableObject
     public string Name { get; init; } = "";
     public IBrush Dot { get; init; } = Brushes.Gray;
     public bool IsUnsorted { get; init; }
+    /// <summary>Not a class: what's due soon in every class, from Canvas.</summary>
+    public bool IsDue { get; init; }
     [ObservableProperty] public partial int Count { get; set; }
     [ObservableProperty] public partial bool Selected { get; set; }
     public bool HasDot => !IsUnsorted;
