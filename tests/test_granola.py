@@ -368,3 +368,11 @@ def test_list_args_skips_custom_when_the_account_cannot_use_it():
                                           "enum": ["this_week", "last_week", "last_30_days", "custom"]},
                            "custom_start": {"type": "string"}, "custom_end": {"type": "string"}}}
     assert list_args(paid, since=datetime.date(2026, 9, 1))["time_range"] == "custom"
+
+
+def test_loose_xml_keeps_single_quoted_attributes():
+    """The fallback parser (for XML ElementTree rejects) lost every value written in single quotes."""
+    from granola_share.granola import _loose_parse
+
+    assert _loose_parse("<meeting id='m1' title=\"Two\">x & <b>y</b></meeting>") == {
+        "id": "m1", "title": "Two", "b": "y", "text": "x &"}
