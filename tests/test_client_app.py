@@ -144,6 +144,25 @@ def test_status_page_lists_recent_lectures(tmp_path, monkeypatch):
     assert state["configured"] and state["watching"] and state["pool_name"] == "Fall pool"
 
 
+def test_status_page_asks_about_copying_only_where_it_can_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(client_app, "mac", lambda: True)
+    cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall pool", copy_transcripts=True)
+    save_client_config(cc)
+    cc.tokens_path.write_text("{}")
+
+    class NoCopier(FakeRuntime):
+        def copy_status(self):
+            return {"available": False, "enabled": True, "allowed": False, "why": "pyobjc is missing"}
+
+    rt = NoCopier(tmp_path)
+    rt._watching = True
+    rt, c = app(tmp_path, runtime=rt)
+    login(c, tmp_path)
+    page = c.get("/").text
+    assert "Sending your lectures to Fall pool" in page
+    assert "needs permission" not in page and "Allow transcript copying" not in page
+
+
 def test_launcher_icons(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
