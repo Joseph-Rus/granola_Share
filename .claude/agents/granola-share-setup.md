@@ -46,6 +46,7 @@ The installers are safe to rerun: they update in place, and setup keeps earlier 
 - Library (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh -s -- server`
 - Library (Windows PowerShell): `$env:GRANOLA_SHARE_ROLE='server'; $env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex`
 - Laptop (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh`
+- Or the apps, from the releases page: Study-Stash-Laptop.dmg / Study-Stash-Laptop-Setup.exe for the laptop, Study-Stash-Library.dmg / Study-Stash-Library-Setup.exe for the library's computer (its app runs the library's setup in a Terminal or PowerShell window).
 - Laptop (Windows PowerShell): `$env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex`
 
 `GRANOLA_SHARE_NO_SETUP=1` installs without starting setup, because you run setup yourself in Step 3. If the install fails, read `~/.granola-share/install.log`.
@@ -103,7 +104,8 @@ On the library computer, also check that the page answers: `curl -s -o /dev/null
 | Copy transcripts ! "hasn't checked yet" | The watcher isn't running | Run `granola-share autostart status --role client`, and read `logs/client.log`. |
 | No study notes, only Granola's summary | No transcript reached the library | Expected on Granola's free plan. A paid plan gives transcripts. On a Mac with transcript copying turned on, open the lecture's transcript in Granola with Granola in front: it's copied and re-sent within a few seconds. |
 | Granola app ✗ (laptop) | Granola isn't installed | They install it from https://www.granola.ai/download. The library's computer never needs it. |
-| Windows: "Windows protected your PC" | Study-Stash-Setup.exe isn't signed | They click More info, then Run anyway. The one-line install avoids it. |
+| Windows: "Windows protected your PC" | The Setup.exe installers aren't signed | They click More info, then Run anyway. The one-line install avoids it. |
+| Windows install: "untrusted mount point (os error 448)" | OneDrive Files On-Demand blocked uv's link to Python in AppData\Roaming | Rerun the install line: since 0.4.1 it keeps uv's Python and tools in AppData\Local. |
 | Mac mini Sleep ! | The library goes offline while asleep | System Settings → Energy → "Prevent automatic sleeping when the display is off". `sudo pmset -a sleep 0` also works, but they must run it themselves. |
 | `timed out waiting for the browser callback` | Sign-in wasn't finished, or port 3334 is blocked | In the Study Stash page, **Sign in to Granola again**, and have them finish in the browser. |
 | Old folders `~/.granola-share/venv` and `app` | Leftovers from 0.1 | Rerun the installer, then setup. Setup removes them once nothing uses them. |

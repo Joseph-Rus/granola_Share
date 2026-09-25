@@ -5,6 +5,10 @@
 // On the Mac mini itself there's only the library. If the background helper isn't installed yet
 // (someone opened the app straight from the DMG), the app installs it, without the Terminal.
 //
+// The same app, built as "Study Stash Library" (Info.plist StudyStashRole = library; build.sh makes
+// both), is the library computer's own window: it shows only the library, and before there is one,
+// it runs the library's setup in Terminal, where its questions are.
+//
 // Build: macos/build.sh (swiftc, no Xcode project).
 
 import AppKit
@@ -24,6 +28,9 @@ let env = ProcessInfo.processInfo.environment
 let engine = env["GRANOLA_SHARE_ENGINE"].map { URL(fileURLWithPath: $0) }
     ?? userHome.appendingPathComponent(".local/bin/granola-share")
 let installScript = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh"
+/// This copy is the library computer's app (Study-Stash-Library.dmg), not the laptop's.
+let libraryMode = (Bundle.main.object(forInfoDictionaryKey: "StudyStashRole") as? String) == "library"
+    || CommandLine.arguments.contains("--library")
 
 func dataFile(_ name: String) -> String? {
     guard let s = try? String(contentsOf: dataDir.appendingPathComponent(name), encoding: .utf8) else { return nil }
@@ -71,8 +78,8 @@ struct Place {
     static func read() -> Place {
         let client = dataFile("client.toml")
         let server = dataFile("config.toml")
-        var p = Place(sends: server == nil || client != nil)
-        if let c = client, let s = tomlValue(c, "server_url"), !s.isEmpty, let u = URL(string: s) {
+        var p = Place(sends: !libraryMode && (server == nil || client != nil))
+        if !libraryMode, let c = client, let s = tomlValue(c, "server_url"), !s.isEmpty, let u = URL(string: s) {
             p.library = u
             p.key = tomlValue(c, "pool_key").flatMap { $0.isEmpty ? nil : $0 }
             p.libraryName = tomlValue(c, "pool_name")
@@ -174,6 +181,13 @@ enum Screen {
         """
     }
 
+    static let libraryWelcome = page(
+        title: "Set up your library",
+        text: "This Mac will keep your lectures: it writes their study notes with a model that runs here, sorts them "
+            + "by class, and serves them to your laptop and phone. Setup opens Terminal with a few questions, and can "
+            + "install Tailscale and Ollama for you. It takes about five minutes, longer if it downloads a model.",
+        buttons: [("Set Up", "setup-library", true)])
+
     static let welcome = page(
         title: "Welcome to Study Stash",
         text: "It sends the lectures you record in Granola to your library, where your own model writes their "
@@ -195,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
     var place = Place.read()
     var libraryShown: URL?
     var signingIn = false
+    var waiting: Timer?
     var downloads: [ObjectIdentifier: URL] = [:]
     // The README's screenshots (macos/tour.sh): GRANOLA_SHARE_TOUR="name=tab:path,…" shows each one and
     // saves GRANOLA_SHARE_TOUR_DIR/<name>.png, then quits. A path of "-" takes the tab as it is.
@@ -338,8 +353,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
 
     func openLibrary() {
         place = Place.read()
+        waiting?.invalidate()
         guard let url = place.library else {
-            library.loadHTMLString(Screen.page(title: "No library yet",
+            library.loadHTMLString(libraryMode ? Screen.libraryWelcome : Screen.page(title: "No library yet",
                                                text: "Connect this Mac to your library on the This Mac tab. Its lectures show up here.",
                                                buttons: [("Go to This Mac", "laptop", true)]), baseURL: nil)
             libraryShown = nil
@@ -347,6 +363,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         }
         libraryShown = url
         library.load(URLRequest(url: url))
+    }
+
+    /// The library's setup asks questions, so it runs in Terminal. This waits for the library to answer,
+    /// then shows it.
+    func setUpLibrary() {
+        let script = FileManager.default.temporaryDirectory.appendingPathComponent("Set Up Study Stash Library.command")
+        let text = """
+            #!/bin/sh
+            # Opened by Study Stash Library: sets up the library on this Mac.
+            clear
+            if curl -fsSL \(installScript) | sh -s -- server; then
+              echo; echo "Done. Your library opens in Study Stash Library."
+            else
+              echo; echo "Setup didn't finish. Run it again from Study Stash Library."
+            fi
+            printf "Press Return to close this window. "; read _
+            """
+        do {
+            try text.write(to: script, atomically: true, encoding: .utf8)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        } catch {
+            return problem(library, "Setup didn't start", error.localizedDescription, retry: "setup-library")
+        }
+        NSWorkspace.shared.open(script)
+        library.loadHTMLString(Screen.page(spinner: true, title: "Setting up your library",
+                                           text: "Answer the questions in the Terminal window. When setup is done, your library shows up here.",
+                                           buttons: [("Open Setup Again", "setup-library", false)]), baseURL: nil)
+        waitForLibrary()
+    }
+
+    /// Start the library's background service (it also starts when you log in).
+    func startLibrary() {
+        library.loadHTMLString(Screen.page(spinner: true, title: "Starting your library", text: "This takes a few seconds."),
+                               baseURL: nil)
+        run(engine.path, ["--home", dataDir.path, "autostart", "install", "--role", "server"]) { _, _ in self.waitForLibrary() }
+    }
+
+    /// Checks every two seconds until the library answers, then shows it.
+    func waitForLibrary() {
+        waiting?.invalidate()
+        waiting = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
+            guard let self = self else { return timer.invalidate() }
+            let now = Place.read()
+            guard let url = now.library else { return }
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 2
+            URLSession.shared.dataTask(with: req) { _, resp, _ in
+                guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+                DispatchQueue.main.async {
+                    guard timer.isValid else { return }
+                    timer.invalidate()
+                    self.place = now
+                    self.openLibrary()
+                }
+            }.resume()
+        }
     }
 
     /// The library asks for its password once per browser; this Mac already has it, so fill it in.
@@ -405,6 +477,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
     func problem(_ v: WKWebView, _ title: String, _ text: String, _ detail: String = "", retry: String = "retry") {
         var buttons = [("Try Again", retry, true)]
         if v === laptop { buttons.append(("Show Log", "log", false)) }
+        if v === library, place.library?.host == "127.0.0.1", fm.isExecutableFile(atPath: engine.path) {
+            buttons.append(("Start It", "start-library", false))
+        }
         v.loadHTMLString(Screen.page(title: title, text: text, buttons: buttons,
                                      detail: String(detail.suffix(1500))), baseURL: nil)
     }
@@ -650,6 +725,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         guard m.name == "app", let action = m.body as? String else { return }
         switch action {
         case "install": installHelper()
+        case "setup-library": setUpLibrary()
+        case "start-library": startLibrary()
         case "laptop": showLaptop()
         case "log": NSWorkspace.shared.open(dataDir.appendingPathComponent("logs"))
         default: m.webView === library ? openLibrary() : openLaptop()

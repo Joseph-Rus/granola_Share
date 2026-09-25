@@ -22,6 +22,23 @@
     Write-Host "Rerunning the same command is safe. Help: https://github.com/$Slug#troubleshooting"
     throw $Message
   }
+  # Runs a program with everything it prints going to the log. (Windows PowerShell shows whatever a
+  # program writes to stderr as red errors, even uv's "Downloading..." progress.)
+  function Invoke-Logged([string]$File, [string]$Arguments) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $File
+    $psi.Arguments = $Arguments
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $err = $p.StandardError.ReadToEndAsync()
+    $out = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    Set-Content -Path $Log -Value ($out + $err.Result) -Encoding UTF8
+    return $p.ExitCode
+  }
   # Windows PowerShell 5.1 turns a native tool's progress on stderr into a terminating error under "Stop".
   function Invoke-Quiet([scriptblock]$Block) {
     $saved = $ErrorActionPreference
@@ -57,16 +74,36 @@
     }
   }
 
-  # 3. The command itself. Windows can't replace files in use, so stop a running copy first.
-  $Running = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*granola_share.cli*" })
+  # 3. The command itself. Windows can't replace files in use, so stop every running copy first: the
+  # background services, and any granola-share command still open (say, one an older version left
+  # stuck). Only Python and granola-share.exe itself, never a window or shell that mentions the name.
+  $Ours = { ($_.Name -like "python*" -or $_.Name -eq "granola-share.exe") -and $_.ProcessId -ne $PID -and
+            ($_.CommandLine -like "*granola_share*" -or $_.CommandLine -like "*granola-share*") }
+  $Running = @(Get-CimInstance Win32_Process | Where-Object -FilterScript $Ours)
   $Running | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($Running.Count) { Start-Sleep -Seconds 2 }
   Write-Host "Installing granola-share ($What)..."
-  $env:UV_PYTHON_PREFERENCE = "only-managed"
-  Invoke-Quiet { uv tool install --force --python 3.12 --reinstall-package granola-share --refresh-package granola-share $Src *> $Log }
-  $Code = $LASTEXITCODE
-  Remove-Item Env:UV_PYTHON_PREFERENCE -ErrorAction SilentlyContinue
-  if ($Code -ne 0) { Get-Content $Log -Tail 20; Fail "uv could not install granola-share (full log: $Log)" }
+  # uv keeps its Python and tools in AppData\Local, which OneDrive never syncs: in AppData\Roaming (its
+  # default), OneDrive's Files On-Demand blocks the link uv makes to Python ("untrusted mount point",
+  # os error 448). A copy installed in Roaming before stays there, since its services point at it.
+  $UvEnv = @{ UV_PYTHON_PREFERENCE = "only-managed" }
+  if (-not (Test-Path (Join-Path $env:APPDATA "uv\tools\granola-share"))) {
+    if (-not $env:UV_PYTHON_INSTALL_DIR) { $UvEnv.UV_PYTHON_INSTALL_DIR = Join-Path $env:LOCALAPPDATA "uv\python" }
+    if (-not $env:UV_TOOL_DIR) { $UvEnv.UV_TOOL_DIR = Join-Path $env:LOCALAPPDATA "uv\tools" }
+  }
+  $UvEnv.GetEnumerator() | ForEach-Object { Set-Item "Env:$($_.Key)" $_.Value }
+  $Code = Invoke-Logged (Get-Command uv).Source "tool install --force --python 3.12 --reinstall-package granola-share --refresh-package granola-share `"$Src`""
+  $UvEnv.Keys | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+  if ($Code -ne 0) {
+    Get-Content $Log -Tail 20
+    if (Select-String -Path $Log -Pattern "os error 448|untrusted mount point" -Quiet) {
+      Fail "Windows blocked a link uv makes (this happens with OneDrive's Files On-Demand). Set the user environment variables UV_PYTHON_INSTALL_DIR and UV_TOOL_DIR to folders outside OneDrive, then run the same line again (log: $Log)"
+    }
+    if (Select-String -Path $Log -Pattern "os error (5|32)|Access is denied|used by another process" -Quiet) {
+      Fail "a file it needs is still in use. Restart this PC, then run the same line again (log: $Log)"
+    }
+    Fail "uv could not install granola-share (full log: $Log)"
+  }
   $BinDir = (Invoke-Quiet { uv tool dir --bin } | Select-Object -First 1)
   if (-not $BinDir) { $BinDir = "$env:USERPROFILE\.local\bin" }
   $Exe = Join-Path $BinDir.Trim() "granola-share.exe"

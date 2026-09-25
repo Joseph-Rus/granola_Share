@@ -70,6 +70,12 @@ Setup then walks through six steps:
 Rerunning setup is safe: your earlier answers become the defaults. `granola-share doctor`
 checks the whole setup at any time, and says what to fix.
 
+**Or with the Library app.** Download [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg)
+(Mac) or [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) (Windows) and
+open **Study Stash Library**. Click **Set Up**: the same six steps run in a Terminal or
+PowerShell window, and when they're done, the app shows your library. After that it's this
+computer's window onto the library.
+
 **Requirements:** Tailscale on both computers, signed in to the same account, so the laptop
 reaches the library away from home. Without it, the laptop reaches the library only on the same
 Wi-Fi. Ollama is needed for study notes and AI sorting. Without it, Granola folder and title
@@ -121,19 +127,27 @@ installer and opens it; if it's signed out, **Open Tailscale** opens it to sign 
 Each step turns into a green check when it's done. (`granola-share client setup` still works in
 the terminal if you prefer it.)
 
-### Or: the app on its own
+### Or: download the app
 
-Every release also has the app by itself, on the
-[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest). The first time you
-open it, it installs its background helper with one click, then shows the same setup. The
-install line above skips the security question below, because it fetches the app itself.
+Every release has four installers, on the
+[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest): one for each
+computer, on each system.
 
-- **Mac: Study-Stash.dmg.** Open it and drag Study Stash into Applications. macOS asks once
-  before opening an app from the internet that isn't from the App Store: click **Done**, then
-  **System Settings → Privacy & Security → Open Anyway**.
-- **Windows: Study-Stash-Setup.exe.** Run it. It installs for your account only, with no admin
-  rights, and adds Study Stash to the Start Menu. The app isn't signed, so Windows may say
-  "Windows protected your PC": click **More info**, then **Run anyway**.
+| | The laptop you record on | The computer that keeps your library |
+|---|---|---|
+| **Mac** | [Study-Stash-Laptop.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop.dmg) | [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg) |
+| **Windows** | [Study-Stash-Laptop-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop-Setup.exe) | [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) |
+
+The laptop's app installs its background helper with one click the first time you open it, then
+shows the same setup. The library's app runs the library's setup (see above). The install lines
+skip the security questions below, because they fetch the app themselves.
+
+- **Mac:** open the DMG and drag the app into Applications. macOS asks once before opening an
+  app from the internet that isn't from the App Store: click **Done**, then **System Settings →
+  Privacy & Security → Open Anyway**.
+- **Windows:** run the Setup.exe. It installs for your account only, with no admin rights, and
+  adds the app to the Start Menu. The app isn't signed, so Windows may say "Windows protected your
+  PC": click **More info**, then **Run anyway**.
 
 <p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Study Stash app's first screen: Welcome to Study Stash, with an Install and Continue button"></p>
 
@@ -255,6 +269,7 @@ Start with `granola-share doctor`. It checks every piece and prints a fix for ea
 | `granola-share: command not found` | Open a new terminal window, or use `~/.local/bin/granola-share`. |
 | Laptop: "could not reach …" | Tailscale on and signed in on both computers, and the library's computer awake. Try the `100.x.y.z` address instead of the name. |
 | "Granola app ✗ not installed" | Install Granola from [granola.ai/download](https://www.granola.ai/download). Only the laptop needs it, not the library's computer. |
+| Windows install: "untrusted mount point (os error 448)" | OneDrive's Files On-Demand blocked uv. Fixed in 0.4.1: the installer keeps uv's Python and tools in `AppData\Local`. Run the install line again. |
 | Windows: "Windows protected your PC" | The app isn't signed. Click **More info**, then **Run anyway**. The install line avoids the question. |
 | Windows: Study Stash asks for WebView2 | Older Windows 10 may not have it. Say yes, and install it from Microsoft. |
 | Laptop can't reach a library on Windows | Windows Firewall. Rerun `granola-share setup` on the PC and let it add the rule (Windows asks for permission). |

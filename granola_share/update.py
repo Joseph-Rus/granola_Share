@@ -25,7 +25,8 @@ from . import __version__, autostart
 REPO_SLUG = "Joseph-Rus/study-stash"
 LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
 MAC_APP_ASSET = "Study-Stash-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
-WINDOWS_APP_ASSET = "Study-Stash-windows.zip"  # the Windows app (windows/build.ps1), likewise
+MAC_LIBRARY_APP_ASSET = "Study-Stash-Library-mac.zip"  # the library computer's Mac app, likewise
+WINDOWS_APP_ASSET = "Study-Stash-windows.zip"  # the Windows app (windows/build.ps1): both of its installers
 FIRST_CHECK_AFTER = 10 * 60
 CHECK_EVERY = 6 * 3600
 LOCK_STALE_AFTER = 20 * 60
@@ -39,6 +40,7 @@ class Release:
     page: str  # release notes
     mac_app: str = ""  # download URL of the native Mac app, when the release has one
     windows_app: str = ""  # and of the Windows app
+    mac_library_app: str = ""  # and of Study Stash Library for the Mac
 
 
 def parse_version(v: str) -> tuple[int, ...]:
@@ -61,7 +63,7 @@ def latest_release(get=httpx.get) -> Release | None:
     tag = str(data["tag_name"])
     assets = {str(a.get("name")): str(a.get("browser_download_url") or "") for a in data.get("assets") or []}
     return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""),
-                   assets.get(MAC_APP_ASSET, ""), assets.get(WINDOWS_APP_ASSET, ""))
+                   assets.get(MAC_APP_ASSET, ""), assets.get(WINDOWS_APP_ASSET, ""), assets.get(MAC_LIBRARY_APP_ASSET, ""))
 
 
 _cache: dict = {"at": 0.0, "release": None}
@@ -115,9 +117,24 @@ def install_command(uv: str, url: str) -> list[str]:
             f"granola-share @ {url}"]
 
 
+def windows_uv_env(system: str | None = None, executable: str | None = None) -> dict[str, str]:
+    """Windows: uv keeps its Python and tools in AppData\\Local, which OneDrive never syncs. In
+    AppData\\Roaming, uv's default, OneDrive's Files On-Demand blocks the link uv makes to Python
+    ("untrusted mount point", os error 448: astral-sh/uv#19616). install.ps1 does the same. A copy
+    installed in Roaming before this stays there: its services point at it."""
+    if (system or platform.system()) != "Windows":
+        return {}
+    roaming = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "uv"
+    if str(executable or sys.executable).lower().startswith(str(roaming).lower()):
+        return {}
+    local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "uv"
+    wanted = {"UV_PYTHON_INSTALL_DIR": str(local / "python"), "UV_TOOL_DIR": str(local / "tools")}
+    return {k: v for k, v in wanted.items() if not os.environ.get(k)}  # yours win
+
+
 def install_env() -> dict:
     # A uv-managed Python, so a Homebrew/system Python upgrade can never break the installed tool.
-    return {**os.environ, "UV_PYTHON_PREFERENCE": "only-managed"}
+    return {**os.environ, "UV_PYTHON_PREFERENCE": "only-managed", **windows_uv_env()}
 
 
 def why_not_updatable() -> str | None:
@@ -154,15 +171,21 @@ def cleanup_legacy(home: Path, log=print) -> bool:
 
 # --- applying an update --------------------------------------------------------------
 
+# Every process of ours that could hold the install open: the services, and any granola-share command
+# still running. Python and granola-share.exe only, so never this helper's own cmd or PowerShell.
+WINDOWS_OURS = ("($_.Name -like 'python*' -or $_.Name -eq 'granola-share.exe') -and "
+                "($_.CommandLine -like '*granola_share*' -or $_.CommandLine -like '*granola-share*')")
+
+
 def _windows_script(home: Path, uv: str, url: str, roles: list[str]) -> Path:
     """Windows locks running files, so a detached helper waits for us to exit, installs, and restarts."""
     log = home / "logs" / "update.log"
-    stop = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*granola_share.cli*' } | "
-            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
+    stop = f"Get-CimInstance Win32_Process | Where-Object {{ {WINDOWS_OURS} }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"
     lines = ["@echo off", "timeout /t 5 /nobreak >nul",
              f'powershell -NoProfile -Command "{stop}" >> "{log}" 2>&1',
              "timeout /t 2 /nobreak >nul",
              "set UV_PYTHON_PREFERENCE=only-managed",
+             *[f'set "{k}={v}"' for k, v in windows_uv_env("Windows").items()],
              subprocess.list2cmdline(install_command(uv, url)) + f' >> "{log}" 2>&1']
     lines += [f'call "{autostart.startup_cmd_path(role)}"' for role in roles]
     script = home / "update.cmd"
@@ -188,8 +211,8 @@ def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restar
     if platform.system() == "Windows":
         from . import launcher
 
-        if release.windows_app and launcher.windows_app_exe():  # the Study Stash app updates along with everything else
-            launcher.install_windows_app(release.windows_app, log=log)
+        for folder in launcher.windows_apps_installed() if release.windows_app else []:  # the apps update too
+            launcher.install_windows_app(release.windows_app, log=log, dest=folder)
         script = _windows_script(home, uv, release.url, roles if restart_services else [])
         _spawn_detached(["cmd", "/c", str(script)])
         log(f"Installing {release.tag} in the background (log: {home / 'logs' / 'update.log'}).")
@@ -205,6 +228,11 @@ def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restar
 
         if launcher.native_installed():  # the Study Stash app updates along with everything else
             launcher.install_native(release.mac_app, log=log)
+    if platform.system() == "Darwin" and release.mac_library_app:
+        from . import launcher
+
+        if launcher.library_app_installed():
+            launcher.install_native(release.mac_library_app, log=log, name=launcher.LIBRARY_APP_NAME)
     if restart_services:
         for role in roles:
             autostart.restart(role)

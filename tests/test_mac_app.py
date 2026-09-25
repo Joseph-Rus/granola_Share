@@ -88,3 +88,26 @@ def test_the_old_granola_share_app_is_replaced_by_study_stash(tmp_path, monkeypa
     new = launcher.install_native("u", log=lambda s: None, get=lambda url, **kw: got, run=ditto)
     assert new == tmp_path / "Applications" / "Study Stash.app" and launcher.is_native(new)
     assert not old.exists() and launcher.native_installed() == new
+
+
+def test_the_library_mac_app_installs_and_updates_on_its_own(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    data = {"tag_name": "v0.4.1", "html_url": "h", "assets": [
+        {"name": "Study-Stash-mac.zip", "browser_download_url": "https://gh/dl/Study-Stash-mac.zip"},
+        {"name": "Study-Stash-Library-mac.zip", "browser_download_url": "https://gh/dl/Study-Stash-Library-mac.zip"}]}
+    ok = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: data)
+    rel = update.latest_release(get=lambda url, **kw: ok)
+    assert rel.mac_library_app == "https://gh/dl/Study-Stash-Library-mac.zip"
+
+    def ditto(cmd, **kw):
+        app = Path(cmd[4]) / "Study Stash Library.app"
+        (app / "Contents" / "MacOS").mkdir(parents=True)
+        (app / "Contents" / "MacOS" / "Study Stash").write_text("binary")
+        return SimpleNamespace(returncode=0)
+
+    got = SimpleNamespace(status_code=200, content=b"zip", raise_for_status=lambda: None)
+    laptop_app = native_app(tmp_path / "Applications")
+    app = launcher.install_native(rel.mac_library_app, log=lambda s: None, get=lambda url, **kw: got, run=ditto,
+                                  name=launcher.LIBRARY_APP_NAME)
+    assert app == tmp_path / "Applications" / "Study Stash Library.app" and launcher.library_app_installed() == app
+    assert launcher.native_installed() == laptop_app  # the laptop's app is its own thing, untouched

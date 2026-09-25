@@ -104,10 +104,30 @@ def test_client_open_on_windows_installs_and_opens_the_app(tmp_path, local, monk
     assert fetched == [rel.windows_app] and opened == [str(local / "Study Stash.exe")]
 
 
-def test_windows_app_folder_matches_its_installer():
+def test_two_windows_installers_one_app():
+    """Study-Stash-Laptop-Setup.exe and Study-Stash-Library-Setup.exe: the same app, in the folders the
+    updater looks in, and the library's copy marked as the library's."""
     iss = (Path(__file__).resolve().parents[1] / "windows" / "setup.iss").read_text()
-    assert r"DefaultDirName={localappdata}\Programs\Study Stash" in iss and "PrivilegesRequired=lowest" in iss
-    assert 'Name: "{userprograms}\\Study Stash"' in iss  # the same Start Menu entry launcher.install writes
+    assert r"DefaultDirName={localappdata}\Programs\{#Name}" in iss and "PrivilegesRequired=lowest" in iss
+    assert '#define Name "Study Stash Library"' in iss and '#define Output "Study-Stash-Library-Setup"' in iss
+    assert '#define Name "Study Stash"' in iss and '#define Output "Study-Stash-Laptop-Setup"' in iss
+    assert 'Key: "role"; String: "library"' in iss and 'Name: "{userprograms}\\{#Name}"' in iss
+    assert launcher.windows_app_dir().name == "Study Stash"
+    assert launcher.windows_app_dir(launcher.LIBRARY_APP_NAME).name == "Study Stash Library"
+    cs = (Path(__file__).resolve().parents[1] / "windows" / "StudyStash.cs").read_text()
+    assert '"role=library"' in cs and '"--library"' in cs  # what the library installer writes, the app reads
+
+
+def test_updates_refresh_every_installed_windows_app(local, monkeypatch):
+    lib = local.with_name("Study Stash Library")
+    for folder in (local, lib):
+        launcher.install_windows_app("u", log=lambda s: None, get=served(release_zip(b"old")), dest=folder)
+    (lib / "study-stash.ini").write_text("[app]\nrole=library\n")
+    assert launcher.windows_apps_installed() == [local, lib]
+    for folder in launcher.windows_apps_installed():
+        launcher.install_windows_app("u", log=lambda s: None, get=served(release_zip(b"new")), dest=folder)
+    assert (local / "Study Stash.exe").read_bytes() == (lib / "Study Stash.exe").read_bytes() == b"new"
+    assert "role=library" in (lib / "study-stash.ini").read_text()  # the update keeps what it is
 
 
 # --- the laptop's own checks ---------------------------------------------------------------------------

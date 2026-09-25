@@ -173,3 +173,24 @@ def test_setup_recognizes_a_0_1_library_already_on_the_port():
                                                      json=lambda: {})
         assert port_status(port, host="127.0.0.1", get=old) == "ours"
         assert port_status(port, host="127.0.0.1", get=other) == "busy"
+
+
+def test_windows_keeps_uv_out_of_onedrive(monkeypatch, tmp_path):
+    """OneDrive's Files On-Demand blocks the link uv makes to Python in AppData\\Roaming (os error 448), so
+    new Windows installs keep uv's Python and tools in AppData\\Local; one already in Roaming stays put."""
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    for k in ("UV_PYTHON_INSTALL_DIR", "UV_TOOL_DIR"):
+        monkeypatch.delenv(k, raising=False)
+    env = update.windows_uv_env("Windows", executable=str(tmp_path / "Local" / "uv" / "tools" / "x" / "python.exe"))
+    assert env == {"UV_PYTHON_INSTALL_DIR": str(tmp_path / "Local" / "uv" / "python"),
+                   "UV_TOOL_DIR": str(tmp_path / "Local" / "uv" / "tools")}
+    assert update.windows_uv_env("Windows", executable=str(tmp_path / "Roaming" / "uv" / "tools" / "x" / "python.exe")) == {}
+    assert update.windows_uv_env("Darwin") == {}
+    monkeypatch.setenv("UV_TOOL_DIR", "D:\\tools")  # yours win
+    assert "UV_TOOL_DIR" not in update.windows_uv_env("Windows", executable="C:\\elsewhere\\python.exe")
+    monkeypatch.delenv("UV_TOOL_DIR")
+    monkeypatch.setattr(update.sys, "executable", str(tmp_path / "Local" / "uv" / "tools" / "x" / "python.exe"))
+    script = update._windows_script(tmp_path, "uv.exe", "https://x/v1.tar.gz", ["client"]).read_text()
+    assert f'set "UV_PYTHON_INSTALL_DIR={tmp_path / "Local" / "uv" / "python"}"' in script
+    assert "$_.Name -like 'python*'" in script and "*granola-share*" in script  # stuck commands too, never cmd

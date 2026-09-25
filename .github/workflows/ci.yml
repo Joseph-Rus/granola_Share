@@ -2,8 +2,8 @@
 #   Every push and pull request: tests on macOS, Linux, and Windows, then the real one-line
 #   installer on each, then a server that boots and answers.
 #   Push to main with a new version in granola_share/__init__.py: once all of that passes,
-#   publish release v<version>, with the apps attached: Study-Stash.dmg and Study-Stash-Setup.exe
-#   for people who download them, and a zip of each that the installer and auto-update use.
+#   publish release v<version>, with four installers for people who download them (a laptop and a
+#   library one each for Mac and Windows), and the zips the installer and auto-update use.
 #   Installed copies pick it up within a few hours (auto_update), or right away with
 #   `granola-share update`.
 name: ci
@@ -117,30 +117,35 @@ jobs:
         run: cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/client.log" "$RUNNER_TEMP/gs2/logs/server.log" || true
 
   mac-app:
-    name: Mac app (DMG)
+    name: Mac apps (DMGs)
     timeout-minutes: 20
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Study Stash.app, its zip, and the DMG
+      - name: Build Study Stash.app and Study Stash Library.app, their zips, and the DMGs
         run: sh macos/build.sh "" dist
-      - name: The app starts
+      - name: Both apps start
         run: |
-          file "dist/Study Stash.app/Contents/MacOS/Study Stash" | grep -q "universal binary"
-          codesign --verify --deep "dist/Study Stash.app"
-          GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/Study Stash.app/Contents/MacOS/Study Stash" &
-          sleep 8
-          kill -0 $!   # still running after 8 seconds: it launched and showed its window
-          kill $!
+          for app in "Study Stash" "Study Stash Library"; do
+            file "dist/$app.app/Contents/MacOS/Study Stash" | grep -q "universal binary"
+            codesign --verify --deep "dist/$app.app"
+            GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/$app.app/Contents/MacOS/Study Stash" &
+            sleep 8
+            kill -0 $!   # still running after 8 seconds: it launched and showed its window
+            kill $!
+          done
+          /usr/libexec/PlistBuddy -c "Print :StudyStashRole" "dist/Study Stash Library.app/Contents/Info.plist" | grep -qx library
       - uses: actions/upload-artifact@v4
         with:
           name: mac-app
           path: |
-            dist/Study-Stash.dmg
+            dist/Study-Stash-Laptop.dmg
+            dist/Study-Stash-Library.dmg
             dist/Study-Stash-mac.zip
+            dist/Study-Stash-Library-mac.zip
 
   windows-app:
-    name: Windows app (Setup.exe)
+    name: Windows apps (Setup.exe)
     timeout-minutes: 20
     runs-on: windows-latest
     steps:
@@ -154,33 +159,41 @@ jobs:
             Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "$env:RUNNER_TEMP\wv2.exe"
             Start-Process "$env:RUNNER_TEMP\wv2.exe" -ArgumentList "/silent", "/install" -Wait
           }
-      - name: Build Study Stash.exe, its zip, and Study-Stash-Setup.exe
+      - name: Build Study Stash.exe, its zip, and both Setup.exe installers
         shell: pwsh
         run: ./windows/build.ps1 -Out dist
-      - name: The app starts and shows its first screen
+      - name: The app starts and shows its first screen, as the laptop's and as the library's
         shell: pwsh
         run: |
           $env:GRANOLA_SHARE_HOME = "$env:RUNNER_TEMP\none"
           $env:GRANOLA_SHARE_ENGINE = "$env:RUNNER_TEMP\none\granola-share.exe"  # not installed: the welcome screen
-          $env:GRANOLA_SHARE_SELFTEST = "$env:RUNNER_TEMP\selftest.txt"
-          $p = Start-Process -FilePath "dist\Study Stash\Study Stash.exe" -PassThru
-          for ($i = 0; $i -lt 60 -and -not (Test-Path $env:GRANOLA_SHARE_SELFTEST); $i++) { Start-Sleep 1 }
-          if (-not (Test-Path $env:GRANOLA_SHARE_SELFTEST)) { Stop-Process -Id $p.Id -ErrorAction SilentlyContinue; throw "no first screen in 60 s" }
-          $said = Get-Content $env:GRANOLA_SHARE_SELFTEST
-          Write-Host $said
-          if ($said -notlike "ok*") { throw $said }
-      - name: Setup.exe installs it for this account, with a Start Menu entry
+          foreach ($mode in @(@(), @("--library"))) {
+            $env:GRANOLA_SHARE_SELFTEST = "$env:RUNNER_TEMP\selftest$($mode.Count).txt"
+            $p = if ($mode.Count) { Start-Process -FilePath "dist\Study Stash\Study Stash.exe" -ArgumentList $mode -PassThru }
+                 else { Start-Process -FilePath "dist\Study Stash\Study Stash.exe" -PassThru }
+            for ($i = 0; $i -lt 60 -and -not (Test-Path $env:GRANOLA_SHARE_SELFTEST); $i++) { Start-Sleep 1 }
+            if (-not (Test-Path $env:GRANOLA_SHARE_SELFTEST)) { Stop-Process -Id $p.Id -ErrorAction SilentlyContinue; throw "no first screen in 60 s ($mode)" }
+            $said = Get-Content $env:GRANOLA_SHARE_SELFTEST
+            Write-Host "$mode $said"
+            if ($said -notlike "ok*") { throw $said }
+          }
+      - name: Each Setup.exe installs its app for this account, with a Start Menu entry
         shell: pwsh
         run: |
-          Start-Process dist\Study-Stash-Setup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Study Stash\Study Stash.exe")) { throw "not installed" }
-          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Study Stash.lnk")) { throw "no Start Menu entry" }
+          foreach ($pair in @(@("Laptop", "Study Stash"), @("Library", "Study Stash Library"))) {
+            $setup, $name = $pair
+            Start-Process "dist\Study-Stash-$setup-Setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+            if (-not (Test-Path "$env:LOCALAPPDATA\Programs\$name\Study Stash.exe")) { throw "$name isn't installed" }
+            if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\$name.lnk")) { throw "no Start Menu entry for $name" }
+          }
+          if (-not (Select-String -Path "$env:LOCALAPPDATA\Programs\Study Stash Library\study-stash.ini" -Pattern "role=library" -Quiet)) { throw "the library's copy isn't marked" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-app
           path: |
             dist/Study-Stash-windows.zip
-            dist/Study-Stash-Setup.exe
+            dist/Study-Stash-Laptop-Setup.exe
+            dist/Study-Stash-Library-Setup.exe
 
   release:
     name: publish release
@@ -213,4 +226,6 @@ jobs:
             exit 0
           fi
           gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
-            dist/Study-Stash.dmg dist/Study-Stash-mac.zip dist/Study-Stash-Setup.exe dist/Study-Stash-windows.zip
+            dist/Study-Stash-Laptop.dmg dist/Study-Stash-Library.dmg dist/Study-Stash-Laptop-Setup.exe \
+            dist/Study-Stash-Library-Setup.exe dist/Study-Stash-mac.zip dist/Study-Stash-Library-mac.zip \
+            dist/Study-Stash-windows.zip

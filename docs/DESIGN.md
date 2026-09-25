@@ -88,6 +88,13 @@ keep working.
   and auto-update all put it in `%LOCALAPPDATA%\Programs\Study Stash`. Windows can't overwrite a
   running program but can rename it, so an update moves files in use aside to `*.old`, which the
   app deletes when it next starts.
+- **Four installers, two apps.** Each app also ships as its library computer's copy: "Study Stash
+  Library" (Info.plist `StudyStashRole` on a Mac, `study-stash.ini` on Windows). It shows only the
+  library, and before there is one it runs the library's setup in Terminal or PowerShell, since that
+  setup asks questions, then waits for the library to answer.
+- **Windows keeps uv in AppData\\Local.** OneDrive's Files On-Demand blocks the link uv makes to
+  Python in AppData\\Roaming (os error 448), so the installer and updater set `UV_PYTHON_INSTALL_DIR`
+  and `UV_TOOL_DIR`; an install already in Roaming stays there.
 - **Without the app** (Linux, or before it's downloaded) the page opens in an Edge or Chrome app
   window, and "Open your library" signs in by posting the saved password to the library's login
   form from a loopback-only page.

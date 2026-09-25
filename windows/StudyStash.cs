@@ -2,9 +2,12 @@
 // app (macos/StudyStash.swift).
 //
 // "This PC" is the laptop's page (setup and status) from the background service on 127.0.0.1.
-// "Library" is your library, signed in with the password this PC already has. On the library's own
-// computer there's only the library. If the background helper isn't installed yet (someone ran
-// Study-Stash-Setup.exe), the app installs it, without PowerShell.
+// "Library" is your library, signed in with the password this PC already has. If the background
+// helper isn't installed yet (someone ran Study-Stash-Laptop-Setup.exe), the app installs it.
+//
+// The same app is the library's own window on the PC that keeps it (Study-Stash-Library-Setup.exe
+// writes role=library into study-stash.ini next to it; `--library` does the same). There it shows only
+// the library, and before there is one, it runs the library's setup in a window for its questions.
 //
 // Built on .NET Framework 4.8 and WebView2, both part of Windows 10 and 11. Build: windows/build.ps1.
 
@@ -40,6 +43,19 @@ namespace StudyStash
         public static readonly string Own = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Study Stash");
         public const string InstallScript = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1";
+        /// <summary>This copy is the library's own app (Study-Stash-Library-Setup.exe), not the laptop's.</summary>
+        public static bool LibraryMode;
+
+        public static bool ReadLibraryMode(string[] args)
+        {
+            if (args.Contains("--library")) return true;
+            try
+            {
+                var ini = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "study-stash.ini");
+                return File.ReadAllLines(ini).Any(l => l.Replace(" ", "").ToLowerInvariant() == "role=library");
+            }
+            catch (Exception) { return false; }
+        }
 
         public static string Env(string name)
         {
@@ -132,8 +148,8 @@ namespace StudyStash
         {
             var client = Where.DataFile("client.toml");
             var server = Where.DataFile("config.toml");
-            var p = new Place { Sends = server == null || client != null };
-            var url = client == null ? null : Where.TomlValue(client, "server_url");
+            var p = new Place { Sends = !Where.LibraryMode && (server == null || client != null) };
+            var url = client == null || Where.LibraryMode ? null : Where.TomlValue(client, "server_url");
             if (!string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out var u))
             {
                 p.Library = u;
@@ -319,6 +335,12 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
   e.preventDefault();studyStash('retry');}});</script></body></html>";
         }
 
+        public static string LibraryWelcome() => Page("Set up your library",
+            "This PC will keep your lectures: it writes their study notes with a model that runs here, sorts them by "
+            + "class, and serves them to your laptop and phone. Setup opens a window with a few questions, and can install "
+            + "Tailscale and Ollama for you. It takes about five minutes, longer if it downloads a model.",
+            buttons: ("Set Up", "setup-library", true));
+
         public static string Welcome() => Page("Welcome to Study Stash",
             "It sends the lectures you record in Granola to your library, where your own model writes their study notes. "
             + "First it installs a small helper that runs in the background. That takes about a minute.",
@@ -443,7 +465,8 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             try
             {
                 Directory.CreateDirectory(Where.Own);
-                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Where.Own, "WebView2"));
+                var env = await CoreWebView2Environment.CreateAsync(null,
+                    Path.Combine(Where.Own, Where.LibraryMode ? "WebView2-library" : "WebView2"));
                 foreach (var v in new[] { laptop, library }) await Prepare(v, env);
             }
             catch (WebView2RuntimeNotFoundException)
@@ -614,7 +637,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             place = Place.Read();
             if (place.Library == null)
             {
-                library.CoreWebView2.NavigateToString(Pages.Page("No library yet",
+                library.CoreWebView2.NavigateToString(Where.LibraryMode ? Pages.LibraryWelcome() : Pages.Page("No library yet",
                     "Connect this PC to your library on the This PC tab. Its lectures show up here.",
                     buttons: ("Go to This PC", "laptop", true)));
                 libraryShown = null;
@@ -622,6 +645,55 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             }
             libraryShown = place.Library;
             library.CoreWebView2.Navigate(place.Library.ToString());
+        }
+
+        /// <summary>The library's setup, in a PowerShell window of its own (it asks questions). When it's done
+        /// and the window closes, the library shows here.</summary>
+        async Task SetUpLibrary()
+        {
+            library.CoreWebView2.NavigateToString(Pages.Page("Setting up your library",
+                "Answer the questions in the window that opened. When setup is done, your library shows up here.", spinner: true));
+            var command = $"$env:GRANOLA_SHARE_ROLE='server'; try {{ irm {Where.InstallScript} | iex }} "
+                + "catch { Write-Host $_ -ForegroundColor Red }; Write-Host ''; Read-Host 'Press Enter to close this window'";
+            try
+            {
+                var p = Process.Start(new ProcessStartInfo("powershell.exe",
+                    $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"") { UseShellExecute = true });
+                await Task.Run(() => p.WaitForExit());
+            }
+            catch (Exception e)
+            {
+                Problem(library, "Setup didn't start", Where.Html(e.Message), retry: "setup-library");
+                return;
+            }
+            place = Place.Read();
+            if (place.Library == null)
+            {
+                Problem(library, "Your library isn't set up yet", "Setup stopped before the end. Run it again and answer its questions.",
+                        retry: "setup-library");
+                return;
+            }
+            await WaitForLibrary();
+            OpenLibrary();
+        }
+
+        /// <summary>Start the library's background service (it also starts when you sign in to Windows).</summary>
+        async Task StartLibrary()
+        {
+            library.CoreWebView2.NavigateToString(Pages.Page("Starting your library", "This takes a few seconds.", spinner: true));
+            await Run(Where.Engine, string.Join(" ", new[] { "--home", Where.DataDir, "autostart", "install", "--role", "server" }
+                .Select(Where.Quote)), null);
+            await WaitForLibrary();
+            OpenLibrary();
+        }
+
+        async Task WaitForLibrary()
+        {
+            for (int i = 0; i < 30 && place.Library != null; i++)
+            {
+                try { if ((await http.GetAsync(place.Library)).IsSuccessStatusCode) return; } catch (Exception) { }
+                await Task.Delay(1000);
+            }
         }
 
         /// <summary>The library asks for its password once per browser; this PC already has it, so fill it in.</summary>
@@ -709,6 +781,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         {
             var buttons = new List<(string, string, bool)> { ("Try Again", retry, true) };
             if (v == laptop) buttons.Add(("Show Log", "log", false));
+            if (v == library && place.Library?.Host == "127.0.0.1" && File.Exists(Where.Engine)) buttons.Add(("Start It", "start-library", false));
             var tail = detail.Length > 1500 ? detail.Substring(detail.Length - 1500) : detail;
             v.CoreWebView2.NavigateToString(Pages.Page(title, text, detail: tail, buttons: buttons.ToArray()));
         }
@@ -726,7 +799,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         void OnNavigationCompleted(WebView2 v, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (v == current) UpdateTitle();
-            if (selfTest != null && v == laptop)
+            if (selfTest != null && v == current)
             {
                 File.WriteAllText(selfTest, "ok: " + v.CoreWebView2.DocumentTitle);
                 Close();
@@ -768,6 +841,8 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             switch (message.Substring(4))
             {
                 case "install": await InstallHelper(); break;
+                case "setup-library": await SetUpLibrary(); break;
+                case "start-library": await StartLibrary(); break;
                 case "laptop": ShowLaptop(); break;
                 case "library": ShowLibrary(); break;
                 case "log": Directory.CreateDirectory(Path.Combine(Where.DataDir, "logs")); OpenInBrowser(Path.Combine(Where.DataDir, "logs")); break;
@@ -805,7 +880,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
 
         // -- window placement and the title bar
 
-        string BoundsFile => Path.Combine(Where.Own, "window.txt");
+        string BoundsFile => Path.Combine(Where.Own, Where.LibraryMode ? "window-library.txt" : "window.txt");
 
         void LoadBounds()
         {
@@ -857,16 +932,25 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int cmd);
         [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
 
-        [STAThread]
-        static void Main()
+        static bool SameProgram(Process a, Process b)
         {
-            using (var one = new Mutex(true, "StudyStash.Window." + Environment.UserName, out bool first))
+            try { return string.Equals(a.MainModule.FileName, b.MainModule.FileName, StringComparison.OrdinalIgnoreCase); }
+            catch (Exception) { return true; }
+        }
+
+        [STAThread]
+        static void Main(string[] args)
+        {
+            Where.LibraryMode = Where.ReadLibraryMode(args);
+            var name = "StudyStash.Window." + Environment.UserName + (Where.LibraryMode ? ".library" : "");
+            using (var one = new Mutex(true, name, out bool first))
             {
                 if (!first && Where.Env("GRANOLA_SHARE_SELFTEST") == null)
                 {
                     // Already open: bring that window forward instead of opening a second one.
                     var me = Process.GetCurrentProcess();
-                    var other = Process.GetProcessesByName(me.ProcessName).FirstOrDefault(p => p.Id != me.Id && p.MainWindowHandle != IntPtr.Zero);
+                    var other = Process.GetProcessesByName(me.ProcessName).FirstOrDefault(p => p.Id != me.Id
+                        && p.MainWindowHandle != IntPtr.Zero && SameProgram(p, me));
                     if (other != null)
                     {
                         if (IsIconic(other.MainWindowHandle)) ShowWindow(other.MainWindowHandle, 9);  // SW_RESTORE

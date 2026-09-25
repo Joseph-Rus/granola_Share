@@ -14,6 +14,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 APP_NAME = "Study Stash"
+LIBRARY_APP_NAME = f"{APP_NAME} Library"  # the same app, as the library computer's own window
 ASSETS = Path(__file__).resolve().parent / "assets"
 WINDOWS_ICON = ASSETS / "study-stash.ico"
 OLD_NAMES = ("Granola Share",)  # what 0.2 called it: replaced and removed on the next install
@@ -83,7 +84,16 @@ def native_installed() -> Path | None:
     return next((a for a in mac_app_paths() if is_native(a)), None)
 
 
-def install_native(url: str, *, log=print, get=None, run=subprocess.run) -> Path | None:
+def mac_library_app_paths() -> list[Path]:
+    return [folder / f"{LIBRARY_APP_NAME}.app" for folder in (SYSTEM_APPS, Path.home() / "Applications")]
+
+
+def library_app_installed() -> Path | None:
+    """Study Stash Library, the library computer's own app (Study-Stash-Library.dmg), if it's here."""
+    return next((a for a in mac_library_app_paths() if is_native(a)), None)
+
+
+def install_native(url: str, *, log=print, get=None, run=subprocess.run, name: str = APP_NAME) -> Path | None:
     """Download the native Mac app (a zip from the release) into Applications, replacing any older copy.
     Fetched here rather than in a browser, macOS doesn't quarantine it, so it opens without a warning."""
     import tempfile
@@ -99,19 +109,20 @@ def install_native(url: str, *, log=print, get=None, run=subprocess.run) -> Path
             zip_path.write_bytes(r.content)
             unpacked = Path(tmp) / "unpacked"
             p = run(["ditto", "-x", "-k", str(zip_path), str(unpacked)], capture_output=True, text=True)
-            new = unpacked / f"{APP_NAME}.app"
+            new = unpacked / f"{name}.app"
             if p.returncode != 0 or not is_native(new):
-                log("The Study Stash app in that release didn't unpack; keeping the one you have.")
+                log(f"The {name} app in that release didn't unpack; keeping the one you have.")
                 return None
-            dest = mac_app_path()
-            for old in mac_app_paths():
+            olds = mac_app_paths() if name == APP_NAME else mac_library_app_paths()
+            dest = mac_app_path().with_name(f"{name}.app")
+            for old in olds:
                 shutil.rmtree(old, ignore_errors=True)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(new), str(dest))
-            log(f"Installed the Study Stash app in {dest.parent}.")
+            log(f"Installed the {name} app in {dest.parent}.")
             return dest
     except Exception as e:
-        log(f"Couldn't install the Study Stash app ({e}); the one in Applications still works.")
+        log(f"Couldn't install the {name} app ({e}); the one in Applications still works.")
         return None
 
 
@@ -122,18 +133,24 @@ def _ps(s: str) -> str:
 
 # --- the Windows app (windows/StudyStash.cs) ------------------------------------------------------
 
-def windows_app_dir() -> Path:
-    """Where Study-Stash-Setup.exe, `client open --install`, and auto-update all put the Windows app."""
+def windows_app_dir(name: str = APP_NAME) -> Path:
+    """Where the Setup.exe installers, `client open --install`, and auto-update put the Windows app:
+    Study Stash (the laptop's) or Study Stash Library (the library computer's)."""
     local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
-    return local / "Programs" / APP_NAME
+    return local / "Programs" / name
 
 
-def windows_app_exe() -> Path | None:
-    exe = windows_app_dir() / f"{APP_NAME}.exe"
+def windows_app_exe(name: str = APP_NAME) -> Path | None:
+    exe = windows_app_dir(name) / f"{APP_NAME}.exe"
     return exe if exe.is_file() else None
 
 
-def install_windows_app(url: str, *, log=print, get=None) -> Path | None:
+def windows_apps_installed() -> list[Path]:
+    """Each installed copy's folder: auto-update refreshes them all."""
+    return [windows_app_dir(n) for n in (APP_NAME, LIBRARY_APP_NAME) if windows_app_exe(n)]
+
+
+def install_windows_app(url: str, *, log=print, get=None, dest: Path | None = None) -> Path | None:
     """Download the Windows app (a zip from the release) into its folder. Windows won't overwrite a
     program that's running, but it lets one be renamed, so a file in use moves aside to *.old first
     (the app deletes those the next time it starts). Fetched here rather than in a browser, it isn't
@@ -156,7 +173,7 @@ def install_windows_app(url: str, *, log=print, get=None) -> Path | None:
             if not (new / f"{APP_NAME}.exe").is_file():
                 log("The Study Stash app in that release didn't unpack; keeping the one you have.")
                 return None
-            dest = windows_app_dir()
+            dest = dest or windows_app_dir()
             for f in sorted(x for x in new.rglob("*") if x.is_file()):
                 target = dest / f.relative_to(new)
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -239,7 +256,7 @@ def uninstall(system: str | None = None) -> None:
             for name in (APP_NAME, *OLD_NAMES):
                 windows_shortcut_path(name).unlink(missing_ok=True)
             folder = windows_app_dir()
-            uninstaller = folder / "unins000.exe"  # put there by Study-Stash-Setup.exe
+            uninstaller = folder / "unins000.exe"  # put there by the Setup.exe installers
             if uninstaller.exists():
                 subprocess.Popen([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
                                  creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
