@@ -235,7 +235,7 @@ public class UpdaterTests
         var appZip = Zip(new() { ["Study Stash.exe"] = "app v9", ["web/app.css"] = "css" });
         var engineZip = Zip(new() { ["studystash.exe"] = "exe", [Updates.EngineMarker] = "9.9.9\n" });
         var downloads = new FakeDownloads(new() { ["https://dl/e.zip"] = engineZip, ["https://dl/app.zip"] = appZip });
-        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"]);
+        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"], dir["Roaming"], dir["userhome"]);
         string appFolder = Apps.WindowsAppDir(Apps.LibraryAppName, at);
         Directory.CreateDirectory(appFolder);
         File.WriteAllText(Path.Combine(appFolder, "Study Stash.exe"), "app v8");
@@ -267,7 +267,7 @@ public class UpdaterTests
     public async Task The_mac_app_is_replaced_along_with_its_old_names()
     {
         using var dir = new TempDir();
-        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"]);
+        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"], dir["Roaming"], dir["userhome"]);
         foreach (string old in new[] { Path.Combine(dir["mine"], "Study Stash.app"), Path.Combine(dir["Applications"], "Granola Share.app") })
         {
             Directory.CreateDirectory(Path.Combine(old, "Contents", "MacOS"));

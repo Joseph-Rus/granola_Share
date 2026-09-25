@@ -20,29 +20,39 @@ That way a computer can switch engines and keep its library as it is.
 | 1 | Config, lectures, the database and note files, Ollama notes and sorting, the pipeline | done |
 | 2 | Granola sign-in, reading lectures from its MCP server, and the library's own sync | done |
 | 3 | The library: its web pages, the laptop's API, and the setup page (ASP.NET Core) | done |
-| 4 | The laptop: watching Granola and its local page | |
+| 4 | The laptop: watching Granola and its local page | done |
 | 5 | Installing Ollama and Tailscale, start at login, updates, `doctor`, Windows firewall and sleep | done |
 | 6 | Mac transcript copying moves into the Swift app | |
 | 7 | The installers and apps switch to this engine; Python retires | |
 
 The code:
 - `src/StudyStash.Core` is the engine.
-- `src/StudyStash.Library` has the library's pages and the setup page.
+- `src/StudyStash.Library` has the web pages: the library's, its setup page, and the laptop's Study Stash page.
 - `src/StudyStash.Engine` is the command. The Study Stash apps still start the Python engine; these are for trying
   this one:
-  - `studystash run` serves the library, as `granola-share run` does;
+  - `studystash run` serves the library, as `granola-share run` does. `serve` does the same without the library's own
+    Granola sync, and `init`, `login`, `logout`, `sync [--once]` and `tools [--probe]` do what the Python engine's do;
+  - `studystash client run` is the laptop's background service: the watcher and its Study Stash page.
+    `client open [--install]` starts it if needed and shows the page (what the apps run), and `client once` and
+    `client login` do what the Python engine's do;
   - `studystash setup --page` serves the setup page, with every button working: installing Ollama and Tailscale,
     the Windows firewall rule, keeping a PC awake, and starting the library at login;
   - `studystash doctor` checks every piece of a setup and says how to fix what's broken, word for word as the Python
     engine does;
-  - `studystash autostart install|uninstall|status --role server` runs the library in the background. It uses the
-    Python engine's service names and files (`com.granola-share.server` on a Mac, `granola-share-server.cmd` in the
-    Windows Startup folder, `granola-share-server.service` on Linux), so installing either engine's service replaces
-    the other's. The laptop's watcher waits for stage 4;
+  - `studystash autostart install|uninstall|status --role server|client` runs the library or the laptop's watcher in
+    the background. It uses the Python engine's service names and files (`com.granola-share.server` on a Mac,
+    `granola-share-server.cmd` in the Windows Startup folder, `granola-share-server.service` on Linux, and the same
+    for `client`), so installing either engine's service replaces the other's;
   - `studystash update [--check]` installs a new release, and `run` checks for one every six hours when
     `auto_update` is on;
   - `studystash config-check` checks it would leave this computer's config files as they are. It prints line
     numbers, never contents.
+
+The laptop's watcher keeps the Python engine's record of what it sent (`client_state.json`), byte for byte, so a laptop
+can switch engines without sending anything twice. Copying transcripts out of the Granola window stays with the Python
+engine until the Study Stash app takes it over (stage 6): the watcher here reads what was copied, from the same
+`transcripts` folder. The terminal wizards (`setup` without `--page`, `client setup`) aren't here: the apps use the
+pages.
 
 Messages still name the `granola-share` command: that's what people type today, and stage 7 decides what it runs.
 
@@ -85,6 +95,13 @@ dotnet test engine/StudyStash.slnx
 - **The laptop** (`CrossEngineTests`, `tests/laptop_check.py`): the Python engine's own laptop code talks to a C#
   library over HTTP. It checks health, a wrong password, sending a lecture, asking if it's filed, and setup's checks
   that the library is running.
+- **The laptop** (`LaptopTests`, `LaptopWebTests`): the Python engine's watcher runs two checks (ask, send, skip,
+  wait, filed), and the C# one must ask, send and notify the same, and write the same `client_state.json` bytes. Its
+  Study Stash page is drawn in 11 states on a Mac, Windows and Linux, with its status JSON and the "Open your library"
+  page; copied transcripts are read and matched to their lectures as Python does.
+- **Laptop to library, both ways** (`CrossEngineTests`, `tests/laptop_flow.py`): the Python engine's watcher sends to
+  a C# library until it's filed, the C# watcher sends to the real Python library (`granola-share run`), and the C#
+  laptop connects from its own page to a C# library and sends until the notes are filed.
 - **The platform** (`AutostartTests`, `ReadyTests`, `UpdaterTests`, `DoctorTests`): the Python engine writes the
   launchd and systemd files and the firewall rule, and runs `doctor` in 20 scenarios (the library's and the
   laptop's). The C# engine must write and say the same bytes; `golden.py` keeps the scenarios, so a new one needs
@@ -137,5 +154,11 @@ Only where Python lost data, could not read its own files, or skipped part of a 
   and its button stayed off until the page restarted.
 - An update checks that the new engine runs on this computer before replacing the old one. It restarts only the
   services that run this engine, and leaves the Python engine's alone.
+- The laptop's status page asks to allow transcript copying only where copying can run. Python asked even where it
+  couldn't; it doesn't now either.
+- A laptop with no way to show a popup (Linux without zenity) leaves the lecture waiting to be asked about. Python's
+  last resort, a Tk dialog, said no without Tk, which skipped the lecture.
+- The Start Menu entry, before the Windows app is installed, opens this engine minimized: it's a console program,
+  where Python used pythonw.
 - An Ollama error reads as Ollama's own words ("Ollama answered 404: model 'x' not found"). Odd answers from the
   sorting model send the note to Unsorted instead of failing it.

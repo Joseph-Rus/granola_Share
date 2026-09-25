@@ -517,7 +517,9 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
         copy = runtime.copy_status()
         facts = [("Library", cc.pool_name or "not connected", False), ("Granola", "signed in" if runtime.signed_in() else "signed out", not runtime.signed_in()),
                  ("Watching", "every few minutes" if runtime.watching else "stopped", not runtime.watching)]
-        if mac() and cc.copy_transcripts:
+        # Only where transcripts can be copied: asking for permission where nothing can copy leads nowhere.
+        copying = mac() and cc.copy_transcripts and copy["available"]
+        if copying:
             facts.append(("Transcripts", "copied from Granola" if copy["allowed"] else "needs permission", not copy["allowed"]))
         checks = runtime.readiness()
         if checks["granola_here"] and not checks["granola"]:
@@ -557,7 +559,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                  '<strong>python3.12</strong> in the list that opens.<div class="toolbar"><button class="primary" '
                  'data-action="/api/allow" data-out="allow-say">Allow transcript copying</button></div>'
                  '<p class="say" id="allow-say"></p>' + _python_fallback() + '</div></div>'
-                 if mac() and cc.copy_transcripts and not copy["allowed"] else "")
+                 if copying and not copy["allowed"] else "")
         rows = _recent(cc)
         items = "".join(
             f'<div class="row"><div class="grow"><div class="title">{esc(e.get("title", ""))}</div>'

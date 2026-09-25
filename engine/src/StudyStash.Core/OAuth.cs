@@ -186,7 +186,8 @@ public sealed class GranolaOAuth(string mcpUrl, int callbackPort, string prompt,
     /// <summary>A usable access token, refreshed first when it has less than a minute left.</summary>
     public async Task<string> AccessTokenAsync(CancellationToken ct = default)
     {
-        var tok = LoadTokens() ?? throw new OAuthException("not logged in: run `granola-share login`");
+        // An empty tokens.json is no sign-in at all, as Python's `if not tok` has it.
+        if (LoadTokens() is not { Count: > 0 } tok) throw new OAuthException("not logged in: run `granola-share login`");
         if (Number(tok["expires_at"]) - 60 < Py.Time()) tok = await RefreshAsync(tok, ct);
         return Py.AsString(tok["access_token"]) ?? throw new OAuthException("tokens.json has no access token: run `granola-share login`");
     }

@@ -339,6 +339,8 @@ public class OAuthTests
         using var dir = new TempDir();
         var (oauth, _, _) = Setup(dir);
         Assert.Equal("not logged in: run `granola-share login`", (await Assert.ThrowsAsync<OAuthException>(() => oauth.AccessTokenAsync())).Message);
+        File.WriteAllText(oauth.TokensPath, "{}"); // an empty file is no sign-in either, as in Python
+        Assert.Equal("not logged in: run `granola-share login`", (await Assert.ThrowsAsync<OAuthException>(() => oauth.AccessTokenAsync())).Message);
         oauth.SaveTokens(new JsonObject { ["access_token"] = "x", ["expires_in"] = -120 });
         Assert.Equal("access token expired and no refresh token: run `granola-share login`",
             (await Assert.ThrowsAsync<OAuthException>(() => oauth.AccessTokenAsync())).Message);

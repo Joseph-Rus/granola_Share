@@ -171,6 +171,217 @@ public class CrossEngineTests(ITestOutputHelper output)
         Assert.Contains("We start with the base case.", Py.ReadText(row.MdPath!));
     }
 
+    /// <summary>A C# library on a spare port on this computer, with its pipeline filing what arrives.</summary>
+    sealed class CsLibrary : IAsyncDisposable
+    {
+        public Config Cfg { get; }
+        public Store Store { get; }
+        public string Url => $"http://127.0.0.1:{Cfg.WebPort}";
+        readonly Microsoft.AspNetCore.Builder.WebApplication app;
+        readonly CancellationTokenSource stop;
+        readonly Task filing;
+
+        CsLibrary(Config cfg, Store store, Microsoft.AspNetCore.Builder.WebApplication app, CancellationTokenSource stop, Task filing) =>
+            (Cfg, Store, this.app, this.stop, this.filing) = (cfg, store, app, stop, filing);
+
+        public static async Task<CsLibrary> StartAsync(TempDir dir)
+        {
+            var cfg = new Config(dir["library"], dir["notes"])
+            {
+                PoolName = "Cross — engine", PoolPassword = "maple otter", OllamaEnabled = false, WebHost = "127.0.0.1", WebPort = FreePort(),
+                Classes = [new ClassDef("CS 101", ["cs101"]), new ClassDef("Bio 110", ["bio"])],
+            };
+            var store = new Store(cfg.DbPath, cfg.PoolDir);
+            var pipeline = new Pipeline(cfg, store, log: _ => { });
+            var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateSlimBuilder();
+            builder.Logging.ClearProviders();
+            Microsoft.AspNetCore.Hosting.WebHostBuilderKestrelExtensions.ConfigureKestrel(builder.WebHost,
+                k => k.Listen(System.Net.IPAddress.Loopback, cfg.WebPort));
+            var app = StudyStash.Library.LibraryWeb.Build(builder, cfg, store, pipeline);
+            await app.StartAsync();
+            var stop = new CancellationTokenSource();
+            return new CsLibrary(cfg, store, app, stop, pipeline.Start(stop.Token));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await stop.CancelAsync();
+            await app.StopAsync();
+            await app.DisposeAsync();
+            await filing.WaitAsync(TimeSpan.FromSeconds(10));
+            Store.Dispose();
+        }
+    }
+
+    static int FreePort()
+    {
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        int port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
+    }
+
+    static readonly List<Meeting> Lectures =
+    [
+        new("cs-1") { Title = "CS101 lecture 6 — recursion", Date = "2026-09-17T10:00:00", Folder = "CS 101", NotesMarkdown = "# Recursion\n- base case",
+            Raw = new JsonObject { ["id"] = "cs-1" } },
+        new("cs-2") { Title = "Bio lab: diffusion", Date = "2026-09-18T14:00:00", NotesMarkdown = "Membranes and diffusion.", Raw = new JsonObject { ["id"] = "cs-2" } },
+    ];
+
+    /// <summary>Sends the lectures as the real watcher does, then checks on them until the library has filed both. What
+    /// it told the person.</summary>
+    static async Task<List<string>> SendAndWaitForFiling(ClientConfig cc)
+    {
+        var told = new List<string>();
+        var host = new LaptopHost { Notify = (_, text) => told.Add(text) }; // the library's HTTP API for real; no popups
+        var client = new ShareClient(cc, new FakeGranola(Lectures, Lectures, id => id == "cs-1" ? "We start with the base case." : ""), host, log: _ => { });
+        var rep = await client.PollOnceAsync();
+        Assert.Empty(rep.Errors);
+        Assert.Equal(2, rep.Shared.Count);
+        for (int i = 0; i < 60 && told.Count < 2; i++)
+        {
+            await Task.Delay(500);
+            await client.PollOnceAsync();
+        }
+        return told;
+    }
+
+    [Fact]
+    public async Task The_python_laptops_watcher_sends_to_a_csharp_library_until_its_filed()
+    {
+        string? root = RepoRoot();
+        string? python = root is null ? null : Python(root);
+        if (python is null)
+        {
+            Assert.True(Environment.GetEnvironmentVariable("STUDYSTASH_REQUIRE_PYTHON") != "1", "no Python engine to check against");
+            return;
+        }
+        using var dir = new TempDir();
+        await using var library = await CsLibrary.StartAsync(dir);
+        var psi = new ProcessStartInfo(python) { RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (string a in new[] { Path.Combine(root!, "engine", "tests", "laptop_flow.py"), library.Url, library.Cfg.PoolPassword, dir["laptop"] })
+            psi.ArgumentList.Add(a);
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
+        using var p = Process.Start(psi)!;
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        string stderr = await p.StandardError.ReadToEndAsync();
+        await p.WaitForExitAsync();
+        output.WriteLine(await stdout + stderr);
+        Assert.True(p.ExitCode == 0, $"the laptop failed:\n{stderr}");
+        var got = JsonNode.Parse(await stdout)!;
+        Assert.Empty(got["errors"]!.AsArray());
+        Assert.Equal(["CS101 lecture 5 — loops", "Bio lab: osmosis"], got["shared"]!.AsArray().Select(x => x![0].S()));
+        Assert.Equal(2, got["filed"]!.AsArray().Count);
+        Assert.Contains("“CS101 lecture 5 — loops” is in Cross — engine under CS 101.", got["told"]!.AsArray().Select(x => x.S()));
+        var row = library.Store.Get("py-1")!;
+        Assert.Equal(("done", "CS 101", "Sam"), (row.Status, row.ClassName, row.Owner));
+        Assert.Contains("Today: for loops, then while loops.", Py.ReadText(row.MdPath!));
+        Assert.Equal("done", library.Store.Get("py-2")!.Status);
+    }
+
+    [Fact]
+    public async Task The_csharp_laptops_watcher_sends_to_a_python_library_until_its_filed()
+    {
+        string? root = RepoRoot();
+        string? python = root is null ? null : Python(root);
+        if (python is null)
+        {
+            Assert.True(Environment.GetEnvironmentVariable("STUDYSTASH_REQUIRE_PYTHON") != "1", "no Python engine to check against");
+            return;
+        }
+        using var dir = new TempDir();
+        var cfg = new Config(dir["library"], dir["notes"])
+        {
+            PoolName = "Cross — engine", PoolPassword = "maple otter", AdminPassword = "admin", OllamaEnabled = false, WebHost = "127.0.0.1",
+            WebPort = FreePort(), AutoUpdate = false, Classes = [new ClassDef("CS 101", ["cs101"]), new ClassDef("Bio 110", ["bio"])],
+        };
+        Configs.Save(cfg); // this engine's config.toml, as the Python library reads it
+        var psi = new ProcessStartInfo(python) { RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = root };
+        foreach (string a in new[] { "-m", "granola_share.cli", "--home", cfg.Home, "run", "--no-ollama" }) psi.ArgumentList.Add(a);
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
+        using var p = Process.Start(psi)!;
+        var log = new System.Text.StringBuilder();
+        p.OutputDataReceived += (_, e) => { lock (log) log.AppendLine(e.Data); };
+        p.ErrorDataReceived += (_, e) => { lock (log) log.AppendLine(e.Data); };
+        p.BeginOutputReadLine();
+        p.BeginErrorReadLine();
+        string url = $"http://127.0.0.1:{cfg.WebPort}";
+        try
+        {
+            JsonObject? health = null;
+            for (int i = 0; i < 120 && health is null && !p.HasExited; i++)
+            {
+                try
+                {
+                    health = await LibraryApi.CheckServerAsync(url, cfg.PoolPassword);
+                }
+                catch (InvalidOperationException)
+                {
+                    await Task.Delay(250);
+                }
+            }
+            Assert.True(health is not null, "the Python library didn't start:\n" + log);
+            Assert.Equal(("Cross — engine", Engine.Version), (health!["pool_name"].S(), health["version"].S()));
+            var cc = new ClientConfig(dir["laptop"]) { ServerUrl = url, PoolKey = cfg.PoolPassword, PoolName = "Cross — engine", DisplayName = "Ada" };
+            var told = await SendAndWaitForFiling(cc);
+            Assert.Contains("“CS101 lecture 6 — recursion” is in Cross — engine under CS 101.", told);
+            Assert.Equal(2, told.Count);
+            var status = await LibraryHttp.GetAsync($"{url}/api/notes/cs-1/status", cfg.PoolPassword);
+            Assert.Equal(("done", "CS 101"), (status!["status"].S(), status["class_name"].S()));
+            string note = Directory.EnumerateFiles(cfg.PoolDir, "*.md", SearchOption.AllDirectories).Single(f => f.Contains("recursion"));
+            Assert.Contains("We start with the base case.", Py.ReadText(note));
+        }
+        finally
+        {
+            try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            await p.WaitForExitAsync();
+        }
+    }
+
+    [Fact]
+    public async Task The_csharp_laptop_connects_on_its_page_and_sends_to_a_csharp_library()
+    {
+        using var dir = new TempDir();
+        await using var library = await CsLibrary.StartAsync(dir);
+        var told = new List<string>();
+        string home = dir["laptop"];
+        using var stop = new CancellationTokenSource();
+        var granola = new FakeGranola(Lectures, Lectures, id => id == "cs-1" ? "We start with the base case." : "");
+        var host = new LaptopHost { System = "Linux", Granola = _ => granola, Notify = (_, text) => told.Add(text), UserName = () => "ada" };
+        var rt = new LaptopRuntime(home, host, stop, _ => { });
+        await using var site = await TestSite.StartAsync(b => StudyStash.Library.LaptopWeb.Build(b, rt, 8765, ["localhost"]));
+        string token = StudyStash.Library.AppPage.Token(home);
+        await site.Get($"/?t={token}");
+        async Task<JsonNode> Post(string path, object body)
+        {
+            var r = new HttpRequestMessage(HttpMethod.Post, path) { Content = System.Net.Http.Json.JsonContent.Create(body) };
+            r.Headers.TryAddWithoutValidation("X-Granola-Share", "1");
+            var answer = await site.Client.SendAsync(r);
+            string text = await answer.Content.ReadAsStringAsync();
+            Assert.True(answer.IsSuccessStatusCode, text);
+            return JsonNode.Parse(text)!;
+        }
+        // The page checks the address and password with the real library, as it does on a laptop.
+        Assert.Equal("Connected to Cross — engine. Anything waiting is being sent now.",
+            (await Post("/api/pool", new { server = library.Url.Replace("http://", ""), key = library.Cfg.PoolPassword }))["message"].S());
+        File.WriteAllText(Configs.LoadClient(home).TokensPath, "{}"); // signed in to Granola (a stand-in one)
+        Assert.Equal("All set. Checking Granola now…", (await Post("/api/finish", new { }))["message"].S());
+        for (int i = 0; i < 80 && told.Count < 2; i++)
+        {
+            await Task.Delay(500);
+            if (i % 4 == 3) await Post("/api/check", new { }); // "Check for new lectures now"
+        }
+        Assert.Contains("“CS101 lecture 6 — recursion” is in Cross — engine under CS 101.", told);
+        Assert.Equal(2, told.Count);
+        string page = await site.Text("/");
+        Assert.Contains("Sending your lectures to Cross — engine.", page);
+        Assert.Contains("Filed in CS 101 with its transcript", page);
+        var row = library.Store.Get("cs-1")!;
+        Assert.Equal(("done", "CS 101", "ada"), (row.Status, row.ClassName, row.Owner));
+        await stop.CancelAsync();
+    }
+
     static List<string> Columns(string db)
     {
         using var conn = new SqliteConnection($"Data Source={db};Pooling=False;Mode=ReadOnly");

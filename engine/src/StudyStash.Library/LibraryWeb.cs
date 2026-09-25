@@ -775,6 +775,16 @@ public static class Icons
     static readonly (string Path, string Resource, string Type)[] Files =
         [("/favicon.ico", "study-stash.ico", "image/x-icon"), ("/icon.png", "icon.png", "image/png"), ("/apple-touch-icon.png", "apple-touch-icon.png", "image/png")];
 
+    /// <summary>One icon file's bytes (study-stash.ico, icon.png, apple-touch-icon.png), or null.</summary>
+    public static byte[]? Bytes(string resource)
+    {
+        using var stream = typeof(Icons).Assembly.GetManifestResourceStream(resource);
+        if (stream is null) return null;
+        var data = new MemoryStream();
+        stream.CopyTo(data);
+        return data.ToArray();
+    }
+
     /// <summary>The icon files; they need no sign-in.</summary>
     public static void Map(WebApplication app)
     {
