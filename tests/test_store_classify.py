@@ -85,3 +85,13 @@ def test_render_markdown_includes_transcript_and_private(tmp_path):
     m = Meeting(id="1", title="T", date="2026-01-01", notes_markdown="n", private_notes="p", transcript="t")
     out = render_markdown(m, Classification("CS 101", 1.0, "folder"))
     assert "## Private notes" in out and "## Transcript" in out
+
+
+def test_renaming_a_class_only_by_capitals_keeps_the_file(tmp_path):
+    """On a Mac or Windows "bio 110" and "Bio 110" are one folder: the old path is the file just written."""
+    store = Store(tmp_path / "state.db", tmp_path / "pool")
+    store.save(Meeting(id="1", title="Cells", date="2026-09-02", notes_markdown="membranes"),
+               Classification("bio 110", 1.0, "rules"))
+    moved = store.set_class("1", "Bio 110")
+    assert moved.exists() and "membranes" in moved.read_text(encoding="utf-8")
+    assert store.get("1")["class_name"] == "Bio 110"

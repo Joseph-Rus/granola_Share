@@ -27,6 +27,16 @@ def test_client_config_roundtrip(tmp_path):
     assert back.tokens_path == tmp_path / "tokens.json"
 
 
+def test_emoji_and_accents_survive_a_save(tmp_path):
+    cfg = Config(home=tmp_path, pool_dir=tmp_path / "pool", pool_name="Café \"notes\" \\ 2026",
+                 classes=[ClassDef("Bio \U0001F9EC", ["genetics — intro"])])
+    save_config(cfg)
+    assert 'name = "Bio \\U0001f9ec"' in (tmp_path / "config.toml").read_text(encoding="utf-8")
+    back = load_config(tmp_path)  # TOML refuses the surrogate pairs json.dumps writes for an emoji
+    assert back.class_names() == ["Bio \U0001F9EC"] and back.classes[0].aliases == ["genetics — intro"]
+    assert back.pool_name == "Café \"notes\" \\ 2026"
+
+
 def test_missing_files_give_defaults(tmp_path):
     assert load_config(tmp_path).web_port == 8787
     assert load_client_config(tmp_path).mode == "auto"
