@@ -27,6 +27,8 @@ LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
 MAC_APP_ASSET = "Study-Stash-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
 MAC_LIBRARY_APP_ASSET = "Study-Stash-Library-mac.zip"  # the library computer's Mac app, likewise
 WINDOWS_APP_ASSET = "Study-Stash-windows.zip"  # the Windows app (windows/build.ps1): both of its installers
+# granola-share itself for Windows, with its own Python (windows/bundle.ps1): Windows doesn't use uv
+WINDOWS_HELPER_ASSET = "Study-Stash-helper-windows.zip"
 FIRST_CHECK_AFTER = 10 * 60
 CHECK_EVERY = 6 * 3600
 LOCK_STALE_AFTER = 20 * 60
@@ -41,6 +43,7 @@ class Release:
     mac_app: str = ""  # download URL of the native Mac app, when the release has one
     windows_app: str = ""  # and of the Windows app
     mac_library_app: str = ""  # and of Study Stash Library for the Mac
+    windows_helper: str = ""  # and of granola-share for Windows, with its own Python
 
 
 def parse_version(v: str) -> tuple[int, ...]:
@@ -63,7 +66,8 @@ def latest_release(get=httpx.get) -> Release | None:
     tag = str(data["tag_name"])
     assets = {str(a.get("name")): str(a.get("browser_download_url") or "") for a in data.get("assets") or []}
     return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""),
-                   assets.get(MAC_APP_ASSET, ""), assets.get(WINDOWS_APP_ASSET, ""), assets.get(MAC_LIBRARY_APP_ASSET, ""))
+                   assets.get(MAC_APP_ASSET, ""), assets.get(WINDOWS_APP_ASSET, ""), assets.get(MAC_LIBRARY_APP_ASSET, ""),
+                   assets.get(WINDOWS_HELPER_ASSET, ""))
 
 
 _cache: dict = {"at": 0.0, "release": None}
@@ -95,7 +99,10 @@ def installed_version() -> str:
 
 
 def install_kind() -> str:
-    """'tool' (installed by install.sh / install.ps1), 'checkout' (pip -e from a git clone), or 'pip'."""
+    """'bundle' (install.ps1: the ready-made Windows folder), 'tool' (install.sh with uv), 'checkout'
+    (pip -e from a git clone), or 'pip'."""
+    if (Path(sys.prefix) / "study-stash-bundle.txt").exists():
+        return "bundle"
     if (Path(sys.prefix) / "uv-receipt.toml").exists():
         return "tool"
     if "site-packages" not in Path(__file__).resolve().parts:
@@ -117,32 +124,21 @@ def install_command(uv: str, url: str) -> list[str]:
             f"granola-share @ {url}"]
 
 
-def windows_uv_env(system: str | None = None, executable: str | None = None) -> dict[str, str]:
-    """Windows: uv keeps its Python and tools in AppData\\Local, which OneDrive never syncs. In
-    AppData\\Roaming, uv's default, OneDrive's Files On-Demand blocks the link uv makes to Python
-    ("untrusted mount point", os error 448: astral-sh/uv#19616). install.ps1 does the same. A copy
-    installed in Roaming before this stays there: its services point at it."""
-    if (system or platform.system()) != "Windows":
-        return {}
-    roaming = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "uv"
-    if str(executable or sys.executable).lower().startswith(str(roaming).lower()):
-        return {}
-    local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "uv"
-    wanted = {"UV_PYTHON_INSTALL_DIR": str(local / "python"), "UV_TOOL_DIR": str(local / "tools")}
-    return {k: v for k, v in wanted.items() if not os.environ.get(k)}  # yours win
-
-
 def install_env() -> dict:
     # A uv-managed Python, so a Homebrew/system Python upgrade can never break the installed tool.
-    return {**os.environ, "UV_PYTHON_PREFERENCE": "only-managed", **windows_uv_env()}
+    return {**os.environ, "UV_PYTHON_PREFERENCE": "only-managed"}
 
 
 def why_not_updatable() -> str | None:
     kind = install_kind()
+    if kind == "bundle":
+        return None
     if kind == "checkout":
         return f"This copy runs from a source checkout ({Path(__file__).resolve().parents[1]}). Update it with `git pull`."
     if kind == "pip":
         return "This copy was installed with pip, not the installer. Reinstall with the one-line installer to get updates."
+    if platform.system() == "Windows":
+        return None  # a uv install from 0.4.1 or before: its next update moves it to the ready-made folder
     if not find_uv():
         return "uv is missing, so updates cannot be installed. Rerun the one-line installer."
     return None
@@ -177,46 +173,109 @@ WINDOWS_OURS = ("($_.Name -like 'python*' -or $_.Name -eq 'granola-share.exe') -
                 "($_.CommandLine -like '*granola_share*' -or $_.CommandLine -like '*granola-share*')")
 
 
-def _windows_script(home: Path, uv: str, url: str, roles: list[str]) -> Path:
-    """Windows locks running files, so a detached helper waits for us to exit, installs, and restarts."""
+def bundle_dir() -> Path:
+    """Where install.ps1 puts granola-share on Windows: one folder, with its own Python."""
+    return Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "Programs" / "granola-share"
+
+
+def write_windows_shims(python: Path, bin_dir: Path | None = None) -> None:
+    """The granola-share command: a .cmd for PowerShell and cmd, a script for Git Bash (what install.ps1
+    writes too). uv's granola-share.exe, from 0.4.1 and before, would win over the .cmd, so it goes."""
+    bin_dir = bin_dir or Path.home() / ".local" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    (bin_dir / "granola-share.cmd").write_text(f'@"{python}" -m granola_share.cli %*\r\n', encoding="ascii")
+    (bin_dir / "granola-share").write_bytes(
+        f'#!/bin/sh\nexec "{str(python).replace(chr(92), "/")}" -m granola_share.cli "$@"\n'.encode("ascii"))
+    try:
+        (bin_dir / "granola-share.exe").unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _stage_bundle(url: str, staged: Path, get) -> None:
+    """Download the Windows folder and unpack it beside the one in use (which can't be replaced while it runs)."""
+    import tempfile
+    import zipfile
+
+    shutil.rmtree(staged, ignore_errors=True)
+    r = get(url, follow_redirects=True, timeout=600)
+    r.raise_for_status()
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "helper.zip"
+        archive.write_bytes(r.content)
+        with zipfile.ZipFile(archive) as z:
+            z.extractall(staged)
+    if not (staged / "python" / "python.exe").is_file():
+        shutil.rmtree(staged, ignore_errors=True)
+        raise RuntimeError("the download has no python\\python.exe")
+
+
+def _windows_script(home: Path, target: Path, roles: list[str]) -> Path:
+    """Windows won't replace files in use, so a detached helper waits for us to exit, stops what's left,
+    swaps the new folder in, and starts the services again from it."""
     log = home / "logs" / "update.log"
+    d, new, old = str(target), f"{target}.new", f"{target}.old"
+    py = str(target / "python" / "python.exe")
     stop = f"Get-CimInstance Win32_Process | Where-Object {{ {WINDOWS_OURS} }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"
     lines = ["@echo off", "timeout /t 5 /nobreak >nul",
              f'powershell -NoProfile -Command "{stop}" >> "{log}" 2>&1',
              "timeout /t 2 /nobreak >nul",
-             "set UV_PYTHON_PREFERENCE=only-managed",
-             *[f'set "{k}={v}"' for k, v in windows_uv_env("Windows").items()],
-             subprocess.list2cmdline(install_command(uv, url)) + f' >> "{log}" 2>&1']
-    lines += [f'call "{autostart.startup_cmd_path(role)}"' for role in roles]
+             f'if exist "{old}" rmdir /s /q "{old}"',
+             f'if exist "{d}" move "{d}" "{old}" >> "{log}" 2>&1',
+             f'if exist "{d}" goto kept',
+             f'move "{new}" "{d}" >> "{log}" 2>&1',
+             f'if not exist "{d}" move "{old}" "{d}" >> "{log}" 2>&1',
+             "goto ready",
+             ":kept",
+             f'echo Something still had {d} open, so this version stays. >> "{log}"',
+             f'rmdir /s /q "{new}"',
+             ":ready"]
+    for role in roles:  # the laptop's `client open --install` also puts the Start Menu entry on the new copy
+        args = ["client", "open", "--install", "--no-browser"] if role == "client" else ["autostart", "install", "--role", role]
+        lines.append(subprocess.list2cmdline([py, "-m", "granola_share.cli", "--home", str(home), *args])
+                     + f' >> "{log}" 2>&1')
+    lines.append(f'if exist "{old}" rmdir /s /q "{old}"')
     script = home / "update.cmd"
     script.write_text("\r\n".join(lines) + "\r\n")
     return script
 
 
 def _spawn_detached(args: list[str]) -> None:
-    flags = 0x00000008 | 0x00000200 | 0x08000000  # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+    # A hidden console its commands share (no windows flash), in its own group so it outlives us.
+    flags = 0x00000200 | 0x08000000  # NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     subprocess.Popen(args, creationflags=flags, close_fds=True)
 
 
-def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restart_services: bool = True) -> bool:
+def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restart_services: bool = True,
+          get=None) -> bool:
     """Install `release`. Background services are restarted onto it. On Windows this hands off to a
     helper and returns before the install happens."""
     problem = why_not_updatable()
     if problem:
         log(problem)
         return False
-    uv = find_uv()
     roles = autostart.installed_roles()
     (home / "logs").mkdir(parents=True, exist_ok=True)
     if platform.system() == "Windows":
         from . import launcher
 
+        if not release.windows_helper:
+            log(f"{release.tag} has no Windows download yet; the next check tries again.")
+            return False
+        target = bundle_dir()
+        try:
+            _stage_bundle(release.windows_helper, target.with_name(target.name + ".new"), get or httpx.get)
+        except Exception as e:
+            log(f"Download failed: {e}")
+            return False
+        write_windows_shims(target / "python" / "python.exe")
         for folder in launcher.windows_apps_installed() if release.windows_app else []:  # the apps update too
             launcher.install_windows_app(release.windows_app, log=log, dest=folder)
-        script = _windows_script(home, uv, release.url, roles if restart_services else [])
+        script = _windows_script(home, target, roles if restart_services else [])
         _spawn_detached(["cmd", "/c", str(script)])
         log(f"Installing {release.tag} in the background (log: {home / 'logs' / 'update.log'}).")
         return True
+    uv = find_uv()
     log(f"Installing {release.tag}...")
     p = run(install_command(uv, release.url), env=install_env(), capture_output=True, text=True)
     if p.returncode != 0:

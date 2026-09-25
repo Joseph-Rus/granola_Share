@@ -15,7 +15,7 @@ One person's setup, on two computers:
 
 ## Facts to rely on (don't guess beyond these)
 
-- Command: `granola-share` (installed with uv into `~/.local/bin`; on Windows `%USERPROFILE%\.local\bin\granola-share.exe`). If a fresh terminal can't find it, call it by that full path.
+- Command: `granola-share`. On a Mac or Linux it's installed with uv into `~/.local/bin`. On Windows (no uv) it's `%USERPROFILE%\.local\bin\granola-share.cmd`, running the ready-made folder `%LOCALAPPDATA%\Programs\granola-share` (its own Python, at `python\python.exe -m granola_share.cli`). If a fresh terminal can't find it, call it by that full path.
 - Data folder: `~/.granola-share` (Windows: `%USERPROFILE%\.granola-share`)
   - `config.toml` (library) or `client.toml` (laptop): plain settings, safe to read. The library's password is `pool_password` in `config.toml`.
   - `tokens.json`, `oauth_client.json`, `web_secret`, `ui_token`: secrets. Never print, copy, or send their contents.
@@ -105,7 +105,7 @@ On the library computer, also check that the page answers: `curl -s -o /dev/null
 | No study notes, only Granola's summary | No transcript reached the library | Expected on Granola's free plan. A paid plan gives transcripts. On a Mac with transcript copying turned on, open the lecture's transcript in Granola with Granola in front: it's copied and re-sent within a few seconds. |
 | Granola app ✗ (laptop) | Granola isn't installed | They install it from https://www.granola.ai/download. The library's computer never needs it. |
 | Windows: "Windows protected your PC" | The Setup.exe installers aren't signed | They click More info, then Run anyway. The one-line install avoids it. |
-| Windows install: "untrusted mount point (os error 448)" | OneDrive Files On-Demand blocked uv's link to Python in AppData\Roaming | Rerun the install line: since 0.4.1 it keeps uv's Python and tools in AppData\Local. |
+| Windows install: "untrusted mount point (os error 448)" | uv, blocked by OneDrive's Files On-Demand (0.4.1 and before) | Rerun the install line: since 0.4.2 Windows doesn't use uv. |
 | Mac mini Sleep ! | The library goes offline while asleep | System Settings → Energy → "Prevent automatic sleeping when the display is off". `sudo pmset -a sleep 0` also works, but they must run it themselves. |
 | `timed out waiting for the browser callback` | Sign-in wasn't finished, or port 3334 is blocked | In the Study Stash page, **Sign in to Granola again**, and have them finish in the browser. |
 | Old folders `~/.granola-share/venv` and `app` | Leftovers from 0.1 | Rerun the installer, then setup. Setup removes them once nothing uses them. |

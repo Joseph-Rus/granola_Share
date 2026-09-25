@@ -42,8 +42,10 @@ On a Windows PC, in PowerShell:
 $env:GRANOLA_SHARE_ROLE='server'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
 ```
 
-The installer puts a `granola-share` command on that computer. It uses uv, so it needs no admin
-rights, git, or Python install, and it keeps its own Python, so a system upgrade can't break it.
+The installer puts a `granola-share` command on that computer, with no admin rights needed. On a
+Mac or Linux it uses uv, which keeps its own Python, so a system upgrade can't break it. On Windows
+it downloads one ready-made folder, `AppData\Local\Programs\granola-share`, with its own Python
+(the python.org build) and everything it needs, so there's nothing else to install.
 Setup then walks through six steps:
 
 1. **Get this computer ready:** shows the memory and free disk space, then checks
@@ -269,7 +271,7 @@ Start with `granola-share doctor`. It checks every piece and prints a fix for ea
 | `granola-share: command not found` | Open a new terminal window, or use `~/.local/bin/granola-share`. |
 | Laptop: "could not reach …" | Tailscale on and signed in on both computers, and the library's computer awake. Try the `100.x.y.z` address instead of the name. |
 | "Granola app ✗ not installed" | Install Granola from [granola.ai/download](https://www.granola.ai/download). Only the laptop needs it, not the library's computer. |
-| Windows install: "untrusted mount point (os error 448)" | OneDrive's Files On-Demand blocked uv. Fixed in 0.4.1: the installer keeps uv's Python and tools in `AppData\Local`. Run the install line again. |
+| Windows install: "untrusted mount point (os error 448)" | That was uv, which OneDrive's Files On-Demand can block. Since 0.4.2 Windows doesn't use uv: run the install line again. |
 | Windows: "Windows protected your PC" | The app isn't signed. Click **More info**, then **Run anyway**. The install line avoids the question. |
 | Windows: Study Stash asks for WebView2 | Older Windows 10 may not have it. Say yes, and install it from Microsoft. |
 | Laptop can't reach a library on Windows | Windows Firewall. Rerun `granola-share setup` on the PC and let it add the rule (Windows asks for permission). |
@@ -360,7 +362,7 @@ macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .ap
   transcript_grab.py  macOS, optional: copy transcripts from the Granola window
   dialogs.py    native popups and notifications (macOS/Windows/Linux)
   autostart.py  launchd / Startup folder / systemd --user
-  update.py     release check, uv upgrade, auto-update loop
+  update.py     release check, upgrade (uv on Mac/Linux, the ready-made folder on Windows), auto-update loop
   store.py      SQLite index, processing queue, Markdown writer
   pipeline.py   background worker: summarize → sort → save
   summarize.py  study notes from a transcript (chunked for long lectures)
@@ -375,6 +377,7 @@ tests/          offline tests: .venv/bin/python -m pytest
 
 Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`),
 and the Windows app with `windows\build.ps1` (the .NET SDK, plus Inno Setup for Setup.exe). The
+Windows download of granola-share itself comes from `windows\bundle.ps1` (on Windows, with Python 3.13). The
 Windows app also compiles on a Mac with the .NET SDK, which is a quick check before CI.
 Redo the README's screenshots with `uv run --with pillow python macos/tour.py` after a build. It
 serves made-up lectures, lets the app capture its own window, and blurs addresses and passwords.

@@ -32,6 +32,8 @@ jobs:
         include:
           - os: ubuntu-latest
             python: "3.11"
+          - os: windows-latest  # the Python the Windows download (windows/bundle.ps1) ships
+            python: "3.13"
     timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     steps:
@@ -42,7 +44,7 @@ jobs:
 
   install:
     name: installer (${{ matrix.os }})
-    needs: test
+    needs: [test, windows-helper]
     strategy:
       fail-fast: false
       matrix:
@@ -61,13 +63,21 @@ jobs:
           sh install.sh client
           sh install.sh server   # a second run must update in place
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: windows-helper
+          path: ${{ runner.temp }}/helper
       - name: Install (Windows)
         if: runner.os == 'Windows'
         shell: powershell
+        env:
+          GRANOLA_SHARE_BUNDLE: ${{ runner.temp }}\helper\Study-Stash-helper-windows.zip  # this commit's, not a release's
         run: |
           .\install.ps1
-          .\install.ps1
+          .\install.ps1   # a second run swaps in a fresh copy of the folder
           Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.local\bin"
+          & "$env:USERPROFILE\.local\bin\granola-share.cmd" --version
       - name: Set up a pool without a keyboard and boot it
         shell: bash
         run: |
@@ -116,6 +126,33 @@ jobs:
         if: failure()
         shell: bash
         run: cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/client.log" "$RUNNER_TEMP/gs2/logs/server.log" || true
+
+  windows-helper:
+    name: Windows download (granola-share with its own Python)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"  # builds the packages for the embeddable Python 3.13 it ships
+      - name: Build Study-Stash-helper-windows.zip
+        shell: pwsh
+        run: ./windows/bundle.ps1 -Out dist
+      - name: It runs by itself, with every package it needs
+        shell: pwsh
+        run: |
+          $t = Join-Path $env:RUNNER_TEMP "unpacked"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path dist\Study-Stash-helper-windows.zip), $t)
+          $py = Join-Path $t "python\python.exe"
+          & $py -m granola_share.cli --version
+          & $py -c "import granola_share.cli, granola_share.web, granola_share.granola, granola_share.client_app, mcp.client.streamable_http, uvicorn, win32api; print('imports ok')"
+          if ($LASTEXITCODE -ne 0) { throw "it doesn't run on its own" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-helper
+          path: dist/Study-Stash-helper-windows.zip
 
   mac-app:
     name: Mac apps (DMGs)
@@ -192,13 +229,13 @@ jobs:
         with:
           name: windows-app
           path: |
-            dist/Study-Stash-windows.zip
+            dist/Study-Stash-windows.zip dist/Study-Stash-helper-windows.zip
             dist/Study-Stash-Laptop-Setup.exe
             dist/Study-Stash-Library-Setup.exe
 
   release:
     name: publish release
-    needs: [test, install, mac-app, windows-app]
+    needs: [test, install, mac-app, windows-app, windows-helper]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -215,6 +252,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: windows-app
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-helper
           path: dist
       - name: Publish v<version> if it is new
         env:

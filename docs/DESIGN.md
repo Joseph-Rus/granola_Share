@@ -92,9 +92,12 @@ keep working.
   Library" (Info.plist `StudyStashRole` on a Mac, `study-stash.ini` on Windows). It shows only the
   library, and before there is one it runs the library's setup in Terminal or PowerShell, since that
   setup asks questions, then waits for the library to answer.
-- **Windows keeps uv in AppData\\Local.** OneDrive's Files On-Demand blocks the link uv makes to
-  Python in AppData\\Roaming (os error 448), so the installer and updater set `UV_PYTHON_INSTALL_DIR`
-  and `UV_TOOL_DIR`; an install already in Roaming stays there.
+- **Windows doesn't use uv.** uv's Python install fails under OneDrive's Files On-Demand (the link it
+  makes gets "untrusted mount point", os error 448). So CI builds one ready-made folder instead
+  (`windows/bundle.ps1`): python.org's embeddable Python 3.13, signed by the PSF, with every package
+  installed beside it. install.ps1 unpacks it into `%LOCALAPPDATA%\Programs\granola-share`, and
+  writes a `granola-share.cmd`. An update unpacks the next one beside it, and a helper swaps the
+  folders once nothing runs from the old one. A uv install from before moves over on its next update.
 - **Without the app** (Linux, or before it's downloaded) the page opens in an Edge or Chrome app
   window, and "Open your library" signs in by posting the saved password to the library's login
   form from a loopback-only page.

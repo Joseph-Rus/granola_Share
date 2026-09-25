@@ -38,8 +38,16 @@ namespace StudyStash
         public static readonly string DataDir = Env("GRANOLA_SHARE_HOME") != null
             ? Environment.ExpandEnvironmentVariables(Env("GRANOLA_SHARE_HOME"))
             : Path.Combine(UserHome, ".granola-share");
-        public static readonly string Engine = Env("GRANOLA_SHARE_ENGINE")
-            ?? Path.Combine(UserHome, ".local", "bin", "granola-share.exe");
+        // granola-share: install.ps1's folder with its own Python, or (0.4.1 and before) uv's granola-share.exe.
+        static readonly string Bundled = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "granola-share", "python", "python.exe");
+        public static string Engine => Env("GRANOLA_SHARE_ENGINE")
+            ?? (File.Exists(Bundled) ? Bundled : Path.Combine(UserHome, ".local", "bin", "granola-share.exe"));
+        public static bool HasEngine => File.Exists(Engine);
+
+        /// <summary>The command line for granola-share with these arguments.</summary>
+        public static string EngineArgs(params string[] args) =>
+            (Engine == Bundled ? "-m granola_share.cli " : "") + string.Join(" ", args.Select(Quote));
         public static readonly string Own = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Study Stash");
         public const string InstallScript = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1";
@@ -554,7 +562,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         async Task OpenLaptop()
         {
             if (await PageAnswers()) laptop.CoreWebView2.Navigate(Where.PageUrl());
-            else if (File.Exists(Where.Engine)) await StartHelper(false);
+            else if (Where.HasEngine) await StartHelper(false);
             else laptop.CoreWebView2.NavigateToString(Pages.Welcome());
         }
 
@@ -563,7 +571,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             laptop.CoreWebView2.NavigateToString(Pages.Page("Starting Study Stash", "This takes a few seconds.", spinner: true));
             var args = new List<string> { "--home", Where.DataDir, "client", "open", "--no-browser" };
             if (install) args.Add("--install");
-            var (code, output) = await Run(Where.Engine, string.Join(" ", args.Select(Where.Quote)), null);
+            var (code, output) = await Run(Where.Engine, Where.EngineArgs(args.ToArray()), null);
             if (code == 0)
             {
                 place = Place.Read();
@@ -582,7 +590,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             var command = $"$env:GRANOLA_SHARE_NO_SETUP='1'; irm {Where.InstallScript} | iex";
             var (code, output) = await Run("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"",
                 line => BeginInvoke((Action)(() => _ = laptop.CoreWebView2?.ExecuteScriptAsync($"addLog({Where.Js(line)})"))));
-            if (code == 0 && File.Exists(Where.Engine)) await StartHelper(true);
+            if (code == 0 && Where.HasEngine) await StartHelper(true);
             else Problem(laptop, "The install didn't finish", "Check that this PC is online, then try again.", output, "install");
         }
 
@@ -681,8 +689,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         async Task StartLibrary()
         {
             library.CoreWebView2.NavigateToString(Pages.Page("Starting your library", "This takes a few seconds.", spinner: true));
-            await Run(Where.Engine, string.Join(" ", new[] { "--home", Where.DataDir, "autostart", "install", "--role", "server" }
-                .Select(Where.Quote)), null);
+            await Run(Where.Engine, Where.EngineArgs("--home", Where.DataDir, "autostart", "install", "--role", "server"), null);
             await WaitForLibrary();
             OpenLibrary();
         }
@@ -781,7 +788,7 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         {
             var buttons = new List<(string, string, bool)> { ("Try Again", retry, true) };
             if (v == laptop) buttons.Add(("Show Log", "log", false));
-            if (v == library && place.Library?.Host == "127.0.0.1" && File.Exists(Where.Engine)) buttons.Add(("Start It", "start-library", false));
+            if (v == library && place.Library?.Host == "127.0.0.1" && Where.HasEngine) buttons.Add(("Start It", "start-library", false));
             var tail = detail.Length > 1500 ? detail.Substring(detail.Length - 1500) : detail;
             v.CoreWebView2.NavigateToString(Pages.Page(title, text, detail: tail, buttons: buttons.ToArray()));
         }

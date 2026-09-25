@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -94,19 +95,6 @@ def test_apply_installs_then_restarts_services(tmp_path, monkeypatch):
     assert "network down" in said[-1]
 
 
-def test_windows_update_hands_off_to_a_helper(tmp_path, monkeypatch):
-    monkeypatch.setattr(update, "why_not_updatable", lambda: None)
-    monkeypatch.setattr(update, "find_uv", lambda: r"C:\u\uv.exe")
-    monkeypatch.setattr(update.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(autostart, "installed_roles", lambda system=None: ["client"])
-    spawned = []
-    monkeypatch.setattr(update, "_spawn_detached", lambda args: spawned.append(args))
-    assert update.apply(Release("v9.0.0", (9, 0, 0), "https://x/v9.tar.gz", "p"), tmp_path, log=lambda s: None)
-    script = (tmp_path / "update.cmd").read_text()
-    assert "Stop-Process" in script and "tool install" in script and "granola-share-client.cmd" in script
-    assert spawned and spawned[0][:2] == ["cmd", "/c"]
-
-
 def test_cleanup_legacy_removes_old_install_only_when_unused(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / "venv" / "bin").mkdir(parents=True)
@@ -175,22 +163,49 @@ def test_setup_recognizes_a_0_1_library_already_on_the_port():
         assert port_status(port, host="127.0.0.1", get=other) == "busy"
 
 
-def test_windows_keeps_uv_out_of_onedrive(monkeypatch, tmp_path):
-    """OneDrive's Files On-Demand blocks the link uv makes to Python in AppData\\Roaming (os error 448), so
-    new Windows installs keep uv's Python and tools in AppData\\Local; one already in Roaming stays put."""
-    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+def helper_zip(python: bytes = b"exe") -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("python/python.exe", python)
+        z.writestr("python/study-stash-bundle.txt", "bundle")
+        z.writestr("python/Lib/site-packages/granola_share/__init__.py", "")
+    return buf.getvalue()
+
+
+def test_windows_installs_are_a_ready_made_folder_not_uv(tmp_path, monkeypatch):
+    """Windows gets granola-share as one folder with its own Python (uv's Python install fails under
+    OneDrive's Files On-Demand), and an update swaps the whole folder once nothing runs from it."""
+    monkeypatch.setattr(update.platform, "system", lambda: "Windows")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
-    for k in ("UV_PYTHON_INSTALL_DIR", "UV_TOOL_DIR"):
-        monkeypatch.delenv(k, raising=False)
-    env = update.windows_uv_env("Windows", executable=str(tmp_path / "Local" / "uv" / "tools" / "x" / "python.exe"))
-    assert env == {"UV_PYTHON_INSTALL_DIR": str(tmp_path / "Local" / "uv" / "python"),
-                   "UV_TOOL_DIR": str(tmp_path / "Local" / "uv" / "tools")}
-    assert update.windows_uv_env("Windows", executable=str(tmp_path / "Roaming" / "uv" / "tools" / "x" / "python.exe")) == {}
-    assert update.windows_uv_env("Darwin") == {}
-    monkeypatch.setenv("UV_TOOL_DIR", "D:\\tools")  # yours win
-    assert "UV_TOOL_DIR" not in update.windows_uv_env("Windows", executable="C:\\elsewhere\\python.exe")
-    monkeypatch.delenv("UV_TOOL_DIR")
-    monkeypatch.setattr(update.sys, "executable", str(tmp_path / "Local" / "uv" / "tools" / "x" / "python.exe"))
-    script = update._windows_script(tmp_path, "uv.exe", "https://x/v1.tar.gz", ["client"]).read_text()
-    assert f'set "UV_PYTHON_INSTALL_DIR={tmp_path / "Local" / "uv" / "python"}"' in script
-    assert "$_.Name -like 'python*'" in script and "*granola-share*" in script  # stuck commands too, never cmd
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    prefix = tmp_path / "Local" / "Programs" / "granola-share" / "python"
+    prefix.mkdir(parents=True)
+    (prefix / "study-stash-bundle.txt").write_text("bundle")
+    monkeypatch.setattr(update.sys, "prefix", str(prefix))
+    monkeypatch.setattr(update, "find_uv", lambda: None)
+    assert update.install_kind() == "bundle" and update.why_not_updatable() is None
+    monkeypatch.setattr(update.autostart, "installed_roles", lambda: ["server", "client"])
+    spawned = []
+    monkeypatch.setattr(update, "_spawn_detached", spawned.append)
+    (tmp_path / ".local" / "bin").mkdir(parents=True)
+    (tmp_path / ".local" / "bin" / "granola-share.exe").write_text("uv's")
+    rel = update.Release("v9.9.9", (9, 9, 9), "src", "h", windows_helper="https://gh/dl/Study-Stash-helper-windows.zip")
+    got = lambda url, **kw: SimpleNamespace(content=helper_zip(), raise_for_status=lambda: None)  # noqa: E731
+    said = []
+    assert update.apply(rel, tmp_path / "home", log=said.append, run=lambda *a, **k: pytest.fail("no uv"), get=got)
+    target = tmp_path / "Local" / "Programs" / "granola-share"
+    assert (target.with_name("granola-share.new") / "python" / "python.exe").read_bytes() == b"exe"
+    shim = (tmp_path / ".local" / "bin" / "granola-share.cmd").read_text()
+    assert shim.startswith(f'@"{target / "python" / "python.exe"}" -m granola_share.cli %*')
+    assert (tmp_path / ".local" / "bin" / "granola-share").read_bytes().startswith(b"#!/bin/sh\nexec ")
+    assert not (tmp_path / ".local" / "bin" / "granola-share.exe").exists()  # uv's would win over the .cmd
+    script = (tmp_path / "home" / "update.cmd").read_text()
+    assert f'move "{target}" "{target}.old"' in script and f'move "{target}.new" "{target}"' in script
+    assert "autostart install --role server" in script and "client open --install --no-browser" in script
+    assert "uv" not in script.replace("update.log", "") and spawned and "in the background" in said[-1]
+    old = update.Release("v9.9.8", (9, 9, 8), "src", "h")  # made before Windows had its download
+    assert not update.apply(old, tmp_path / "home", log=said.append) and "no Windows download" in said[-1]
+
