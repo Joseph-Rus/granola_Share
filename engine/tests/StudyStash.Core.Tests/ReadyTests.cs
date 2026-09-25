@@ -181,13 +181,13 @@ public class ReadyTests
     public void Granola_is_found_where_its_installers_put_it()
     {
         using var dir = new TempDir();
-        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"]);
+        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"], dir["Roaming"], dir["userhome"]);
         var spotlight = new FakeRunner((_, _) => new ProcResult(0, "/Volumes/Apps/Granola.app\n"));
         Assert.Equal("/Volumes/Apps/Granola.app", Ready.GranolaApp("Darwin", spotlight.Run, at));
         Assert.Contains("com.granola.app", spotlight.Calls.Single()[^1]);
         Directory.CreateDirectory(Path.Combine(dir["mine"], "Granola.app"));
         Assert.Equal(Path.Combine(dir["mine"], "Granola.app"), Ready.GranolaApp("Darwin", spotlight.Run, at));
-        Assert.Null(Ready.GranolaApp("Darwin", (_, _, _) => null, new AppPlaces(dir["none"], dir["none"], dir["none"])));
+        Assert.Null(Ready.GranolaApp("Darwin", (_, _, _) => null, new AppPlaces(dir["none"], dir["none"], dir["none"], dir["none"], dir["none"])));
         string exe = Path.Combine(dir["Local"], "Programs", "@granolaelectron", "Granola.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
         File.WriteAllText(exe, "");

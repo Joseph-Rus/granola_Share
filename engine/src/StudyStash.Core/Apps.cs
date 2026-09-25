@@ -2,12 +2,18 @@ using System.IO.Compression;
 
 namespace StudyStash.Core;
 
-/// <summary>Where the apps go: the Mac's two Applications folders, and Windows' per-account programs folder.
-/// Tests point these at a folder of their own.</summary>
-public sealed record AppPlaces(string SystemApps, string PersonalApps, string LocalAppData)
+/// <summary>Where the apps and their icons go: the Mac's two Applications folders, Windows' per-account programs and
+/// Start Menu folders, and the home folder (Linux keeps its menu entries there). Tests point these at a folder of their
+/// own.</summary>
+public sealed record AppPlaces(string SystemApps, string PersonalApps, string LocalAppData, string RoamingAppData, string Home)
 {
     public static AppPlaces Default => new("/Applications", Path.Combine(Py.UserHome(), "Applications"),
-        Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local ? local : Path.Combine(Py.UserHome(), "AppData", "Local"));
+        Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local ? local : Path.Combine(Py.UserHome(), "AppData", "Local"),
+        Environment.GetEnvironmentVariable("APPDATA") is { Length: > 0 } roaming ? roaming : Py.UserHome(), Py.UserHome());
+
+    /// <summary>Everything under one folder, for tests.</summary>
+    public static AppPlaces Under(string root) => new(Path.Combine(root, "Applications"), Path.Combine(root, "home", "Applications"),
+        Path.Combine(root, "Local"), Path.Combine(root, "Roaming"), Path.Combine(root, "home"));
 }
 
 /// <summary>
@@ -172,4 +178,153 @@ public static class Apps
             return null;
         }
     }
+}
+
+/// <summary>
+/// The "Study Stash" icon (launcher.py): an app in Applications (a Mac), a Start Menu entry (Windows), or a menu entry
+/// (Linux). It opens the native Study Stash app when that's installed; before then it runs `client open`, which starts
+/// the background service if needed and shows its page.
+/// </summary>
+public static class Launcher
+{
+    public const string BundleId = "com.granola-share.app";
+
+    public static List<string> Command(string home, IReadOnlyList<string>? engine = null) =>
+        [.. engine ?? Autostart.EngineCommand(), "--home", home, "client", "open"];
+
+    public static string WindowsShortcutPath(AppPlaces at, string name = Apps.AppName) =>
+        Path.Combine(at.RoamingAppData, "Microsoft", "Windows", "Start Menu", "Programs", $"{name}.lnk");
+
+    public static string LinuxDesktopPath(AppPlaces at) => Path.Combine(at.Home, ".local", "share", "applications", "granola-share.desktop");
+
+    static string Xml(string s) => s.Replace("&", "&amp;").Replace(">", "&gt;").Replace("<", "&lt;");
+
+    public static string RenderInfoPlist() => $"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleName</key><string>{Xml(Apps.AppName)}</string>
+            <key>CFBundleDisplayName</key><string>{Xml(Apps.AppName)}</string>
+            <key>CFBundleIdentifier</key><string>{BundleId}</string>
+            <key>CFBundleExecutable</key><string>granola-share-app</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>1.0</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>LSUIElement</key><true/>
+        </dict>
+        </plist>
+
+        """.ReplaceLineEndings("\n");
+
+    public static string RenderMacScript(IReadOnlyList<string> args) =>
+        "#!/bin/sh\n# Opens the Study Stash page (starting its background service if needed).\nexec "
+        + string.Join(" ", args.Select(a => "'" + a.Replace("'", "'\\''") + "'")) + "\n";
+
+    static string Ps(string s) => s.Replace("'", "''");
+
+    /// <summary>Put the icon in place. Returns where, or null when that didn't work. `icon` is a .ico file (Windows) or
+    /// a .png (Linux) for the menu entry.</summary>
+    public static string? Install(string home, string system, Runner run, AppPlaces at, IReadOnlyList<string>? engine = null, string? icon = null)
+    {
+        var args = Command(home, engine);
+        try
+        {
+            if (system == "Darwin")
+            {
+                if (Apps.NativeInstalled(at) is string native) // the real app is there: never swap it for the script launcher
+                {
+                    foreach (string other in Apps.MacAppPaths(at))
+                        if (other != native && !Apps.IsNative(other) && Directory.Exists(other)) Directory.Delete(other, recursive: true);
+                    return native;
+                }
+                string app = Path.Combine(Apps.MacAppFolder(at), $"{Apps.AppName}.app");
+                Directory.CreateDirectory(Path.Combine(app, "Contents", "MacOS"));
+                Py.WriteText(Path.Combine(app, "Contents", "Info.plist"), RenderInfoPlist());
+                string exe = Path.Combine(app, "Contents", "MacOS", "granola-share-app");
+                Py.WriteText(exe, RenderMacScript(args));
+                if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(exe, (UnixFileMode)Convert.ToInt32("755", 8));
+                foreach (string other in Apps.MacAppPaths(at)) // one copy only: 0.2.0 used ~/Applications
+                    if (other != app && Directory.Exists(other)) Directory.Delete(other, recursive: true);
+                return app;
+            }
+            if (system == "Windows")
+            {
+                string link = WindowsShortcutPath(at);
+                Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+                foreach (string old in Apps.OldNames) File.Delete(WindowsShortcutPath(at, old));
+                string target, arguments, iconLine, style = "";
+                if (Apps.WindowsAppExe(Apps.AppName, at) is string appExe) // the real app is there: the Start Menu opens it
+                {
+                    (target, arguments, iconLine) = (appExe, "", $"$s.IconLocation='{Ps(appExe)},0';");
+                }
+                else
+                {
+                    target = args[0];
+                    arguments = Py.List2CmdLine(args.Skip(1)).Replace("'", "''");
+                    iconLine = icon is not null && File.Exists(icon) ? $"$s.IconLocation='{Ps(icon)},0';" : "";
+                    style = "$s.WindowStyle=7;"; // this engine is a console program: its window only flashes, minimized
+                }
+                string ps = $"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{Ps(link)}');"
+                    + $"$s.TargetPath='{Ps(target)}';$s.Arguments='{arguments}';{iconLine}{style}"
+                    + "$s.Description='Open Study Stash';$s.Save()";
+                run("powershell", ["-NoProfile", "-Command", ps], TimeSpan.FromSeconds(60));
+                return link;
+            }
+            string desktop = LinuxDesktopPath(at);
+            Directory.CreateDirectory(Path.GetDirectoryName(desktop)!);
+            string execLine = string.Join(" ", args.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+            Py.WriteText(desktop, $"[Desktop Entry]\nType=Application\nName={Apps.AppName}\n"
+                + $"Comment=Send your Granola lectures to your library\nExec={execLine}\n"
+                + $"Icon={icon ?? ""}\nTerminal=false\nCategories=Office;Education;\n");
+            return desktop;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Take the icon away again (best effort). On Windows the app's own uninstaller runs, when it has one.</summary>
+    public static void Uninstall(string system, AppPlaces at)
+    {
+        try
+        {
+            if (system == "Darwin")
+            {
+                foreach (string app in Apps.MacAppPaths(at))
+                    if (Directory.Exists(app)) Directory.Delete(app, recursive: true);
+            }
+            else if (system == "Windows")
+            {
+                foreach (string name in new[] { Apps.AppName }.Concat(Apps.OldNames)) File.Delete(WindowsShortcutPath(at, name));
+                string folder = Apps.WindowsAppDir(Apps.AppName, at);
+                string uninstaller = Path.Combine(folder, "unins000.exe"); // put there by the Setup.exe installers
+                if (File.Exists(uninstaller))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo(uninstaller) { UseShellExecute = true };
+                    foreach (string a in new[] { "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" }) psi.ArgumentList.Add(a);
+                    using var _ = System.Diagnostics.Process.Start(psi);
+                }
+                else if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, recursive: true);
+                }
+            }
+            else
+            {
+                File.Delete(LinuxDesktopPath(at));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+        }
+    }
+
+    public static bool Installed(string system, AppPlaces at) => system switch
+    {
+        "Darwin" => Apps.MacAppPaths(at).Any(Directory.Exists),
+        "Windows" => File.Exists(WindowsShortcutPath(at)),
+        _ => File.Exists(LinuxDesktopPath(at)),
+    };
 }

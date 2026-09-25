@@ -656,6 +656,252 @@ def platform_cases() -> dict:
     return out
 
 
+# --- stage 4: the laptop ---------------------------------------------------------------------------------
+
+COPIED_TEXTS = [
+    "Meeting Title: Membranes and osmosis\nDate: Sep 24\n\nTranscript:\nMe: osmosis and membranes, three cases.",
+    "Meeting Title: Year end\nDate: Dec 31\nTranscript:\nMe: the last one",
+    "Meeting Title: Full\nDate: September 3, 2025\nMeeting participants: Me, You\nTranscript:\nline one\nline two\n\n",
+    "Meeting Title: Odd date\nDate: 2026-09-24\nTranscript:\nbody",
+    "no headers at all, just text",
+    "Meeting Title: Empty\nTranscript:\n   \n",
+    "",
+    "Meeting Title:   Spaces  \r\nDate:  sep 5, 2026 \r\nTranscript:\r\nwindows lines\r\n",
+    "Meeting Title: Leap\nDate: Feb 29\nTranscript:\nx",
+    "Date: Sep 24 2026\nTranscript:\nno title",
+    "Meeting Title: Café — ünïcode\nDate: Sep 20\nTranscript:\nMe: ça va",
+]
+# (text, recorded_to) saved in order, then (title, day) looked up: the watcher finds a lecture's copied transcript.
+STORE_SAVES = [
+    ["Meeting Title: Membranes and osmosis\nDate: Sep 24\nTranscript:\nshort", None],
+    ["Meeting Title: Membranes and osmosis\nDate: Sep 24\nTranscript:\na much longer transcript of the lecture", None],
+    ["Meeting Title: Membranes and osmosis\nDate: Sep 24\nTranscript:\ntiny", None],
+    ["Meeting Title: \nDate: Sep 24\nTranscript:\ncopied as the recording stopped", "2026-09-24T15:58:00"],
+    ["Meeting Title: Later\nDate: Sep 24\nTranscript:\nthe next recording", "2026-09-24T18:30:00"],
+    ["Meeting Title: Bio: lab/2 <draft>\nDate: Sep 23\nTranscript:\nfile name with odd characters", None],
+]
+STORE_FINDS = [["Membranes and osmosis", "2026-09-24"], ["membranes  AND osmosis!", "2026-09-25T09:00:00"],
+               ["Membranes and osmosis", "2026-09-27"], ["Untitled", "2026-09-24T15:00:00"], ["Untitled", "2026-09-24T16:30:00"],
+               ["Untitled", "2026-09-24"], ["Bio: lab/2 <draft>", None], ["Nothing like it", "2026-09-24T12:00:00"],
+               ["Untitled", "2026-09-24T09:00:00"]]
+
+
+class GoldenGranola:
+    """The watcher's Granola: three lectures, their full notes, and a transcript for each."""
+
+    def __init__(self):
+        from granola_share.granola import Meeting
+
+        self.stubs = [Meeting(id="a", title="CS101 lec 1", date="2026-09-10"),
+                      Meeting(id="b", title="Bio lab — café", date="2026-09-11T14:05:00"),
+                      Meeting(id="c", title="Standup", date="2026-09-12T09:00:00Z")]
+        self.full = [Meeting(id=m.id, title=m.title, date=m.date, notes_markdown=f"notes {m.id}", attendees=["Ada"],
+                             raw={"id": m.id, "n": 1}) for m in self.stubs]
+
+    def session(self):
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def s():
+            yield "session"
+        return s()
+
+    async def list_meetings(self, session, since=None, limit=50):
+        return list(self.stubs)
+
+    async def get_meetings(self, session, ids):
+        from dataclasses import replace
+
+        return [replace(m) for m in self.full if m.id in ids]
+
+    async def get_transcript(self, session, mid):
+        return "" if mid == "b" else "the transcript"
+
+
+LAPTOP_READY = {"granola": "/Applications/Granola.app", "granola_here": True,
+                "tailscale": {"installed": True, "running": True, "state": "Running", "dns": "air.tail.ts.net", "ips": ["100.64.0.7"]}}
+SEEN = {
+    "a": {"decision": "shared", "title": "Membranes lecture", "date": "2026-09-24", "class_name": "Data Science",
+          "filed": True, "transcript_chars": 8000, "at": "2026-09-24T16:00:00+00:00"},
+    "b": {"decision": "pending", "title": "Bio lab <3>", "date": "2026-09-23", "at": "2026-09-23T10:00:00+00:00"},
+    "c": {"decision": "skipped", "title": "Standup", "date": "2026-09-22", "at": "2026-09-22T09:00:00+00:00"},
+    "d": {"decision": "shared", "title": "Calc II", "date": "2026-09-21", "filed": False, "at": "2026-09-21T09:00:00+00:00"},
+    "e": {"decision": "pending", "title": "Waiting one", "date": "2026-09-20", "error": "401", "transcript_chars": 50,
+          "at": "2026-09-20T09:00:00+00:00"},
+    "f": {"decision": "shared", "title": "Old", "date": "2026-09-19", "class_name": "CS 101", "at": "2026-09-19T09:00:00+00:00"},
+    "g": {"decision": "shared", "title": "Filed bare", "date": "", "filed": True, "at": "2026-09-18T09:00:00+00:00"},
+}
+# name: (system, client.toml fields, prefill, signed in, watching, runtime fields, seen, readiness)
+LAPTOP_STATES = {
+    "fresh-linux": ("Linux", {}, None, False, False, {}, None,
+                    {"granola": None, "granola_here": False, "tailscale": {"installed": False}}),
+    "invite-mac": ("Darwin", {}, {"server": "http://mini:8787", "key": "p&w \"x\""}, False, False,
+                   {"tailscale_job": {"running": True, "error": None}}, None,
+                   {"granola": None, "granola_here": True, "tailscale": {"installed": True, "state": "NeedsLogin"}}),
+    "connected-mac": ("Darwin", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall <pool>"}, None, False,
+                      False, {"login": {"running": True, "error": None, "started": 1.5}}, None, LAPTOP_READY),
+    "login-error-windows": ("Windows", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall"}, None, False,
+                            False, {"login": {"running": False, "error": "Granola said <no>", "started": None},
+                                    "tailscale_job": {"running": False, "error": "it isn't installed yet"}}, None,
+                            {"granola": None, "granola_here": True, "tailscale": {"installed": False}}),
+    "signed-in-mac": ("Darwin", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall", "mode": "ask",
+                                 "copy_transcripts": True}, None, True, False, {}, None, LAPTOP_READY),
+    "status-mac": ("Darwin", {"server_url": "http://mini.tail.ts.net:8787", "pool_key": "pw", "pool_name": "Fall pool",
+                              "display_name": "Sam", "copy_transcripts": True}, None, True, True, {}, SEEN, LAPTOP_READY),
+    "status-password-windows": ("Windows", {"server_url": "http://mini:8787", "pool_key": "old", "pool_name": "Fall"}, None,
+                                True, True, {"client": {"last_error": "Fall turned down this laptop's password, so lectures are waiting here.",
+                                                        "send_problem_kind": "password"}}, SEEN,
+                                {"granola": "C:\\Granola.exe", "granola_here": True, "tailscale": {"installed": True, "running": True}}),
+    "status-signin-linux": ("Linux", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall"}, None, True, True,
+                            {"client": {"last_error": "token refresh failed (401): invalid_grant. Run `granola-share login`.",
+                                        "send_problem_kind": None}}, {}, {"granola": None, "granola_here": False,
+                                                                           "tailscale": {"installed": True, "state": "Stopped"}}),
+    "status-other-mac": ("Darwin", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall"}, None, True, True,
+                         {"client": {"last_error": "boom " + "x" * 300, "send_problem_kind": None}}, None,
+                         {"granola": None, "granola_here": True, "tailscale": {"installed": True, "running": True}}),
+    "status-unreachable-windows": ("Windows", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall"}, None,
+                                   True, True, {"client": {"last_error": "Can't reach Fall right now.",
+                                                           "send_problem_kind": "unreachable"}}, None,
+                                   {"granola": "C:\\G.exe", "granola_here": True, "tailscale": {"running": True}}),
+    "not-watching-yet": ("Linux", {"server_url": "http://mini:8787", "pool_key": "pw", "pool_name": "Fall"}, None, True, False,
+                         {}, SEEN, {"granola": None, "granola_here": False, "tailscale": {"running": True}}),
+}
+
+
+def laptop_cases() -> dict:
+    """Stage 4: copied transcripts, the watcher's record of what it sent, and the laptop's Study Stash page."""
+    import asyncio
+    import secrets
+    import tempfile
+    from datetime import date, datetime, timezone
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    from granola_share import client_app
+    from granola_share import transcript_grab as tg
+    from granola_share.client import ShareClient
+    from granola_share.config import save_client_config
+
+    today = date(2026, 9, 25)
+
+    def copied(c):
+        return None if c is None else {"title": c.title, "date": str(c.date) if c.date else None, "body": c.body}
+
+    out = {"today": str(today),
+           "parse": [[t, copied(tg.parse_copied(t, today=today))] for t in COPIED_TEXTS],
+           "norm": [[t, tg._norm_title(t)] for t in ["Membranes & Osmosis!", "  CS 101: Lecture #3 ", "Ümlaut café", "",
+                                                    "İstanbul", "a_b-c.d", "ÀÉÎ oe", "Kelvin \u212a", "ΣΊΣΥΦΟΣ ẞ"]]}
+    with tempfile.TemporaryDirectory() as tmp:
+        store = tg.TranscriptStore(Path(tmp))
+        saved = []
+        for text, stopped in STORE_SAVES:
+            path, changed = store.save(tg.parse_copied(text, today=today), text,
+                                       recorded_to=datetime.fromisoformat(stopped) if stopped else None)
+            saved.append([path.name, changed])
+        files = sorted(p.name for p in store.dir.iterdir())
+        out["store"] = {"saved": saved, "files": files, "finds": [[t, d, store.find(t, d)] for t, d in STORE_FINDS]}
+
+    # The watcher: three lectures in ask mode (send, skip, no answer), then the library files what it got, then the
+    # unanswered one is sent. What it asked, sent, said, and wrote down each time.
+    with tempfile.TemporaryDirectory() as tmp:
+        cc = ClientConfig(home=Path(tmp), server_url="http://mini:8787/", pool_key="pw", pool_name="Pool — ü",
+                          display_name="Sam", mode="ask", include_transcripts=True)
+        answers = [True, False, None]
+        asked, posted, notified, got = [], [], [], []
+
+        def ask(title, text, yes=None, no=None, timeout=0):
+            asked.append([title, text, yes, no, timeout])
+            return answers.pop(0) if answers else True
+
+        def post(url, payload, headers):
+            posted.append([url, payload, headers["Authorization"]])
+            return {"class_name": "CS 101"} if payload["id"] == "a" else {"class_name": None}
+
+        def get(url, headers):
+            got.append(url)
+            return {"status": "done", "class_name": "Bio 110", "summary_model": "m"} if "/a/" not in url else {"status": "queued"}
+
+        clock = iter([datetime(2026, 9, 24, 16, 0, 0, 123456, tzinfo=timezone.utc)] * 4
+                     + [datetime(2026, 9, 24, 16, 5, 0, tzinfo=timezone.utc)] * 20)
+        now = [None]
+
+        def tick():
+            now[0] = next(clock)
+            return now[0]
+
+        client = ShareClient(cc, GoldenGranola(), ask=ask, notify=lambda t, x: notified.append([t, x]), post=post, get=get,
+                             log=lambda *_: None, clock=tick)
+        rounds = []
+        for _ in range(2):
+            rep = asyncio.run(client.poll_once(since=date(2026, 9, 1)))
+            rounds.append({"report": {"listed": rep.listed, "considered": rep.considered, "shared": [list(x) for x in rep.shared],
+                                      "skipped": rep.skipped, "pending": rep.pending, "filed": [list(x) for x in rep.filed],
+                                      "errors": rep.errors},
+                           "state": cc.state_path.read_bytes().decode("utf-8")})
+        out["watcher"] = {"rounds": rounds, "asked": asked, "posted": posted, "notified": notified, "got": got,
+                          "clock": ["2026-09-24T16:00:00.123456+00:00"] * 4 + ["2026-09-24T16:05:00+00:00"] * 20}
+
+    # The page, in each state, with the nonce pinned.
+    real_token, real_mac, real_windows = secrets.token_urlsafe, client_app.mac, client_app.windows
+    secrets.token_urlsafe = lambda n=None: "NONCE"
+    pages = {}
+    try:
+        for name, (system, fields, prefill, signed, is_watching, rt_fields, seen, ready) in LAPTOP_STATES.items():
+            client_app.mac = lambda s=system: s == "Darwin"
+            client_app.windows = lambda s=system: s == "Windows"
+            with tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp) / "home"
+                home.mkdir()
+                (home / "ui_token").write_text("TOKEN")
+                cc = ClientConfig(home=home)
+                for k, v in fields.items():
+                    setattr(cc, k, v)
+                if fields:
+                    save_client_config(cc)
+                if prefill:
+                    (home / "ui_prefill.json").write_text(json.dumps(prefill))
+                if signed:
+                    cc.tokens_path.write_text("{}")
+                if seen is not None:
+                    cc.state_path.write_text(json.dumps({"seen": seen, "last_poll": None}))
+
+                class Runtime(client_app.ClientRuntime):
+                    watching = is_watching
+
+                    def readiness(self, fresh=False, r=ready):
+                        return r
+
+                    def copy_status(self, s=system):
+                        # No copier: the C# engine hands copying to the Study Stash app.
+                        return ({"available": False, "enabled": self.config().copy_transcripts, "why": "none here",
+                                 "allowed": False} if s == "Darwin" else
+                                {"available": False, "enabled": False, "allowed": False, "why": "only on macOS for now"})
+
+                rt = Runtime(home, log=lambda s: None)
+                if "login" in rt_fields:
+                    rt.login = rt_fields["login"]
+                if "tailscale_job" in rt_fields:
+                    rt.tailscale_job = rt_fields["tailscale_job"]
+                if "client" in rt_fields:
+                    rt.client = SimpleNamespace(**rt_fields["client"])
+                c = TestClient(client_app.create_client_app(rt, port=8765), base_url="http://127.0.0.1:8765", follow_redirects=False)
+                unauthed = c.get("/").text
+                c.cookies.set("gs_app", "TOKEN")
+                r = c.get("/")
+                state = c.get("/api/state", headers={"X-Granola-Share": "1"}).text
+                library = c.get("/library")
+                scrub = lambda text: text.replace(str(home), "{home}")  # noqa: E731
+                pages[name] = {"status": r.status_code, "html": scrub(r.text), "csp": r.headers.get("content-security-policy"),
+                               "unauthed": unauthed, "state": scrub(state),
+                               "library": {"status": library.status_code, "html": library.text,
+                                           "csp": library.headers.get("content-security-policy")}}
+    finally:
+        secrets.token_urlsafe, client_app.mac, client_app.windows = real_token, real_mac, real_windows
+    out["pages"] = {"states": {k: list(v) for k, v in LAPTOP_STATES.items()}, "rendered": pages}
+    return out
+
+
 # Granola's sign-in server metadata as fetched from mcp-auth.granola.ai on 2026-09-25 (public, trimmed).
 GRANOLA_AUTH_META = {
     "authorization_endpoint": "https://mcp-auth.granola.ai/oauth2/authorize",
@@ -680,6 +926,7 @@ def main() -> None:
     write("library.json", json.dumps(library_cases(), indent=1, ensure_ascii=False) + "\n")
     write("pages.json", json.dumps({"library": library_pages(), "setup": setup_pages()}, indent=1, ensure_ascii=False) + "\n")
     write("platform.json", json.dumps(platform_cases(), indent=1, ensure_ascii=False) + "\n")
+    write("laptop.json", json.dumps(laptop_cases(), indent=1, ensure_ascii=False) + "\n")
     page_text()
     print(f"wrote {OUT.relative_to(ROOT)}")
 

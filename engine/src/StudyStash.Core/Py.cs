@@ -145,6 +145,43 @@ public static class Py
         return now.ToString("yyyy-MM-dd'T'HH:mm:ss", Inv) + (micro != 0 ? "." + micro.ToString("000000", Inv) : "") + "+00:00";
     }
 
+    /// <summary>str.lower(): .NET's own casing, plus the one unconditional full mapping Python applies that .NET leaves
+    /// alone ("İ" becomes "i" and a combining dot).</summary>
+    public static string Lower(string s) => s.Replace("\u0130", "i\u0307").ToLowerInvariant();
+
+    /// <summary>subprocess.list2cmdline: one Windows command line, quoted the way the C runtime reads it back.</summary>
+    public static string List2CmdLine(IEnumerable<string> args)
+    {
+        var result = new StringBuilder();
+        foreach (string arg in args)
+        {
+            if (result.Length > 0) result.Append(' ');
+            bool quote = arg.Contains(' ') || arg.Contains('\t') || arg.Length == 0;
+            if (quote) result.Append('"');
+            int backslashes = 0;
+            foreach (char c in arg)
+            {
+                if (c == '\\')
+                {
+                    backslashes++;
+                }
+                else if (c == '"')
+                {
+                    result.Append('\\', backslashes * 2).Append("\\\"");
+                    backslashes = 0;
+                }
+                else
+                {
+                    result.Append('\\', backslashes).Append(c);
+                    backslashes = 0;
+                }
+            }
+            result.Append('\\', backslashes);
+            if (quote) result.Append('\\', backslashes).Append('"');
+        }
+        return result.ToString();
+    }
+
     /// <summary>time.time(): seconds since 1970, as a float.</summary>
     public static double Time() => (DateTime.UtcNow - DateTime.UnixEpoch).Ticks / (double)TimeSpan.TicksPerSecond;
 
