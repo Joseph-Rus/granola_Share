@@ -13,3 +13,5 @@ build/
 
 # macos/build.sh output
 dist/
+windows/bin/
+windows/obj/

@@ -73,7 +73,27 @@ keep working.
 
 - The installers run `uv tool install` from the newest GitHub release, with a uv-managed Python
   3.12, so there's no git and no system Python. Services run under launchd, systemd `--user`, or the
-  Windows Startup folder.
+  Windows Startup folder. Windows has nothing like launchd's KeepAlive, so there the service runs
+  under a small keep-alive loop that restarts it and writes its log (pythonw has no console).
+- **Library setup gets the computer ready first** (`ready.py`): Tailscale and Ollama, each installed
+  from its official download if missing (asking first), started, or connected. Tailscale's
+  installers need an administrator, so the installer window opens and setup waits. Models download
+  through Ollama's API, so no `ollama` command is needed, and each one answers once before setup
+  moves on. On Windows, setup adds one firewall rule for the library's port, open only to
+  Tailscale's range (100.64.0.0/10) and the local subnet, through Windows' own permission prompt.
+- **The Windows app** (`windows/StudyStash.cs`) is the Mac app's twin: a WinForms window around
+  two WebView2 views (This PC and Library), on .NET Framework 4.8, which every Windows 10 and 11
+  has, so it's a 0.5 MB zip. It fills in the library's password itself, routes links like the Mac
+  app, and installs the helper from its welcome screen. The installer, `client open --install`,
+  and auto-update all put it in `%LOCALAPPDATA%\Programs\Study Stash`. Windows can't overwrite a
+  running program but can rename it, so an update moves files in use aside to `*.old`, which the
+  app deletes when it next starts.
+- **Without the app** (Linux, or before it's downloaded) the page opens in an Edge or Chrome app
+  window, and "Open your library" signs in by posting the saved password to the library's login
+  form from a loopback-only page.
+- **The laptop checks its own needs**: Granola (the app that records; the library's computer
+  doesn't need it) and Tailscale, shown at the top of setup with a fix button for each, and in
+  `doctor`.
 - CI tests on macOS, Linux, and Windows, runs the real installer on each, builds the Mac app, and
   publishes `v<version>` when `__version__` changes. Installed copies check every six hours,
   install, and restart. Windows uses a detached helper, because it locks running files.

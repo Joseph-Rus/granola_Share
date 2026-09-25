@@ -1,6 +1,6 @@
-"""The "Study Stash" icon: an app in /Applications or ~/Applications (macOS), a Start Menu shortcut (Windows),
-or a menu entry (Linux). Opening it runs `granola-share client open`, which starts the
-background service if needed and shows its page in the browser.
+"""The "Study Stash" icon: an app in /Applications or ~/Applications (macOS), the Study Stash app and its
+Start Menu entry (Windows), or a menu entry (Linux). Before the native app is there, the icon runs
+`granola-share client open`, which starts the background service if needed and shows its page.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 APP_NAME = "Study Stash"
+ASSETS = Path(__file__).resolve().parent / "assets"
+WINDOWS_ICON = ASSETS / "study-stash.ico"
 OLD_NAMES = ("Granola Share",)  # what 0.2 called it: replaced and removed on the next install
 BUNDLE_ID = "com.granola-share.app"
 
@@ -113,6 +115,69 @@ def install_native(url: str, *, log=print, get=None, run=subprocess.run) -> Path
         return None
 
 
+def _ps(s: str) -> str:
+    """Inside a single-quoted PowerShell string."""
+    return s.replace("'", "''")
+
+
+# --- the Windows app (windows/StudyStash.cs) ------------------------------------------------------
+
+def windows_app_dir() -> Path:
+    """Where Study-Stash-Setup.exe, `client open --install`, and auto-update all put the Windows app."""
+    local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
+    return local / "Programs" / APP_NAME
+
+
+def windows_app_exe() -> Path | None:
+    exe = windows_app_dir() / f"{APP_NAME}.exe"
+    return exe if exe.is_file() else None
+
+
+def install_windows_app(url: str, *, log=print, get=None) -> Path | None:
+    """Download the Windows app (a zip from the release) into its folder. Windows won't overwrite a
+    program that's running, but it lets one be renamed, so a file in use moves aside to *.old first
+    (the app deletes those the next time it starts). Fetched here rather than in a browser, it isn't
+    marked as downloaded, so SmartScreen doesn't ask about it."""
+    import tempfile
+    import zipfile
+
+    import httpx
+
+    get = get or httpx.get
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            r = get(url, follow_redirects=True, timeout=120)
+            r.raise_for_status()
+            archive = Path(tmp) / "app.zip"
+            archive.write_bytes(r.content)
+            new = Path(tmp) / "app"
+            with zipfile.ZipFile(archive) as z:
+                z.extractall(new)
+            if not (new / f"{APP_NAME}.exe").is_file():
+                log("The Study Stash app in that release didn't unpack; keeping the one you have.")
+                return None
+            dest = windows_app_dir()
+            for f in sorted(x for x in new.rglob("*") if x.is_file()):
+                target = dest / f.relative_to(new)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if target.exists():
+                    try:
+                        target.unlink()
+                    except OSError:  # in use
+                        aside = target.with_name(target.name + ".old")
+                        try:
+                            aside.unlink(missing_ok=True)
+                        except OSError:
+                            aside = target.with_name(f"{target.name}.{os.getpid()}.old")
+                        target.rename(aside)
+                shutil.copy2(f, target)
+            log(f"Installed the Study Stash app in {dest}.")
+            return dest / f"{APP_NAME}.exe"
+    except Exception as e:
+        log(f"Couldn't install the Study Stash app ({e}); the Start Menu entry still opens Study Stash.")
+        return None
+
+
 def install(home: Path, *, system: str | None = None, python: str | None = None, run=subprocess.run) -> Path | None:
     system = system or platform.system()
     args = _command(home, python)
@@ -139,11 +204,16 @@ def install(home: Path, *, system: str | None = None, python: str | None = None,
             link.parent.mkdir(parents=True, exist_ok=True)
             for old in OLD_NAMES:
                 windows_shortcut_path(old).unlink(missing_ok=True)
-            exe = Path(args[0])
-            target = exe.with_name("pythonw.exe") if exe.with_name("pythonw.exe").exists() else exe
-            arguments = subprocess.list2cmdline(args[1:]).replace("'", "''")
-            ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{str(link).replace(chr(39), chr(39) * 2)}');"
-                  f"$s.TargetPath='{str(target).replace(chr(39), chr(39) * 2)}';$s.Arguments='{arguments}';"
+            app = windows_app_exe()
+            if app is not None:  # the real app is there: the Start Menu opens it
+                target, arguments, icon = app, "", f"$s.IconLocation='{_ps(str(app))},0';"
+            else:
+                exe = Path(args[0])
+                target = exe.with_name("pythonw.exe") if exe.with_name("pythonw.exe").exists() else exe
+                arguments = subprocess.list2cmdline(args[1:]).replace("'", "''")
+                icon = f"$s.IconLocation='{_ps(str(WINDOWS_ICON))},0';" if WINDOWS_ICON.exists() else ""
+            ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{_ps(str(link))}');"
+                  f"$s.TargetPath='{_ps(str(target))}';$s.Arguments='{arguments}';{icon}"
                   f"$s.Description='Open Study Stash';$s.Save()")
             run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
             return link
@@ -152,7 +222,8 @@ def install(home: Path, *, system: str | None = None, python: str | None = None,
         exec_line = " ".join(f'"{a}"' if " " in a else a for a in args)
         desktop.write_text(f"[Desktop Entry]\nType=Application\nName={APP_NAME}\n"
                            f"Comment=Send your Granola lectures to your library\nExec={exec_line}\n"
-                           "Terminal=false\nCategories=Office;Education;\n", encoding="utf-8")
+                           f"Icon={ASSETS / 'icon.png'}\nTerminal=false\nCategories=Office;Education;\n",
+                           encoding="utf-8")
         return desktop
     except Exception:
         return None
@@ -167,9 +238,16 @@ def uninstall(system: str | None = None) -> None:
         elif system == "Windows":
             for name in (APP_NAME, *OLD_NAMES):
                 windows_shortcut_path(name).unlink(missing_ok=True)
+            folder = windows_app_dir()
+            uninstaller = folder / "unins000.exe"  # put there by Study-Stash-Setup.exe
+            if uninstaller.exists():
+                subprocess.Popen([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+                                 creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+            else:
+                shutil.rmtree(folder, ignore_errors=True)
         else:
             linux_desktop_path().unlink(missing_ok=True)
-    except OSError:
+    except Exception:  # removing is best effort
         pass
 
 

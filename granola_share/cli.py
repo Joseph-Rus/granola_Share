@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import platform
 import sys
 import threading
 from pathlib import Path
@@ -298,10 +300,14 @@ def _server_setup_flags(sp: argparse.ArgumentParser) -> None:
                    help="a class to sort into; repeat for each (replaces the current list)")
     g.add_argument("--summary-model", dest="a_summary_model", help="Ollama model that writes summaries")
     g.add_argument("--sort-model", dest="a_sort_model", help="Ollama model that sorts into classes")
+    _bool(g, "install-tailscale", "install or connect Tailscale if it isn't (the installer asks for your OK)")
+    _bool(g, "install-ollama", "install Ollama if it isn't")
     _bool(g, "pull", "download missing Ollama models")
     _bool(g, "server-sync", "also sync this computer's own Granola account")
     _bool(g, "auto-update", "install new versions automatically")
     _bool(g, "autostart", "start at login and keep running")
+    _bool(g, "firewall", "Windows: let Tailscale and your network reach the library (asks for permission)")
+    _bool(g, "keep-awake", "Windows: don't sleep while plugged in")
     sp.add_argument("--yes", "-y", action="store_true", help="accept the default for every question not answered by a flag")
 
 
@@ -333,7 +339,7 @@ def main(argv=None):
     p.add_argument("--version", action="version", version=f"granola-share {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sp = sub.add_parser("setup", help="guided setup for the computer that keeps your library (the Mac mini)")
+    sp = sub.add_parser("setup", help="guided setup for the computer that keeps your library (a Mac mini, or any always-on Mac or PC)")
     _server_setup_flags(sp)
     sp.set_defaults(fn=cmd_setup)
     sub.add_parser("init", help="write a starter config.toml without the wizard").set_defaults(fn=cmd_init)
@@ -392,6 +398,16 @@ def main(argv=None):
     args.home.mkdir(parents=True, exist_ok=True)
     if getattr(args, "a_ask_each", None) is not None:
         args.a_ask_each = args.a_ask_each == "ask"
+    if platform.system() == "Windows":
+        for stream in (sys.stdout, sys.stderr):  # a piped console can't print every character (→, ✓)
+            if stream is not None and hasattr(stream, "reconfigure"):
+                stream.reconfigure(errors="replace")
+        role = {cmd_run: "server", cmd_serve: "server", cmd_client_run: "client"}.get(args.fn)
+        if role and os.environ.get("GRANOLA_SHARE_SERVICE") == "1" and not os.environ.get("GRANOLA_SHARE_CHILD"):
+            from .autostart import keep_alive
+
+            keep_alive(args.home, role, list(sys.argv[1:] if argv is None else argv))
+            return
     try:
         args.fn(args)
     except KeyboardInterrupt:

@@ -32,3 +32,7 @@ version = { attr = "granola_share.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["granola_share*"]
+
+[tool.setuptools.package-data]
+# The icon for Windows, Linux, and the pages (made by macos/icon_assets.py).
+granola_share = ["assets/*"]

@@ -87,10 +87,11 @@
   }
   Write-Host ""
   if ($Role -ne "server" -and -not $env:GRANOLA_SHARE_TERMINAL) {
-    # The laptop sets up in the browser: start the background service, add the Start Menu entry, open setup.
+    # The laptop sets up in the Study Stash app: this starts the background service, adds the app and its
+    # Start Menu entry, and opens its setup page with the library's address and password filled in.
     & $Exe --home $HomeDir client open --install
     if ($LASTEXITCODE -ne 0) { Fail "Study Stash didn't start (log: $HomeDir\logs\client.log)" }
-    Write-Host "Setup continues in your browser. Later, open Study Stash from the Start Menu."
+    Write-Host "Setup continues in the Study Stash window. Later, open Study Stash from the Start Menu."
     return
   }
   if ($Role -eq "server") { & $Exe --home $HomeDir setup } else { & $Exe --home $HomeDir client setup }

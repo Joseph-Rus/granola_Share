@@ -4,19 +4,25 @@ from types import SimpleNamespace
 import pytest
 
 from granola_share import cli, wizard
-from granola_share.config import ClassDef, load_client_config, load_config
+from granola_share.config import ClassDef, load_client_config, load_config, save_config
 from granola_share.wizard import Prompter, ScriptedPrompter, _normalize_url, client_setup, parse_class, server_setup
 
 MODELS = [{"name": "qwen3:1.7b", "size_gb": 1.4}, {"name": "llama3.2:latest", "size_gb": 2.0}]
-TS = {"running": True, "dns": "mini.tail.ts.net", "ips": ["100.64.0.7"]}
+TS = {"installed": True, "running": True, "state": "Running", "dns": "mini.tail.ts.net", "ips": ["100.64.0.7"]}
 
 
 def server_kw(**over):
     kw = dict(list_models=lambda h: MODELS, start_ollama=lambda h: False, ollama_installed=lambda: False,
-              pull_model=lambda m: pytest.fail("nothing to pull"), ram_gb=lambda: 64.0,
-              do_login=lambda c: pytest.fail("login should not run"), install_autostart=lambda role, home: "plist",
-              tailscale=lambda: TS, port_status=lambda p: "free", wait_healthy=lambda cfg: True,
-              cleanup=lambda home, log: False)
+              pull_model=lambda m, host, bar: pytest.fail("nothing to pull"), try_model=lambda host, m: (3.0, ""),
+              install_ollama=lambda log, bar: pytest.fail("Ollama is already installed"), ram_gb=lambda: 64.0,
+              disk_free=lambda: 300.0, do_login=lambda c: pytest.fail("login should not run"),
+              install_autostart=lambda role, home: "plist", tailscale=lambda: TS,
+              install_tailscale=lambda log, bar, ask: pytest.fail("Tailscale is already installed"),
+              connect_tailscale=lambda ts, log: pytest.fail("Tailscale is already connected"),
+              firewall=lambda port: pytest.fail("only Windows has a firewall step"),
+              open_firewall=lambda port: pytest.fail("no firewall change"), sleep_minutes=lambda system: 0,
+              keep_awake=lambda system: pytest.fail("no sleep change"), port_status=lambda p: "free",
+              wait_healthy=lambda cfg: True, cleanup=lambda home, log: False, system="Darwin")
     kw.update(over)
     return kw
 
@@ -32,51 +38,148 @@ def test_server_setup_writes_config_and_installs(tmp_path):
         "",                      # end classes
         "1",                     # summary model by number
         "",                      # sorting model = same
-        False,                   # server_sync? no
         True,                    # auto update
         True,                    # autostart
     ])
-    installed = []
-    server_setup(tmp_path, io, **server_kw(install_autostart=lambda role, home: installed.append(role) or "plist"))
+    installed, tried = [], []
+    server_setup(tmp_path, io, **server_kw(install_autostart=lambda role, home: installed.append(role) or "plist",
+                                           try_model=lambda host, m: tried.append(m) or (3.0, "")))
     back = load_config(tmp_path)
     assert back.pool_name == "Fall pool" and len(back.pool_password) >= 8 and back.web_port == 8790
     assert back.class_names() == ["CS 101", "Bio 110"] and back.classes[0].aliases == ["cs101", "intro"]
     assert back.summary_model == back.ollama_model == "qwen3:1.7b" and back.ollama_enabled and not back.server_sync
-    assert installed == ["server"] and back.auto_update
+    assert installed == ["server"] and back.auto_update and tried == ["qwen3:1.7b"]
     out = "\n".join(io.output)
     assert "http://mini.tail.ts.net:8790" in out and "http://100.64.0.7:8790" in out and back.pool_password in out
     assert "GRANOLA_SHARE_SERVER=http://mini.tail.ts.net:8790" in out and "install.ps1" in out
     assert "It's up." in out and "paid plans" in out and "Connect your laptop" in out and "friend" not in out.lower()
+    assert "Tailscale:  connected; your laptop reaches this computer as mini.tail.ts.net" in out
+    assert "Ollama:     running, with 2 models" in out and "Memory:     64 GB" in out and "300 GB free" in out
+    assert "It answered in 3 s" in out and "Granola account signed in on this computer" not in out
 
 
 def test_server_setup_without_ollama_continues_on_rules(tmp_path):
-    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", False, False, True, False])
+    io = ScriptedPrompter([False, False, "P", "pw", str(tmp_path / "pool"), "8787", "", True, False])
     cfg = server_setup(tmp_path, io, **server_kw(list_models=lambda h: None))
     assert cfg.ollama_enabled is False and cfg.classes == []
     out = "\n".join(io.output)
-    assert "https://ollama.com" in out and "Start it with" in out
+    assert "Ollama:     not installed" in out and "https://ollama.com" in out and "Start it with" in out
 
 
 def test_server_setup_starts_ollama_when_installed_but_closed(tmp_path):
     state = {"up": False}
-    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", False, True, False])
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False])
     cfg = server_setup(tmp_path, io, **server_kw(
         list_models=lambda h: MODELS if state["up"] else None, ollama_installed=lambda: True,
         start_ollama=lambda h: state.update(up=True) or True))
     assert cfg.ollama_enabled and cfg.summary_model == "qwen3:1.7b"
-    assert "installed but not running" in "\n".join(io.output)
+    assert "installed, but not running" in "\n".join(io.output)
+
+
+def test_server_setup_installs_ollama_and_tailscale(tmp_path):
+    state = {"ollama": False, "tailscale": False}
+    calls = []
+
+    def install_tailscale(log, bar, ask):
+        calls.append("tailscale")
+        bar(10, 20)
+        bar(20, 20)
+        state["tailscale"] = True
+        return True
+
+    def install_ollama(log, bar):
+        calls.append("ollama")
+        bar(200, 200)
+        state["ollama"] = True
+        return True
+
+    io = ScriptedPrompter([True, True, "P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False])
+    cfg = server_setup(tmp_path, io, **server_kw(
+        tailscale=lambda: TS if state["tailscale"] else {"installed": False, "running": False},
+        install_tailscale=install_tailscale, install_ollama=install_ollama,
+        list_models=lambda h: MODELS if state["ollama"] else None, start_ollama=lambda h: True))
+    assert calls == ["tailscale", "ollama"] and cfg.ollama_enabled
+    out = "\n".join(io.output)
+    assert "Tailscale:  not installed" in out and "Downloading Tailscale 100%" in out
+    assert "Tailscale:  connected; your laptop reaches this computer as mini.tail.ts.net" in out
+    assert "Ollama:     not installed" in out and "Downloading Ollama 100%" in out and "Ollama:     running" in out
+
+
+def test_server_setup_connects_a_signed_out_tailscale(tmp_path):
+    state = {"up": False}
+    signed_out = {"installed": True, "running": False, "state": "NeedsLogin", "exe": "/usr/bin/tailscale"}
+
+    def connect(ts, log):
+        assert ts["state"] == "NeedsLogin"
+        state["up"] = True
+        return True
+
+    io = ScriptedPrompter([True, "P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False])
+    server_setup(tmp_path, io, **server_kw(tailscale=lambda: TS if state["up"] else signed_out,
+                                           connect_tailscale=connect))
+    out = "\n".join(io.output)
+    assert "installed, but signed out" in out and "Tailscale:  connected" in out and state["up"]
+
+
+def test_server_setup_with_yes_installs_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(builtins, "input", lambda *a: pytest.fail("asked a question"))
+    io = Prompter({"pool_dir": str(tmp_path / "pool"), "autostart": False}, assume_defaults=True)
+    cfg = server_setup(tmp_path, io, **server_kw(tailscale=lambda: {"installed": False, "running": False},
+                                                 list_models=lambda h: None))
+    assert cfg.ollama_enabled is False
+
+
+def test_server_setup_tells_when_the_model_does_not_answer(tmp_path):
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False])
+    server_setup(tmp_path, io, **server_kw(try_model=lambda h, m: (None, "model requires more system memory")))
+    assert "It didn't answer: model requires more system memory" in "\n".join(io.output)
 
 
 def test_server_setup_pulls_a_missing_model_once(tmp_path):
-    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "qwen3:4b", "", True, False, True, False])
-    pulled = []
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "qwen3:4b", "", True, True, False])
+    pulled, tried = [], []
+
+    def pull(model, host, bar):
+        bar(1, 2)
+        bar(2, 2)
+        pulled.append(model)
+        return True, ""
+
     server_setup(tmp_path, io, **server_kw(list_models=lambda h: [{"name": "llama3.2:latest", "size_gb": 2.0}],
-                                           pull_model=lambda m: pulled.append(m) or True))
-    assert pulled == ["qwen3:4b"]
+                                           pull_model=pull, try_model=lambda h, m: tried.append(m) or (1.0, "")))
+    assert pulled == ["qwen3:4b"] and tried == ["qwen3:4b"]
+    assert "Downloading qwen3:4b 100%" in io.output
+
+
+def test_server_setup_explains_a_failed_download(tmp_path):
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "qwen9:1b", "", True, True, False])
+    server_setup(tmp_path, io, **server_kw(
+        pull_model=lambda m, host, bar: (False, "pull model manifest: requires a newer version of Ollama"),
+        try_model=lambda h, m: pytest.fail("nothing to try")))
+    out = "\n".join(io.output)
+    assert "Download failed: pull model manifest" in out and "Update Ollama" in out
+
+
+def test_windows_server_setup_opens_the_firewall_and_stays_awake(tmp_path):
+    opened, awake = [], []
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False, True, True])
+    server_setup(tmp_path, io, **server_kw(
+        system="Windows", firewall=lambda port: False, open_firewall=lambda port: opened.append(port) or True,
+        sleep_minutes=lambda system: 30, keep_awake=lambda system: awake.append(system) or True))
+    assert opened == [8787] and awake == ["Windows"]
+    out = "\n".join(io.output)
+    assert "Windows Firewall blocks" in out and "Opened." in out and "sleeps after 30 minutes" in out
+    assert "it stays awake while plugged in" in out
+
+
+def test_mac_server_setup_explains_sleep(tmp_path):
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False])
+    server_setup(tmp_path, io, **server_kw(sleep_minutes=lambda system: 10))
+    assert "Prevent automatic sleeping" in "\n".join(io.output)
 
 
 def test_server_setup_reasks_bad_or_busy_port(tmp_path):
-    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "eighty", "8787", "8788", "", "", "", False, True, False])
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "eighty", "8787", "8788", "", "", "", True, False])
     cfg = server_setup(tmp_path, io, **server_kw(port_status=lambda p: "busy" if p == 8787 else "free"))
     assert cfg.web_port == 8788
     out = "\n".join(io.output)
@@ -84,7 +187,10 @@ def test_server_setup_reasks_bad_or_busy_port(tmp_path):
 
 
 def test_server_setup_login_failure_does_not_abort(tmp_path):
-    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "", "", True, False, True, False])
+    cfg = load_config(tmp_path)
+    cfg.server_sync = True  # only asked when it's already on
+    save_config(cfg)
+    io = ScriptedPrompter(["P", "pw", str(tmp_path / "pool"), "8787", "", "1", "", True, True, False, False])
 
     def boom(cfg):
         raise RuntimeError("timed out waiting for the browser callback")
@@ -116,7 +222,7 @@ def test_prompter_without_terminal_explains_itself(monkeypatch):
 def client_kw(**over):
     kw = dict(do_login=lambda c: None, is_logged_in=lambda c: False, install_autostart=lambda r, h: "p",
               share_now=lambda c, log: None, service_status=lambda r: "running", cleanup=lambda home, log: False,
-              mac=False)
+              mac=False, laptop=lambda: {"granola": "/Applications/Granola.app", "granola_here": True, "tailscale": TS})
     kw.update(over)
     return kw
 
@@ -225,3 +331,11 @@ def test_pick_default_model_prefers_big_moe_models():
     assert recommended_model(64) == "qwen3.6:35b-a3b" and recommended_model(16) == "gemma4:e4b"
     assert recommended_model(8) == "qwen3:1.7b"
     assert has_model(["llama3.2:latest"], "llama3.2") and not has_model(["llama3.2:latest"], "llama3.2:3b")
+
+
+def test_no_pull_covers_both_models(tmp_path, monkeypatch):
+    monkeypatch.setattr(builtins, "input", lambda *a: pytest.fail("asked a question"))
+    io = Prompter({"pool_dir": str(tmp_path / "pool"), "summary_model": "big:35b", "sort_model": "small:1b",
+                   "pull": False, "autostart": False}, assume_defaults=True)
+    server_setup(tmp_path, io, **server_kw(try_model=lambda h, m: pytest.fail("nothing is installed to try")))
+    assert load_config(tmp_path).summary_model == "big:35b"

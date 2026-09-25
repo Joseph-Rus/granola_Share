@@ -21,6 +21,7 @@ import socket
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -90,13 +91,24 @@ var watch=document.body.dataset.watch;
 document.querySelectorAll('form[data-autosave]').forEach(function(f){
   f.addEventListener('change',function(){f.requestSubmit();});});
 if(watch){var seen=null;setInterval(function(){fetch('/api/state',{headers:{'X-Granola-Share':'1'}}).then(function(r){return r.json();})
-  .then(function(s){var key=JSON.stringify([s.signed_in,s.login.running,s.login.error,s.copy.allowed,s.watching,s.recent_key,s.problem]);
+  .then(function(s){var key=JSON.stringify([s.signed_in,s.login.running,s.login.error,s.copy.allowed,s.watching,s.recent_key,s.problem,s.ready]);
     if(seen!==null&&key!==seen)location.reload();seen=key;});}, parseInt(watch,10)*1000);}
 """
 
 
 def mac() -> bool:
     return platform.system() == "Darwin"
+
+
+def windows() -> bool:
+    return platform.system() == "Windows"
+
+
+def native_app() -> Path | None:
+    """The Study Stash app, when it's installed: the Mac app, or the Windows one."""
+    from . import launcher
+
+    return launcher.native_installed() if mac() else launcher.windows_app_exe() if windows() else None
 
 
 # --- what runs in the background ---------------------------------------------------------
@@ -115,9 +127,42 @@ class ClientRuntime:
         self.login = {"running": False, "error": None, "started": None}
         self._updater = False
         self._lock = threading.Lock()
+        self._checked: tuple[float, dict] | None = None
+        self.tailscale_job = {"running": False, "error": None}
 
     def config(self) -> ClientConfig:
         return load_client_config(self.home)
+
+    # -- what this computer has: Granola (records the lectures) and Tailscale (reaches the library)
+    def readiness(self, fresh: bool = False) -> dict:
+        """ready.laptop_checks(), at most every few seconds (the setup page asks every two)."""
+        if fresh or self._checked is None or time.time() - self._checked[0] > 4:
+            from . import ready
+
+            self._checked = (time.time(), ready.laptop_checks())
+        return self._checked[1]
+
+    def fix_tailscale(self) -> str:
+        """Install Tailscale (its own installer opens) or, when it's installed, open it to sign in."""
+        from . import hostinfo, ready
+
+        if hostinfo.tailscale_exe():
+            return ("Tailscale is open. Sign in with the same account as your library's computer."
+                    if ready.open_tailscale() else "Open Tailscale from your apps and sign in.")
+        if self.tailscale_job["running"]:
+            return "Tailscale is downloading."
+        self.tailscale_job = {"running": True, "error": None}
+
+        def go():
+            try:
+                ok = ready.install_tailscale(self.log, None, lambda _: None, remote=False)
+                self.tailscale_job = {"running": False, "error": None if ok else "it isn't installed yet"}
+            except Exception as e:  # noqa: BLE001
+                self.tailscale_job = {"running": False, "error": str(e)}
+            self._checked = None
+
+        threading.Thread(target=go, name="tailscale-install", daemon=True).start()
+        return "Downloading Tailscale. Its installer opens in a moment: click through it."
 
     def signed_in(self) -> bool:
         return self.config().tokens_path.exists()
@@ -280,6 +325,49 @@ def _recent(cc: ClientConfig, limit: int = 12) -> list[dict]:
     return rows
 
 
+def _ready_key(checks: dict, job: dict) -> list:
+    from . import hostinfo
+
+    return [bool(checks["granola"]), hostinfo.tailscale_problem(checks["tailscale"]), job.get("running")]
+
+
+def _this_computer(checks: dict, job: dict) -> str:
+    """What this laptop needs besides Study Stash: Granola, which records the lectures, and Tailscale, which
+    reaches the library from anywhere. Each with its fix."""
+    from . import hostinfo, ready
+
+    rows, fixes = [], []
+    if checks["granola_here"]:
+        ok = bool(checks["granola"])
+        rows.append(("Granola", "Records your lectures", "installed" if ok else "not installed", ok))
+        if not ok:
+            fixes.append("<p>Granola isn’t on this computer yet. It’s the app you record your lectures in.</p>"
+                         f'<div class="toolbar"><a class="btn primary" href="{ready.GRANOLA_DOWNLOAD}" target="_blank" '
+                         'rel="noopener">Get Granola</a></div>')
+    ts = checks["tailscale"]
+    problem = hostinfo.tailscale_problem(ts)
+    rows.append(("Tailscale", "Reaches your library from anywhere", problem or "connected", not problem))
+    if problem:
+        if ts.get("installed"):
+            text, label = ("Open Tailscale and sign in with the same account as your library’s computer.", "Open Tailscale")
+        else:
+            text, label = ("Without Tailscale, this computer reaches your library only on the same Wi-Fi.",
+                           "Install Tailscale")
+        busy = " disabled" if job.get("running") else ""
+        fixes.append(f'<p>{text}</p><div class="toolbar"><button class="primary" data-action="/api/tailscale" '
+                     f'data-out="ts-say" data-busy="Working…"{busy}>{label}</button></div>'
+                     f'<p class="say{" bad" if job.get("error") else ""}" id="ts-say">'
+                     f'{esc("Tailscale didn’t install: " + job["error"]) if job.get("error") else ""}</p>')
+    # Without Granola there's nothing to record with (red); without Tailscale, only home Wi-Fi works (orange).
+    items = "".join(
+        f'<div class="row"><span class="grow">{esc(name)}<span class="subtitle">{esc(what)}</span></span>'
+        f'<span class="value{" bad" if not ok and name == "Granola" else ""}">{esc(state)}</span>'
+        f'<span class="dot" style="--tag:{"var(--green)" if ok else "var(--red)" if name == "Granola" else "var(--orange)"}">'
+        '</span></div>' for name, what, state, ok in rows)
+    notice = f'<div class="notice" style="margin-top:.75rem"><div>{"".join(fixes)}</div></div>' if fixes else ""
+    return f'<div class="group-head">This computer</div><div class="group">{items}</div>{notice}'
+
+
 def _describe(e: dict) -> str:
     d = e.get("decision")
     if d == "shared":
@@ -339,7 +427,8 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
             return resp
         if not authed(request):
             return respond("Study Stash", "<header><h1>Study Stash</h1></header><p class=sub>Open "
-                           "<strong>Study Stash</strong> from your Applications folder to see this page.</p>")
+                           "<strong>Study Stash</strong> from your " + ("Applications folder" if mac() else "Start Menu")
+                           + " to see this page.</p>")
         return status_page() if runtime.configured() and runtime.watching else setup_page()
 
     # -- setup
@@ -360,7 +449,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                     f'<h2>{esc(title)}</h2></div><div class="group"><div class="fields">{inner}</div></div></section>')
 
         pool_inner = (
-            f'<p>The address and password from your Mac mini\'s setup (also under Settings in its web page).</p>'
+            f'<p>The address and password from your library\'s setup (also under Settings in its web page).</p>'
             f'<form class="stack" data-action="/api/pool" data-out="pool-say" data-busy="Connecting…">'
             f'<input type="url" name="server" value="{esc(server)}" placeholder="http://mac-mini:8787" aria-label="Library address" required>'
             f'<input type="password" name="key" value="{esc(key)}" placeholder="Password" aria-label="Password">'
@@ -414,9 +503,9 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                         f'data-out="finish-say"{"" if ready else " disabled"}>Finish setup</button></div>'
                         '<p class="say" id="finish-say"></p>')
         steps.append(step(n, "Start sending", False, not ready, finish_inner))
-        body = (f'<header><h1>Set up Study Stash</h1><p class="sub">Send your Granola lectures to your library on your '
-                f'Mac mini, where your own model writes their notes. {n} short steps.</p></header>'
-                f'{"".join(steps)}')
+        body = (f'<header><h1>Set up Study Stash</h1><p class="sub">Send your Granola lectures to your library, on your '
+                f'own computer, where your own model writes their notes. {n} short steps.</p></header>'
+                f'{_this_computer(runtime.readiness(), runtime.tailscale_job)}{"".join(steps)}')
         return respond("Set up Study Stash", body, watch=2)
 
     # -- status
@@ -427,6 +516,9 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                  ("Watching", "every few minutes" if runtime.watching else "stopped", not runtime.watching)]
         if mac() and cc.copy_transcripts:
             facts.append(("Transcripts", "copied from Granola" if copy["allowed"] else "needs permission", not copy["allowed"]))
+        checks = runtime.readiness()
+        if checks["granola_here"] and not checks["granola"]:
+            facts.append(("Granola app", "not installed on this computer", True))
         problem = runtime.client.last_error if runtime.client is not None else None
         signin_problem = bool(problem and "granola-share login" in problem)  # every sign-in failure says this
         send_kind = getattr(runtime.client, "send_problem_kind", None) if problem else None
@@ -448,7 +540,7 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                 '<input type="password" name="key" placeholder="The new password" aria-label="Library password" required>'
                 '<div class="actions" style="margin:0"><button class="primary">Reconnect</button></div></form>'
                 '<p class="say" id="problem-say"></p>'
-                '<p class="small muted" style="margin:.5rem 0 0">It\'s shown on the Mac mini, in your library\'s '
+                '<p class="small muted" style="margin:.5rem 0 0">It\'s shown on your library\'s computer, in the library\'s '
                 'Settings under Connect your laptop.</p></div></div>')
         elif problem:
             fix = ('<div class="toolbar"><button class="primary" data-action="/api/login" data-out="problem-say">'
@@ -496,7 +588,9 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                 f'{problem_html}{allow}<div class="group">{facts_html}</div>'
                 '<div class="toolbar" style="margin-top:1rem"><button class="primary" data-action="/api/check" '
                 'data-out="check-say">Check for new lectures now</button>'
-                f'<a class="btn" href="{esc(cc.server_url)}" target="_blank" rel="noopener">Open your library</a></div>'
+                # The Mac app signs in to the library itself; in a browser, /library does it.
+                f'<a class="btn" href="{esc(cc.server_url if mac() else "/library")}" target="_blank" rel="noopener">'
+                'Open your library</a></div>'
                 '<p class="say" id="check-say"></p>'
                 f'<h2>Recent lectures</h2>{recent}{settings}')
         return respond("Study Stash", body, watch=15)
@@ -519,8 +613,8 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
         try:
             info = check_server(url, key)
         except Exception as e:
-            hint = (" Check the password from your Mac mini's setup." if "password" in str(e) else
-                    " Is Tailscale on on both computers, and is the Mac mini awake?")
+            hint = (" Check the password from your library's setup." if "password" in str(e) else
+                    " Is Tailscale on on both computers, and is the library's computer awake?")
             raise HTTPException(400, f"Couldn't connect: {e}.{hint}")
         cc = runtime.config()
         cc.server_url, cc.pool_key, cc.pool_name = url, key, str(info.get("pool_name") or "your library")
@@ -568,6 +662,11 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
         runtime.check_now()
         return {"message": "All set. Checking Granola now…"}
 
+    @app.post("/api/tailscale")
+    def tailscale(request: Request):
+        require(request)
+        return {"message": runtime.fix_tailscale(), "reload": False}
+
     @app.post("/api/check")
     def check(request: Request):
         require(request)
@@ -603,12 +702,34 @@ def create_client_app(runtime: ClientRuntime, *, port: int = DEFAULT_PORT, check
                 "problem": runtime.client.last_error if runtime.client is not None else None,
                 "copy": runtime.copy_status(), "watching": runtime.watching, "pool_name": cc.pool_name,
                 "recent_key": [(e.get("title"), e.get("decision"), e.get("filed")) for e in recent[:5]],
-                "version": __version__}
+                "ready": _ready_key(runtime.readiness(), runtime.tailscale_job), "version": __version__}
+
+    @app.get("/library", response_class=HTMLResponse)
+    def open_library(request: Request):
+        """"Open your library", already signed in: sends the password this laptop has to the library's
+        login form, as if you'd typed it. The strict cookie keeps other sites from opening this."""
+        cc = runtime.config()
+        if not authed(request) or not cc.server_url:
+            return RedirectResponse("/", status_code=303)
+        target = urlsplit(cc.server_url)
+        origin = f"{target.scheme}://{target.netloc}"
+        nonce = secrets.token_urlsafe(16)
+        body = (f'<form id="go" method="post" action="{esc(origin)}/login"><input type="hidden" name="password" '
+                f'value="{esc(cc.pool_key)}"><input type="hidden" name="next" value="/">'
+                f'<p class="sub">Opening {esc(cc.pool_name or "your library")}…</p>'
+                '<noscript><button class="primary">Open your library</button></noscript></form>'
+                f'<script nonce="{nonce}">document.getElementById("go").submit()</script>')
+        page = ui.head("Opening your library", nonce) + f'<body><div class="solo">{body}</div></body></html>'
+        csp = (f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline'; img-src 'self'; "
+               f"form-action {origin}; frame-ancestors 'none'; base-uri 'none'")
+        return HTMLResponse(page, headers={"Content-Security-Policy": csp, "Cache-Control": "no-store",
+                                           "Referrer-Policy": "no-referrer"})
 
     @app.get("/healthz")
     def healthz():
         return {"ok": True, "app": "granola-share", "version": __version__}
 
+    ui.add_icon_routes(app)
     return app
 
 
@@ -722,7 +843,7 @@ def open_app(home: Path, install: bool = False, log=print, browser: bool = True)
     if install:
         from .update import cleanup_legacy
 
-        if mac() and launcher.native_installed() is None:
+        if (mac() or windows()) and native_app() is None:
             _install_native_app(log)
         autostart.install("client", home)
         launcher.install(home)
@@ -736,19 +857,21 @@ def open_app(home: Path, install: bool = False, log=print, browser: bool = True)
         log(f"Study Stash didn't start. See {home / 'logs' / 'client.log'}, or run `granola-share doctor`.")
         return None
     if browser:
-        native = launcher.native_installed() if mac() else None
+        native = native_app()
         if native is None or not dialogs.open_app(str(native)):
-            dialogs.open_url(url)
+            dialogs.open_window(url)  # no app yet (or Linux): its own browser window, with the Study Stash icon
     return url
 
 
 def _install_native_app(log=print) -> None:
-    """The first install on a Mac also gets the Study Stash app from the newest release, if it has one."""
+    """The first install on a Mac or PC also gets the Study Stash app from the newest release, if it has one."""
     from . import launcher, update
 
     try:
         rel = update.latest_release()
     except Exception:
         return
-    if rel and rel.mac_app:
+    if rel and mac() and rel.mac_app:
         launcher.install_native(rel.mac_app, log=log)
+    elif rel and windows() and rel.windows_app:
+        launcher.install_windows_app(rel.windows_app, log=log)

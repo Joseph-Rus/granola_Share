@@ -12,27 +12,44 @@ from pathlib import Path
 import httpx
 
 RAW = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main"
-TAILSCALE_PATHS = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", r"C:\Program Files\Tailscale\tailscale.exe"]
+TAILSCALE_PATHS = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale",
+                   r"C:\Program Files\Tailscale\tailscale.exe"]
+
+
+def tailscale_exe() -> str | None:
+    return next((exe for exe in [shutil.which("tailscale"), *TAILSCALE_PATHS] if exe and Path(exe).exists()), None)
 
 
 def tailscale_info(runner=subprocess.run) -> dict:
-    """{"installed", "running", "dns", "ips"} from `tailscale status --json`."""
-    info = {"installed": False, "running": False, "dns": "", "ips": []}
+    """{"installed", "running", "state", "dns", "ips", "exe"} from `tailscale status --json`. `state` is
+    Tailscale's own: Running, NeedsLogin (signed out), Stopped (turned off), or "" when it didn't answer."""
+    info = {"installed": False, "running": False, "state": "", "dns": "", "ips": [], "exe": ""}
     for exe in [shutil.which("tailscale"), *TAILSCALE_PATHS]:
         if not exe or not Path(exe).exists():
             continue
-        info["installed"] = True
+        info["installed"], info["exe"] = True, exe
         try:
             out = runner([exe, "status", "--json"], capture_output=True, text=True, timeout=10).stdout
             data = json.loads(out)
         except Exception:
             continue
         me = data.get("Self") or {}
-        info["running"] = data.get("BackendState") == "Running"
+        info["state"] = str(data.get("BackendState") or "")
+        info["running"] = info["state"] == "Running"
         info["dns"] = str(me.get("DNSName") or "").rstrip(".")
         info["ips"] = [ip for ip in me.get("TailscaleIPs") or [] if "." in ip]
         break
     return info
+
+
+def tailscale_problem(ts: dict) -> str:
+    """What's wrong with Tailscale here, in a few words, or "" when it's connected."""
+    if ts.get("running"):
+        return ""
+    if not ts.get("installed"):
+        return "not installed"
+    return {"NeedsLogin": "installed, but signed out", "NeedsMachineAuth": "waiting for approval in your Tailscale admin page",
+            "Stopped": "installed, but turned off"}.get(ts.get("state", ""), "installed, but not running")
 
 
 def server_urls(port: int, ts: dict | None = None) -> list[str]:

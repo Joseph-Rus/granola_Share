@@ -25,6 +25,7 @@ from . import __version__, autostart
 REPO_SLUG = "Joseph-Rus/study-stash"
 LATEST_API = f"https://api.github.com/repos/{REPO_SLUG}/releases/latest"
 MAC_APP_ASSET = "Study-Stash-mac.zip"  # the native Mac app (macos/build.sh), attached to each release by CI
+WINDOWS_APP_ASSET = "Study-Stash-windows.zip"  # the Windows app (windows/build.ps1), likewise
 FIRST_CHECK_AFTER = 10 * 60
 CHECK_EVERY = 6 * 3600
 LOCK_STALE_AFTER = 20 * 60
@@ -37,6 +38,7 @@ class Release:
     url: str  # source archive uv installs from
     page: str  # release notes
     mac_app: str = ""  # download URL of the native Mac app, when the release has one
+    windows_app: str = ""  # and of the Windows app
 
 
 def parse_version(v: str) -> tuple[int, ...]:
@@ -57,9 +59,9 @@ def latest_release(get=httpx.get) -> Release | None:
     r.raise_for_status()
     data = r.json()
     tag = str(data["tag_name"])
-    mac_app = next((str(a.get("browser_download_url") or "") for a in data.get("assets") or []
-                    if a.get("name") == MAC_APP_ASSET), "")
-    return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""), mac_app)
+    assets = {str(a.get("name")): str(a.get("browser_download_url") or "") for a in data.get("assets") or []}
+    return Release(tag, parse_version(tag), archive_url(tag), str(data.get("html_url") or ""),
+                   assets.get(MAC_APP_ASSET, ""), assets.get(WINDOWS_APP_ASSET, ""))
 
 
 _cache: dict = {"at": 0.0, "release": None}
@@ -184,6 +186,10 @@ def apply(release: Release, home: Path, *, log=print, run=subprocess.run, restar
     roles = autostart.installed_roles()
     (home / "logs").mkdir(parents=True, exist_ok=True)
     if platform.system() == "Windows":
+        from . import launcher
+
+        if release.windows_app and launcher.windows_app_exe():  # the Study Stash app updates along with everything else
+            launcher.install_windows_app(release.windows_app, log=log)
         script = _windows_script(home, uv, release.url, roles if restart_services else [])
         _spawn_detached(["cmd", "/c", str(script)])
         log(f"Installing {release.tag} in the background (log: {home / 'logs' / 'update.log'}).")

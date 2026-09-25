@@ -201,7 +201,7 @@ class ShareClient:
         if getattr(getattr(e, "response", None), "status_code", None) == 401:
             kind, text = "password", f"{self.library} turned down this laptop's password, so lectures are waiting here."
         elif isinstance(e, httpx.TransportError):
-            kind, text = "unreachable", (f"Can't reach {self.library} right now. Is the Mac mini awake, with Tailscale "
+            kind, text = "unreachable", (f"Can't reach {self.library} right now. Is its computer awake, with Tailscale "
                                          "on? Lectures wait here and go as soon as it's back.")
         else:
             kind, text = "other", f"Couldn't send to {self.library}: {e}"

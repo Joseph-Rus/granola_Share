@@ -63,6 +63,35 @@ def test_server_notices_ollama_down_and_old_version_running(tmp_path):
     assert checks["Ollama"].state == doctor.FAIL
 
 
+def test_server_says_whether_ollama_needs_installing_or_opening(tmp_path):
+    cfg = server_cfg(tmp_path)
+    kw = dict(http_get=healthy, service_status=lambda r: "running", latest=lambda: None, list_models=lambda h: None,
+              tailscale=lambda: {"installed": True, "running": False, "state": "NeedsLogin"}, system="Darwin",
+              sleep_minutes=lambda: 0)
+    missing = by_name(doctor.server_checks(cfg, ollama_installed=lambda: False, **kw))
+    assert "not installed" in missing["Ollama"].detail and "granola-share setup" in missing["Ollama"].fix
+    closed = by_name(doctor.server_checks(cfg, ollama_installed=lambda: True, **kw))
+    assert "installed, but not answering" in closed["Ollama"].detail and "open -a Ollama" in closed["Ollama"].fix
+    assert "signed out" in closed["Tailscale"].detail and "sign in" in closed["Tailscale"].fix
+
+
+def test_windows_library_checks_the_firewall_and_sleep(tmp_path):
+    cfg = server_cfg(tmp_path)
+    checks = by_name(doctor.server_checks(
+        cfg, http_get=healthy, service_status=lambda r: "running", latest=lambda: None, system="Windows",
+        list_models=lambda h: [{"name": "qwen3:1.7b", "size_gb": 1.4}, {"name": "big:35b", "size_gb": 23}],
+        tailscale=lambda: {"installed": True, "running": True, "dns": "pc.ts.net", "ips": []},
+        firewall=lambda port: False, sleep_minutes=lambda: 30))
+    assert checks["Firewall"].state == doctor.WARN and "8787" in checks["Firewall"].detail
+    assert checks["Sleep"].state == doctor.WARN and "Never" in checks["Sleep"].fix
+    fine = by_name(doctor.server_checks(
+        cfg, http_get=healthy, service_status=lambda r: "running", latest=lambda: None, system="Windows",
+        list_models=lambda h: [{"name": "qwen3:1.7b", "size_gb": 1.4}, {"name": "big:35b", "size_gb": 23}],
+        tailscale=lambda: {"installed": True, "running": True, "dns": "pc.ts.net", "ips": []},
+        firewall=lambda port: True, sleep_minutes=lambda: 0))
+    assert "Firewall" not in fine and "Sleep" not in fine
+
+
 def test_client_checks(tmp_path):
     cc = ClientConfig(home=tmp_path, server_url="http://mini:8787", pool_key="pw", pool_name="Fall")
     save_client_config(cc)

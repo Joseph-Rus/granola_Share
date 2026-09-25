@@ -112,7 +112,7 @@ def test_pool_errors_say_what_to_check(tmp_path):
     rt, c = app(tmp_path, check=bad)
     login(c, tmp_path)
     r = c.post("/api/pool", json={"server": "mini:8787", "key": "nope"}, headers=H)
-    assert r.status_code == 400 and "Check the password from your Mac mini" in r.json()["detail"]
+    assert r.status_code == 400 and "Check the password from your library" in r.json()["detail"]
 
 
 def test_status_page_lists_recent_lectures(tmp_path, monkeypatch):
@@ -234,3 +234,32 @@ def test_status_page_asks_to_sign_in_again_when_granola_signed_out(tmp_path):
     page = c.get("/").text
     assert "Granola signed you out" in page and "Sign in to Granola again" in page and "needs you to sign in again" in page
     assert "granola-share login" not in page  # no terminal commands on the page
+
+
+def test_open_your_library_signs_in_from_a_browser(tmp_path, monkeypatch):
+    monkeypatch.setattr(client_app, "mac", lambda: False)  # Windows and Linux: no Mac app to sign in for us
+    cc = ClientConfig(home=tmp_path, server_url="http://mini.tail.ts.net:8787", pool_key="p&w", pool_name="Fall pool")
+    save_client_config(cc)
+    cc.tokens_path.write_text("{}")
+    rt = FakeRuntime(tmp_path)
+    rt._watching = True
+    rt, c = app(tmp_path, runtime=rt)
+    assert c.get("/library").status_code == 303  # not without the page's own cookie
+    login(c, tmp_path)
+    assert 'href="/library"' in c.get("/").text
+    r = c.get("/library")
+    assert r.status_code == 200 and 'action="http://mini.tail.ts.net:8787/login"' in r.text
+    assert 'name="password" value="p&amp;w"' in r.text and ".submit()" in r.text
+    csp = r.headers["content-security-policy"]
+    assert "form-action http://mini.tail.ts.net:8787" in csp and "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
+    assert r.headers["cache-control"] == "no-store"
+    monkeypatch.setattr(client_app, "mac", lambda: True)  # the Mac app signs in by itself
+    assert 'href="http://mini.tail.ts.net:8787"' in c.get("/").text
+
+
+def test_pages_have_the_study_stash_icon(tmp_path):
+    rt, c = app(tmp_path)
+    r = c.get("/favicon.ico")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/x-icon" and len(r.content) > 1000
+    assert c.get("/apple-touch-icon.png").headers["content-type"] == "image/png"
+    assert 'rel="icon" href="/favicon.ico"' in c.get("/").text

@@ -330,7 +330,7 @@ def head(title: str, nonce: str, math: bool = False) -> str:
     extra = f'<link rel="stylesheet" href="{KATEX}/katex.min.css">' if math else ""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
-            f'<meta name="color-scheme" content="light dark">'
+            f'<meta name="color-scheme" content="light dark">{ICON_LINKS}'
             f'<title>{esc(title)}</title>{extra}<style nonce="{nonce}">{CSS}</style></head>')
 
 
@@ -390,6 +390,35 @@ def page(title: str, body: str, ctx: dict, *, math: bool = False) -> str:
     return (head(f"{title} · {ctx['pool_name']}" if title != ctx["pool_name"] else title, nonce, math)
             + f'<body><div class="app">{sidebar(ctx)}{topbar(ctx)}<main class="main"><div class="wrap">{body}</div></main></div>'
             + scripts(nonce, math) + "</body></html>")
+
+
+# The Study Stash icon on every page: the browser tab, the taskbar button of an Edge or Chrome app window
+# (that's the Windows app), and an iPhone's home screen.
+ICON_LINKS = ('<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" href="/icon.png">'
+              '<link rel="apple-touch-icon" href="/apple-touch-icon.png">')
+ICON_FILES = {"/favicon.ico": ("study-stash.ico", "image/x-icon"), "/icon.png": ("icon.png", "image/png"),
+              "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png")}
+
+
+def add_icon_routes(app) -> None:
+    """Serve the icon files; they need no sign-in."""
+    from pathlib import Path
+
+    from fastapi import Response
+
+    assets = Path(__file__).resolve().parent / "assets"
+
+    def route(name: str, kind: str):
+        def icon():
+            try:
+                data = (assets / name).read_bytes()
+            except OSError:
+                return Response(status_code=404)
+            return Response(data, media_type=kind, headers={"Cache-Control": "public, max-age=86400"})
+        return icon
+
+    for path, (name, kind) in ICON_FILES.items():
+        app.get(path, include_in_schema=False)(route(name, kind))
 
 
 def bare_page(title: str, body: str, nonce: str) -> str:

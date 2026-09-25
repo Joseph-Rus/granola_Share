@@ -1,14 +1,14 @@
 # Study Stash
 
 Your Granola lectures, rewritten into study notes by your own model and sorted by class, on
-your own Mac mini (or any always-on computer). Free and open source.
+your own Mac mini or Windows PC (any computer that stays on). Free and open source.
 
 > Study Stash is an independent project, **not affiliated with or endorsed by Granola**.
 > "Granola" is a trademark of its owner, and is used here only to say what this works with.
 
 - **Your laptop** records lectures in Granola, as usual. When Granola finishes a lecture, a
   small background app sends it to your library.
-- **Your Mac mini** keeps the library. It writes study notes from each lecture's transcript
+- **Your Mac mini** (or a Windows PC that stays on) keeps the library. It writes study notes from each lecture's transcript
   with the Ollama model you pick, files each lecture under its class, and serves a web page
   you can open from your laptop or phone over Tailscale.
 
@@ -28,36 +28,54 @@ your laptop                                        your Mac mini
                                                   └────────────────────────────────────┘
 ```
 
-## 1. Set up the Mac mini
+## 1. Set up the library's computer
+
+On the Mac mini (or any Mac or Linux computer that stays on), in Terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- server
 ```
 
-The installer puts a `granola-share` command on the Mac mini. It uses uv, so it needs no admin
+On a Windows PC, in PowerShell:
+
+```powershell
+$env:GRANOLA_SHARE_ROLE='server'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
+```
+
+The installer puts a `granola-share` command on that computer. It uses uv, so it needs no admin
 rights, git, or Python install, and it keeps its own Python, so a system upgrade can't break it.
 Setup then walks through six steps:
 
-1. **Your library:** a name, a password (your laptop and browser use it), the notes folder, and
+1. **Get this computer ready:** shows the memory and free disk space, then checks
+   [Tailscale](https://tailscale.com) (so your laptop and phone reach the library from anywhere)
+   and [Ollama](https://ollama.com) (which runs the model that writes your notes). If one is
+   missing, setup offers to install it from its official site. If it's closed or signed out,
+   setup starts it or connects it. Tailscale's installer asks for your password (Mac) or
+   permission (Windows), and you sign in to Tailscale in your browser. Over SSH, setup tells you
+   what to click on the Mac itself instead.
+2. **Your library:** a name, a password (your laptop and browser use it), the notes folder, and
    the web port. It checks that the folder is writable and the port is free.
-2. **Classes:** the folders lectures are sorted into, plus any short names you use in Granola
+3. **Classes:** the folders lectures are sorted into, plus any short names you use in Granola
    folder names or titles.
-3. **AI:** lists your Ollama models (and starts Ollama if it's closed), then asks which model
-   writes the study notes and which sorts. It offers to download a missing model.
-4. **Granola on this computer** (optional; usually your laptop sends the lectures).
-5. **Keep it running:** starts at login and installs updates by itself. It checks that the
-   library actually answers before moving on.
+4. **Study notes:** lists your Ollama models and asks which model writes the study notes and
+   which sorts. It downloads a missing model with a progress bar, then has the model answer once,
+   so you know it works before the first lecture arrives.
+5. **Keep it running:** starts at login, restarts if it stops, and installs updates by itself. It
+   checks that the library actually answers. On Windows it also lets your laptop through Windows
+   Firewall (for Tailscale and your own network only; Windows asks first) and offers to keep the PC
+   awake while it's plugged in. On a Mac it tells you if the Mac will sleep.
 6. **Connect your laptop:** prints the address, the password, and a one-line install for your
    laptop with both filled in.
 
 Rerunning setup is safe: your earlier answers become the defaults. `granola-share doctor`
-checks the whole setup at any time.
+checks the whole setup at any time, and says what to fix.
 
-**Requirements:** [Ollama](https://ollama.com) for study notes and AI sorting (optional: Granola
-folder and title rules still sort without it), and [Tailscale](https://tailscale.com/download) on
-both computers, signed in to the same account, so the laptop reaches the Mac mini away from
-home. On the Mac mini, turn on System Settings → Energy → "Prevent automatic sleeping when the
-display is off", or the library goes offline every time it sleeps.
+**Requirements:** Tailscale on both computers, signed in to the same account, so the laptop
+reaches the library away from home. Without it, the laptop reaches the library only on the same
+Wi-Fi. Ollama is needed for study notes and AI sorting. Without it, Granola folder and title
+rules still sort lectures. Setup installs both for you if you say yes. The library goes offline
+while its computer sleeps: on a Mac, turn on System Settings → Energy → "Prevent automatic
+sleeping when the display is off".
 
 **Which model?** Setup suggests one that fits your RAM. With 40 GB or more, use
 `qwen3.6:35b-a3b`: it's a mixture-of-experts model with 35B-class judgment but only about 3B
@@ -66,8 +84,10 @@ the same model for both jobs avoids reloading it between the two steps.
 
 ## 2. Connect your laptop
 
-Paste the line from the Mac mini's setup (it's also under **Settings → Connect your laptop** on
-the library's web page):
+This is the computer you record lectures on, a Mac or a Windows PC. It needs
+[Granola](https://www.granola.ai/download), since that's what records the lectures. (The library's
+computer doesn't need Granola.) Paste the line from the library's setup (it's also under
+**Settings → Connect your laptop** on the library's web page):
 
 ```bash
 # Mac / Linux (Terminal)
@@ -79,8 +99,12 @@ $env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SH
 ```
 
 That's the last time you touch the terminal on the laptop. The line installs granola-share,
-starts it in the background, adds the **Study Stash** app (a real Mac app in Applications; the
-Start Menu on Windows), and opens it on setup with the address and password filled in:
+starts it in the background, adds the **Study Stash** app (in Applications on a Mac, in the Start
+Menu on Windows), and opens it on setup with the address and password filled in.
+
+At the top, **This computer** checks for Granola and Tailscale. If Granola is missing, **Get
+Granola** opens its download page. If Tailscale is missing, **Install Tailscale** downloads its
+installer and opens it; if it's signed out, **Open Tailscale** opens it to sign in. Then:
 
 1. **Connect to your library.** One click checks the address and password.
 2. **Sign in to Granola.** A browser tab opens for your Granola account.
@@ -97,15 +121,19 @@ Start Menu on Windows), and opens it on setup with the address and password fill
 Each step turns into a green check when it's done. (`granola-share client setup` still works in
 the terminal if you prefer it.)
 
-### Or: the Mac app on its own
+### Or: the app on its own
 
-Every release also has **Study-Stash.dmg** (on the
-[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest)). Open it and drag
-Study Stash into Applications. The first time you open it, it installs its background helper
-with one click, then shows the same setup. macOS asks once before opening an app from the
-internet that isn't from the App Store: click **Done**, then **System Settings → Privacy &
-Security → Open Anyway**. The install line above skips that question, because it fetches the
-app itself.
+Every release also has the app by itself, on the
+[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest). The first time you
+open it, it installs its background helper with one click, then shows the same setup. The
+install line above skips the security question below, because it fetches the app itself.
+
+- **Mac: Study-Stash.dmg.** Open it and drag Study Stash into Applications. macOS asks once
+  before opening an app from the internet that isn't from the App Store: click **Done**, then
+  **System Settings → Privacy & Security → Open Anyway**.
+- **Windows: Study-Stash-Setup.exe.** Run it. It installs for your account only, with no admin
+  rights, and adds Study Stash to the Start Menu. The app isn't signed, so Windows may say
+  "Windows protected your PC": click **More info**, then **Run anyway**.
 
 <p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Study Stash app's first screen: Welcome to Study Stash, with an Install and Continue button"></p>
 
@@ -122,6 +150,11 @@ Open **Study Stash** from Applications or Spotlight. Its toolbar has two tabs:
 
 ⌘R reloads, ⌘+ and ⌘− zoom, and downloads land in Downloads. It follows your Mac's light or
 dark mode. On the Mac mini the app shows just the library.
+
+**On Windows** it's the same app: open **Study Stash** from the Start Menu. Its tabs are **This
+PC** (Ctrl+1) and **Library** (Ctrl+2), F5 reloads, Ctrl+plus and Ctrl+minus zoom, and it follows
+Windows' light or dark mode. It's built on WebView2, the Edge engine that comes with Windows 10
+and 11. (On Linux, Study Stash opens in its own Chrome or Edge window instead.)
 
 ## When a lecture finishes
 
@@ -220,7 +253,12 @@ Start with `granola-share doctor`. It checks every piece and prints a fix for ea
 |---|---|
 | The installer failed | Read `~/.granola-share/install.log`, then rerun the same line. It's safe to repeat. |
 | `granola-share: command not found` | Open a new terminal window, or use `~/.local/bin/granola-share`. |
-| Laptop: "could not reach …" | Tailscale on and signed in on both computers, and the Mac mini awake. Try the `100.x.y.z` address instead of the name. |
+| Laptop: "could not reach …" | Tailscale on and signed in on both computers, and the library's computer awake. Try the `100.x.y.z` address instead of the name. |
+| "Granola app ✗ not installed" | Install Granola from [granola.ai/download](https://www.granola.ai/download). Only the laptop needs it, not the library's computer. |
+| Windows: "Windows protected your PC" | The app isn't signed. Click **More info**, then **Run anyway**. The install line avoids the question. |
+| Windows: Study Stash asks for WebView2 | Older Windows 10 may not have it. Say yes, and install it from Microsoft. |
+| Laptop can't reach a library on Windows | Windows Firewall. Rerun `granola-share setup` on the PC and let it add the rule (Windows asks for permission). |
+| Tailscale "signed out" or "turned off" | Open Tailscale and sign in with the same account on both computers, or rerun `granola-share setup` to connect it. |
 | Laptop: "wrong password" | The password is in the Mac mini's `~/.granola-share/config.toml`, and under Settings on the library's page. |
 | No study notes, only Granola's | The transcript wasn't copied (open the lecture's transcript in Granola), or Ollama is closed on the Mac mini. |
 | A lecture shows "Failed" | Open it, then **Try again**. The reason is on the page and in `~/.granola-share/logs/server.log`. |
@@ -236,13 +274,13 @@ Logs live in `~/.granola-share/logs/` (`server.log`, `client.log`, `update.log`)
 |---|---|
 | `setup` | set up the library (safe to rerun; `--help` lists flags to answer without prompts) |
 | `run` | the library: web page, ingest API, study notes (+ its own sync if enabled) |
-| `client open [--install] [--no-browser]` | show Study Stash (the app on a Mac, else the browser), starting its service if needed |
+| `client open [--install] [--no-browser]` | show Study Stash (the app on a Mac, its own window on Windows), starting its service if needed |
 | `client setup` | laptop setup in the terminal instead (`--server`, `--key`, `--mode`, `--yes`, …) |
 | `client run [--no-ui]` / `client once [--auto]` | the laptop's background service, or check once |
 | `client login` / `login` | sign in to Granola again |
 | `doctor` | check this computer's setup and print fixes |
 | `update [--check]` | install the newest release and restart the background service |
-| `autostart install\|uninstall\|status --role server\|client` | background service: launchd, Windows Startup folder, or systemd --user |
+| `autostart install\|uninstall\|status --role server\|client` | background service: launchd, the Windows Startup folder (with a keep-alive loop and log), or systemd --user |
 | `tools --probe` | print Granola's MCP tools and your latest notes (debugging) |
 
 Everything lives in `~/.granola-share` (override with `--home` or `GRANOLA_SHARE_HOME`):
@@ -292,12 +330,16 @@ connector is free. Details and alternatives are in [docs/DESIGN.md](docs/DESIGN.
 granola_share/
   config.py     library + laptop TOML config (reader and writer)
   wizard.py     the two terminal setups (every question answerable by a flag)
+  ready.py      get the library's computer ready: install/connect Tailscale and Ollama, Windows
+                firewall and sleep
   doctor.py     `granola-share doctor` health checks
   oauth.py      discovery, dynamic client registration, PKCE login, refresh
   granola.py    MCP client; discovers tool argument names at runtime
   client.py     laptop watcher: poll → popup → send → "it's filed"
   client_app.py the laptop's Study Stash page: setup and status, on 127.0.0.1 only
   launcher.py   the Study Stash app (native on macOS, else a script), Start Menu, .desktop
+  assets/       the icon for Windows, Linux, and the pages (from macos/icon_assets.py)
+windows/        the Windows app: StudyStash.cs (WebView2), build.ps1 → zip, setup.iss → Setup.exe
 macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .app, zip, DMG; tour.py
                 → docs/screenshots
   transcript_grab.py  macOS, optional: copy transcripts from the Granola window
@@ -308,7 +350,7 @@ macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .ap
   pipeline.py   background worker: summarize → sort → save
   summarize.py  study notes from a transcript (chunked for long lectures)
   classify.py   rules → Ollama structured output → Unsorted
-  ollama.py     list / start / pull / recommend models
+  ollama.py     find / start / pull (with progress) / try / recommend models
   hostinfo.py   Tailscale address, the laptop install line, port checks
   sync.py       the library's own Granola poll loop (optional)
   web.py, ui.py FastAPI app and its HTML
@@ -316,7 +358,9 @@ macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .ap
 tests/          offline tests: .venv/bin/python -m pytest
 ```
 
-Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`).
+Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`),
+and the Windows app with `windows\build.ps1` (the .NET SDK, plus Inno Setup for Setup.exe). The
+Windows app also compiles on a Mac with the .NET SDK, which is a quick check before CI.
 Redo the README's screenshots with `uv run --with pillow python macos/tour.py` after a build. It
 serves made-up lectures, lets the app capture its own window, and blurs addresses and passwords.
 From a checkout: `python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`. To try the
@@ -331,8 +375,10 @@ installer against your working copy, run
   button), so a Granola redesign can break it until granola-share is updated. The Study Stash
   page and `doctor` show when the last copy happened. Accessibility access is granted to the
   python3.12 that granola-share runs on, so other programs using that same Python share it.
-- The Windows installer, Startup-folder service, and self-update helper are written against the
-  Windows APIs. CI runs the installer and the tests on Windows, but the background service and
-  the popups have only been used for real on macOS.
+- On Windows, CI runs the installer, the tests, the library as a background service (with its
+  keep-alive loop and log), and the Start Menu shortcut. It also builds the Windows app, checks
+  that it starts and shows its first screen, and installs it with Setup.exe. Installing Ollama and
+  Tailscale from setup, the firewall rule, the app's sign-in to the library, and the popups
+  haven't been used on a real Windows PC yet.
 - Lecture recordings capture other people (your professors, classmates). Check your school's
   recording policy.

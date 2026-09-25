@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import platform
 import shutil
 import subprocess
@@ -91,25 +93,66 @@ def recommended_model(ram_gb: float | None) -> str:
     return "qwen3:1.7b"  # ~1.4 GB
 
 
-def installed() -> bool:
-    return bool(shutil.which("ollama")) or Path("/Applications/Ollama.app").exists()
+def _mac_apps() -> list[Path]:
+    return [Path("/Applications/Ollama.app"), Path.home() / "Applications" / "Ollama.app"]
+
+
+def _windows_dir() -> Path:
+    """Where OllamaSetup.exe puts it: in your own account, no admin needed."""
+    return Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "Programs" / "Ollama"
+
+
+def find_exe(system: str | None = None) -> str | None:
+    """The `ollama` command. A fresh install isn't on this process's PATH yet, so its usual homes are checked too."""
+    system = system or platform.system()
+    if shutil.which("ollama"):
+        return shutil.which("ollama")
+    if system == "Darwin":
+        places = [app / "Contents" / "Resources" / "ollama" for app in _mac_apps()]
+        places += [Path("/opt/homebrew/bin/ollama"), Path("/usr/local/bin/ollama")]
+    elif system == "Windows":
+        places = [_windows_dir() / "ollama.exe"]
+    else:
+        places = [Path("/usr/local/bin/ollama"), Path("/usr/bin/ollama")]
+    return next((str(p) for p in places if p.exists()), None)
+
+
+def app_path(system: str | None = None) -> Path | None:
+    """The Ollama app (Mac) or its tray app (Windows): they keep Ollama running and start it at login."""
+    system = system or platform.system()
+    if system == "Darwin":
+        return next((a for a in _mac_apps() if a.exists()), None)
+    if system == "Windows":
+        tray = _windows_dir() / "ollama app.exe"
+        return tray if tray.exists() else None
+    return None
+
+
+def installed(system: str | None = None) -> bool:
+    return bool(find_exe(system) or app_path(system))
+
+
+def _detached() -> dict:
+    if platform.system() == "Windows":
+        return {"creationflags": 0x00000008 | 0x00000200}  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    return {"start_new_session": True}
 
 
 def start(host: str, wait: float = 20) -> bool:
     """Start Ollama if it is installed but not running. True once it answers."""
     if list_models(host) is not None:
         return True
+    system = platform.system()
+    app, exe = app_path(system), find_exe(system)
     try:
-        if platform.system() == "Darwin" and Path("/Applications/Ollama.app").exists():
-            subprocess.run(["open", "-g", "-a", "Ollama"], capture_output=True, timeout=10)
-        elif shutil.which("ollama"):
-            flags = {}
-            if platform.system() == "Windows":
-                flags["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-            else:
-                flags["start_new_session"] = True
-            subprocess.Popen([shutil.which("ollama"), "serve"], stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, **flags)
+        if system == "Darwin" and app:
+            # Over SSH with nobody signed in on the Mac's screen, `open` can't start an app: serve directly.
+            if subprocess.run(["open", "-g", "-a", str(app)], capture_output=True, timeout=10).returncode != 0 and exe:
+                subprocess.Popen([exe, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_detached())
+        elif system == "Windows" and app:
+            subprocess.Popen([str(app)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_detached())
+        elif exe:
+            subprocess.Popen([exe, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_detached())
         else:
             return False
     except Exception:
@@ -122,8 +165,48 @@ def start(host: str, wait: float = 20) -> bool:
     return False
 
 
-def pull(model: str) -> bool:
-    exe = shutil.which("ollama")
-    if not exe:
-        return False
-    return subprocess.run([exe, "pull", model]).returncode == 0
+def pull(model: str, host: str = "http://localhost:11434", progress=None) -> tuple[bool, str]:
+    """Download a model through Ollama's own API, so no `ollama` command is needed.
+    `progress(done_bytes, total_bytes)` is called as it goes. Returns (ok, why it failed)."""
+    layers: dict[str, tuple[int, int]] = {}
+    try:
+        with httpx.stream("POST", host.rstrip("/") + "/api/pull", json={"model": model},
+                          timeout=httpx.Timeout(60, connect=10)) as r:
+            for line in r.iter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    ev = json.loads(line)
+                except ValueError:
+                    continue
+                if ev.get("error"):
+                    return False, str(ev["error"])
+                if ev.get("digest") and ev.get("total"):
+                    layers[ev["digest"]] = (int(ev.get("completed") or 0), int(ev["total"]))
+                    if progress:
+                        progress(sum(d for d, _ in layers.values()), sum(t for _, t in layers.values()))
+                if ev.get("status") == "success":
+                    return True, ""
+            if r.status_code != 200:
+                return False, f"Ollama answered {r.status_code}"
+    except httpx.HTTPError as e:
+        return False, str(e) or type(e).__name__
+    return False, "the download stopped before it finished"
+
+
+def try_model(host: str, model: str, timeout: float = 600) -> tuple[float | None, str]:
+    """Load the model and have it write a few words, the way a lecture will: (seconds, "") or (None, why)."""
+    began = time.time()
+    body = {"model": model, "messages": [{"role": "user", "content": "Reply with the single word: ready"}],
+            "stream": False, "think": False, "options": {"num_predict": 16}}
+    try:
+        r = httpx.post(host.rstrip("/") + "/api/chat", json=body, timeout=httpx.Timeout(timeout, connect=10))
+        if r.status_code != 200:
+            try:
+                why = r.json().get("error") or r.text
+            except ValueError:
+                why = r.text
+            return None, str(why).strip()[:300] or f"Ollama answered {r.status_code}"
+    except httpx.HTTPError as e:
+        return None, str(e) or type(e).__name__
+    return time.time() - began, ""

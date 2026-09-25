@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import platform
-import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
-from . import __version__, autostart, hostinfo, ollama, update
+from . import __version__, autostart, hostinfo, ollama, ready, update
 from .config import ClientConfig, Config
+from .ready import mac_sleep_minutes  # noqa: F401  (kept importable from here)
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -34,16 +33,6 @@ def _log_tail(path: Path, n: int = 6) -> str:
     return "\n".join(lines[-n:])
 
 
-def mac_sleep_minutes(runner=subprocess.run) -> int | None:
-    """System sleep timer from `pmset -g` (0 = never sleeps)."""
-    try:
-        out = runner(["pmset", "-g"], capture_output=True, text=True, timeout=10).stdout
-    except Exception:
-        return None
-    m = re.search(r"^\s*sleep\s+(\d+)", out, re.MULTILINE)
-    return int(m.group(1)) if m else None
-
-
 def _version_check(latest=update.cached_latest) -> Check:
     rel = latest()
     if update.is_newer(rel):
@@ -54,7 +43,8 @@ def _version_check(latest=update.cached_latest) -> Check:
 # --- the library (the Mac mini) -------------------------------------------------------
 
 def server_checks(cfg: Config, *, http_get=httpx.get, list_models=ollama.list_models, service_status=autostart.status,
-                  tailscale=hostinfo.tailscale_info, sleep_minutes=mac_sleep_minutes, latest=update.cached_latest,
+                  tailscale=hostinfo.tailscale_info, sleep_minutes=None, latest=update.cached_latest,
+                  ollama_installed=ollama.installed, firewall=ready.firewall_open,
                   system: str | None = None) -> list[Check]:
     system = system or platform.system()
     out: list[Check] = []
@@ -106,9 +96,13 @@ def server_checks(cfg: Config, *, http_get=httpx.get, list_models=ollama.list_mo
 
     if cfg.ollama_enabled:
         models = list_models(cfg.ollama_host)
-        if models is None:
-            out.append(Check("Ollama", FAIL, f"not answering at {cfg.ollama_host}; summaries and AI sorting are paused",
-                             "open the Ollama app (or run `ollama serve`); install it from https://ollama.com"))
+        if models is None and ollama_installed():
+            out.append(Check("Ollama", FAIL, f"installed, but not answering at {cfg.ollama_host}; study notes and AI sorting "
+                             "are paused", {"Darwin": "open the Ollama app (`open -a Ollama`)",
+                                            "Windows": "open Ollama from the Start menu"}.get(system, "run `ollama serve`")))
+        elif models is None:
+            out.append(Check("Ollama", FAIL, "not installed, so study notes and AI sorting are paused",
+                             "rerun `granola-share setup`: it installs Ollama for you (or get it from https://ollama.com)"))
         else:
             names = [m["name"] for m in models]
             for label, model in (("Summary model", cfg.effective_summary_model), ("Sorting model", cfg.ollama_model)):
@@ -124,19 +118,26 @@ def server_checks(cfg: Config, *, http_get=httpx.get, list_models=ollama.list_mo
                          "turn it on in Settings"))
 
     ts = tailscale()
-    if ts.get("running"):
+    problem = hostinfo.tailscale_problem(ts)
+    if not problem:
         out.append(Check("Tailscale", OK, "your laptop can reach " + hostinfo.server_urls(cfg.web_port, ts)[0]))
-    elif ts.get("installed"):
-        out.append(Check("Tailscale", WARN, "installed but not connected", "open Tailscale and sign in"))
-    else:
+    elif not ts.get("installed"):
         out.append(Check("Tailscale", WARN, "not installed; your laptop can only reach this computer on the same Wi-Fi",
-                         "install it from https://tailscale.com/download on both computers, signed in to one account"))
+                         "rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; "
+                         "sign in on both computers with one account"))
+    else:
+        out.append(Check("Tailscale", WARN, problem + "; your laptop can only reach this computer on the same Wi-Fi",
+                         "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"))
 
-    if system == "Darwin":
-        mins = sleep_minutes()
+    if system == "Windows" and firewall(cfg.web_port) is False:
+        out.append(Check("Firewall", WARN, f"Windows Firewall has no rule for port {cfg.web_port}, so it may block your laptop",
+                         "rerun `granola-share setup` and let it add the rule (Windows asks for permission)"))
+
+    if system in ready.SLEEP_FIX:
+        mins = (sleep_minutes or (lambda: ready.sleep_minutes(system)))()
         if mins:
-            out.append(Check("Sleep", WARN, f"this Mac sleeps after {mins} min idle, and the library goes offline with it",
-                             "System Settings → Energy: turn on \"Prevent automatic sleeping when the display is off\""))
+            out.append(Check("Sleep", WARN, f"this computer sleeps after {mins} min idle, and the library goes offline with it",
+                             ready.SLEEP_FIX[system]))
 
     if cfg.server_sync and not cfg.tokens_path.exists():
         out.append(Check("Server's Granola", FAIL, "server_sync is on but this server isn't signed in",
@@ -198,20 +199,39 @@ def copy_check(cc: ClientConfig, transcripts_via_api: bool | None, system: str |
     return Check("Copy transcripts", OK, "allowed; a transcript is copied when you have it open in Granola")
 
 
+def laptop_app_checks(checks: dict) -> list[Check]:
+    """The Granola app (it records the lectures) and Tailscale, from ready.laptop_checks()."""
+    out = []
+    if checks["granola_here"]:
+        out.append(Check("Granola app", OK, checks["granola"]) if checks["granola"] else
+                   Check("Granola app", FAIL, "not installed on this computer, so there's nothing to record lectures with",
+                         f"get it from {ready.GRANOLA_DOWNLOAD}"))
+    ts = checks["tailscale"]
+    problem = hostinfo.tailscale_problem(ts)
+    if not problem:
+        out.append(Check("Tailscale", OK, "connected" + (f" as {ts['dns']}" if ts.get("dns") else "")))
+    else:
+        out.append(Check("Tailscale", WARN, problem + "; this computer reaches the library only on the same Wi-Fi",
+                         "open Tailscale and sign in with the same account as your library's computer" if ts.get("installed")
+                         else f"install it from {ready.TAILSCALE_DOWNLOAD} (or with the button in Study Stash)"))
+    return out
+
+
 def client_checks(cc: ClientConfig, *, check_server=None, probe=granola_probe, service_status=autostart.status,
-                  latest=update.cached_latest, system: str | None = None) -> list[Check]:
+                  latest=update.cached_latest, system: str | None = None, laptop=None) -> list[Check]:
     from .client import check_server as _check_server
 
     check_server = check_server or _check_server
     if not cc.config_path.exists() or not cc.server_url:
         return [Check("Config", FAIL, f"no {cc.config_path}", "run `granola-share client setup`")]
-    out = [Check("Config", OK, f"{cc.config_path}, mode: {'ask each time' if cc.mode == 'ask' else 'share everything'}")]
+    out = [Check("Config", OK, f"{cc.config_path}, mode: {'ask each time' if cc.mode == 'ask' else 'share everything'}"),
+           *laptop_app_checks((laptop or ready.laptop_checks)())]
     try:
         info = check_server(cc.server_url, cc.pool_key)
         out.append(Check("Library", OK, f"'{info.get('pool_name')}' at {cc.server_url}"))
     except Exception as e:
         out.append(Check("Library", FAIL, f"{cc.server_url}: {e}",
-                         "is Tailscale on on both computers, and is the Mac mini awake? "
+                         "is Tailscale on on both computers, and is the library's computer awake? "
                          "Wrong address or password: `granola-share client setup`"))
     transcripts = None
     if not cc.tokens_path.exists():
@@ -279,8 +299,8 @@ def run(home: Path, role: str | None = None, print_fn=print) -> int:
                                  if (home / f).exists()]
     if not roles:
         print_fn(f"Nothing is set up in {home} yet.\n"
-                 "  The Mac mini (keeps the library):  granola-share setup\n"
-                 "  Your laptop (records in Granola):   granola-share client open")
+                 "  The computer that keeps the library:  granola-share setup\n"
+                 "  Your laptop (records in Granola):     granola-share client open")
         return 1
     failed = False
     for r in roles:

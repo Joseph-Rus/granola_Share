@@ -10,6 +10,7 @@ import platform
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 
 def _esc(s: str) -> str:
@@ -121,9 +122,51 @@ def open_url(url: str, runner=subprocess.run, system: str | None = None) -> None
         pass
 
 
-def open_app(name: str, runner=subprocess.run, system: str | None = None) -> bool:
-    """Bring an app to the front (macOS)."""
-    if (system or platform.system()) != "Darwin":
+def app_browsers(system: str | None = None) -> list[str]:
+    """Browsers that can show a page as its own app window (no tabs or address bar), best first. Every
+    Windows 10 and 11 has Edge."""
+    import os
+
+    system = system or platform.system()
+    if system == "Windows":
+        roots = [os.environ.get(v) for v in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA")]
+        found = [str(Path(r, *sub)) for sub in (("Microsoft", "Edge", "Application", "msedge.exe"),
+                                                 ("Google", "Chrome", "Application", "chrome.exe")) for r in roots if r]
+        return [f for f in dict.fromkeys(found) if Path(f).exists()]
+    if system == "Linux":
+        names = ["google-chrome", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"]
+        return [p for p in (shutil.which(n) for n in names) if p]
+    return []
+
+
+def open_window(url: str, spawn=subprocess.Popen, system: str | None = None) -> bool:
+    """Show a page in its own window, like an app (Windows and Linux; the Mac has the real Study Stash
+    app). Falls back to a browser tab. True when it opened as a window."""
+    system = system or platform.system()
+    for exe in app_browsers(system):
+        try:
+            spawn([exe, f"--app={url}", "--window-size=1180,820"], stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL)
+            return True
+        except OSError:
+            continue
+    open_url(url)
+    return False
+
+
+def open_app(name: str, runner=subprocess.run, system: str | None = None, start=None) -> bool:
+    """Bring an app to the front (macOS), or start one from its .exe (Windows; the app brings its own
+    window forward when it's already open)."""
+    system = system or platform.system()
+    if system == "Windows":
+        import os
+
+        try:
+            (start or os.startfile)(name)  # type: ignore[attr-defined]
+            return True
+        except Exception:
+            return False
+    if system != "Darwin":
         return False
     try:
         return runner(["open", "-a", name], capture_output=True, text=True).returncode == 0

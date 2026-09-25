@@ -529,6 +529,8 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
                 '<a class="btn primary" href="/settings">Back to settings</a></form></div>')
         return respond(ui.bare_page("Updating", body, nonce), nonce=nonce)
 
+    ui.add_icon_routes(app)
+
     # -- API -------------------------------------------------------------------------------
     @app.get("/api/health")
     def health(request: Request):

@@ -1,5 +1,7 @@
 // Draws the app icon: `swift make_icon.swift out.iconset`, then iconutil. With an output ending
-// in .png it writes one 1024-px picture instead.
+// in .png it writes one 1024-px picture instead. With an output ending in .tiles it writes
+// icon-<px>.png at the sizes Windows and web pages use, with the tile filling the picture (no
+// macOS margin or shadow); macos/icon_assets.py turns those into granola_share/assets.
 // A lime folder on a dark tile with lines of notes on it: your stash of lecture notes. On Apple's
 // macOS grid: an 824-pt rounded square on a 1024 canvas.
 
@@ -37,20 +39,26 @@ func fill(_ ctx: CGContext, _ path: CGPath, _ colors: [CGColor], top: CGFloat, b
     ctx.restoreGState()
 }
 
-func icon(_ px: Int) -> Data {
+func icon(_ px: Int, bleed: Bool = false) -> Data {
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8,
                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let ctx = NSGraphicsContext.current!.cgContext
-    ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)  // design in 1024 units
+    if bleed {  // the 824-unit tile fills 96% of the picture
+        let scale = 0.96 * CGFloat(px) / 824
+        ctx.translateBy(x: 0.02 * CGFloat(px) - 100 * scale, y: 0.02 * CGFloat(px) - 100 * scale)
+        ctx.scaleBy(x: scale, y: scale)
+    } else {
+        ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)  // design in 1024 units
+    }
     let small = px <= 64  // at Finder-list sizes: fewer, thicker lines, so it still reads
 
     // the tile, on the shadow macOS icons sit on
     let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
     fill(ctx, rounded(tile, 185), [color(0x353b34), color(0x1d211d), color(0x131613)], top: tile.maxY,
-         bottom: tile.minY, shadow: 0.35)
+         bottom: tile.minY, shadow: bleed ? 0 : 0.35)
 
     // the folder: its back with the tab, then the front, the way Finder draws folders
     let bx: CGFloat = 212, by: CGFloat = 268, bw: CGFloat = 600, bh: CGFloat = 470
@@ -86,6 +94,11 @@ func icon(_ px: Int) -> Data {
 
 if out.pathExtension == "png" {
     try! icon(1024).write(to: out)
+} else if out.pathExtension == "tiles" {
+    try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    for px in [16, 24, 32, 48, 64, 128, 180, 256] {
+        try! icon(px, bleed: true).write(to: out.appendingPathComponent("icon-\(px).png"))
+    }
 } else {
     try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
     for (name, px) in [("16x16", 16), ("16x16@2x", 32), ("32x32", 32), ("32x32@2x", 64), ("128x128", 128),

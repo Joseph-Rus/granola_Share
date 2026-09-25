@@ -6,12 +6,16 @@ import os
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 ROLES = {"server": ["run"], "client": ["client", "run"]}
 # Set for the background service only: tells the auto-updater that exiting means "restart me".
 SERVICE_ENV = "GRANOLA_SHARE_SERVICE"
+# Windows: set on the service that keep_alive() starts, so it doesn't start another keep_alive.
+CHILD_ENV = "GRANOLA_SHARE_CHILD"
+LOG_LIMIT = 5_000_000  # bytes; the Windows log starts over (keeping one old copy) past this
 
 
 def _uid() -> int:
@@ -226,3 +230,29 @@ def restart(role: str, *, system: str | None = None, run_cmd=subprocess.run) -> 
         _quiet(run_cmd, ["cmd", "/c", str(path)])
     else:
         _quiet(run_cmd, ["systemctl", "--user", "restart", path.name])
+
+
+def keep_alive(home: Path, role: str, argv: list[str], *, spawn=subprocess.Popen, sleep=time.sleep,
+               rounds: int | None = None) -> None:
+    """Windows has no launchd KeepAlive or systemd Restart=, so there the background service runs under
+    this small loop: it writes the log that launchd and systemd keep elsewhere (pythonw has no console,
+    so print() would go nowhere) and starts the service again whenever it stops."""
+    log = home / "logs" / f"{role}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, CHILD_ENV: "1"}
+    done = 0
+    while rounds is None or done < rounds:
+        done += 1
+        try:
+            if log.exists() and log.stat().st_size > LOG_LIMIT:
+                log.replace(log.with_suffix(".log.1"))
+        except OSError:
+            pass
+        began = time.time()
+        with open(log, "a", encoding="utf-8", errors="replace") as out:
+            child = spawn([sys.executable, "-u", "-m", "granola_share.cli", *argv], env=env, stdout=out,
+                          stderr=subprocess.STDOUT, creationflags=0x08000000)  # CREATE_NO_WINDOW
+            code = child.wait()
+            pause = 10 if time.time() - began > 60 else 60  # failing as it starts: don't spin
+            out.write(f"[service] stopped (exit {code}); starting it again in {pause} s\n")
+        sleep(pause)
