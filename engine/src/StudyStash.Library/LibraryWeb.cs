@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using StudyStash.Core;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.Library;
 
@@ -29,6 +30,8 @@ public sealed class LibraryWebOptions
     public ClaudeReach Reach { get; init; } = new();
     /// <summary>Asking your notes: the model's answer to a prompt. Null asks the library's Ollama.</summary>
     public LibraryReader.AskChatFn? AskChat { get; init; }
+    /// <summary>The AI picked for each kind of work (ai.json): Settings shows and tests it. Null: kept beside the config.</summary>
+    public StudyStash.Core.Ai.AiJobs? Ai { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -619,7 +622,37 @@ public sealed partial class LibraryWeb
         static string Switch(string name, bool on, string text) =>
             $"<label class=\"row\"><span class=\"grow\">{text}</span><input class=\"switch\" type=\"checkbox\" name=\"{name}\" value=\"1\"{Checked(on)}></label>";
 
-        string ai = $"<div class=\"group-head\">AI models</div>{aiState}<div class=\"group\">"
+        // Which AI does the work (ai.json): Ollama on this computer, or Claude, ChatGPT or Gemini with your own account.
+        var picked = AiSettings.Load(cfg.Home);
+        var providers = AiProviders.All(() => cfg.OllamaHost);
+        string ProviderSelect(string field, string current, string? blank)
+        {
+            var opts = blank is null ? "" : $"<option value=\"\">{Ui.Esc(blank)}</option>";
+            foreach (var p in providers)
+                opts += $"<option value=\"{p.Id}\"{(p.Id == current ? " selected" : "")}>{Ui.Esc(p.Name)}{(p.Available() ? "" : " (not installed)")}</option>";
+            return $"<select id=\"{field}\" name=\"{field}\">{opts}</select>";
+        }
+        string JobRow(string job, string label) =>
+            $"<div class=\"row\"><label class=\"grow\" for=\"ai_job_{job}\">{label}</label>"
+            + ProviderSelect($"ai_job_{job}", picked.ByJob.TryGetValue(job, out var jc) ? jc.Provider : "", "Same as above") + "</div>";
+        var main = providers.First(p => p.Id == picked.Provider);
+        string modelOpts = string.Concat(main.Models.Select(m =>
+            $"<option value=\"{Ui.Esc(m.Id)}\"{(m.Id == picked.Models.GetValueOrDefault(main.Id, "") ? " selected" : "")}>{Ui.Esc(m.Label)}</option>"));
+        string tested = picked.Tests.GetValueOrDefault(main.Id, "") switch
+        {
+            "works" => "<span class=\"value\">Works</span>",
+            "" => "",
+            string why => $"<span class=\"value\" title=\"{Ui.Esc(why)}\">Didn't answer</span>",
+        };
+        string brain = "<div class=\"group-head\">AI</div><div class=\"group\">"
+            + $"<div class=\"row\"><label class=\"grow\" for=\"ai_provider\">Does the work</label>{tested}{ProviderSelect("ai_provider", picked.Provider, null)}</div>"
+            + (main.Id == "ollama" ? "" : $"<div class=\"row\"><label class=\"grow\" for=\"ai_model\">Model</label><select id=\"ai_model\" name=\"ai_model\">{modelOpts}</select></div>")
+            + JobRow("notes", "Writes study notes") + JobRow("sort", "Sorts lectures") + JobRow("ask", "Answers questions")
+            + "</div><p class=\"group-foot\">Claude, ChatGPT and Gemini run through their own apps (Claude Code, Codex, "
+            + "Antigravity), signed in with your own account, so they use your plan. The local model stays on this computer "
+            + "and costs nothing.</p>";
+
+        string ai = brain + $"<div class=\"group-head\">Local models</div>{aiState}<div class=\"group\">"
             + "<div class=\"row\"><label class=\"grow\" for=\"summary_model\">Writes summaries</label>"
             + $"{ModelSelect("summary_model", cfg.SummaryModel, models, "Same as the sorting model")}</div>"
             + "<div class=\"row\"><label class=\"grow\" for=\"ollama_model\">Sorts lectures into classes</label>"
@@ -735,6 +768,25 @@ public sealed partial class LibraryWeb
         }
         cfg.Classes = classes;
         Configs.Save(cfg);
+        if (f.ContainsKey("ai_provider"))
+        {
+            var picked = AiSettings.Load(cfg.Home);
+            var known = AiProviders.All().Select(p => p.Id).ToHashSet();
+            string provider = Py.Strip(f.Get("ai_provider"));
+            if (known.Contains(provider))
+            {
+                if (provider != picked.Provider) picked.Models.Remove(provider); // a new AI starts on its default model
+                else if (f.ContainsKey("ai_model")) picked.Models[provider] = Py.Strip(f.Get("ai_model"));
+                picked.Provider = provider;
+            }
+            foreach (string job in new[] { "notes", "sort", "ask" })
+            {
+                string p = Py.Strip(f.Get($"ai_job_{job}"));
+                if (known.Contains(p)) picked.ByJob[job] = new AiChoice(p);
+                else picked.ByJob.Remove(job);
+            }
+            picked.Save(cfg.Home);
+        }
         return Http.SeeOther("/settings?saved=1");
     });
 

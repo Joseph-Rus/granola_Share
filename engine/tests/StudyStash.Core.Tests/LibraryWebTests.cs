@@ -90,6 +90,8 @@ public class LibraryWebTests
         foreach (var (key, want) in pages)
         {
             if (key.StartsWith("open:", StringComparison.Ordinal)) continue;
+            // Settings has the AI picker (Claude, ChatGPT, Gemini), which only this engine has: it's checked on its own below.
+            if (key.Contains("/settings", StringComparison.Ordinal)) continue;
             var (s, path) = key.StartsWith("no-ollama:", StringComparison.Ordinal) ? (noOllama, key[10..]) : (site, key);
             var r = await s.Get(path);
             Assert.True((int)r.StatusCode == want!["status"]!.GetValue<int>(), $"{key}: {(int)r.StatusCode}");
@@ -99,6 +101,26 @@ public class LibraryWebTests
         }
         cfg.PoolPassword = ""; // no password: the library is open, with no Log out
         Assert.Equal(pages["open:/"]!["html"].S(), await (await site.Stranger().GetAsync("/")).Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Settings_picks_the_ai_for_everything_and_for_each_kind_of_work()
+    {
+        using var dir = new TempDir();
+        var cfg = new Config(dir["home"], dir["pool"]) { PoolPassword = "pw", Classes = [new ClassDef("CS 101")] };
+        using var store = new Store(cfg.DbPath, cfg.PoolDir);
+        await using var site = await Site(cfg, store);
+        await site.PostForm("/login", ("password", "pw"), ("next", "/"));
+        string page = await site.Text("/settings");
+        Assert.Contains("Does the work", page);
+        Assert.Contains("<option value=\"claude\"", page);
+        var r = await site.PostForm("/settings", ("ai_provider", "claude"), ("ai_job_sort", "ollama"), ("ai_job_notes", ""),
+            ("class_name_0", "CS 101"), ("summary_enabled", "1"), ("ollama_enabled", "1"));
+        Assert.Equal(HttpStatusCode.SeeOther, r.StatusCode);
+        var ai = StudyStash.Core.Ai.AiSettings.Load(cfg.Home);
+        Assert.Equal("claude", ai.For("notes").Provider);
+        Assert.True(ai.Local("sort"));
+        Assert.Contains("Writes study notes", await site.Text("/settings"));
     }
 
     static string FirstDifference(string want, string got)

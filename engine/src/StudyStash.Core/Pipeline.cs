@@ -7,7 +7,7 @@ namespace StudyStash.Core;
 /// background of the library, so an upload from the laptop returns at once even when a big model takes minutes.
 /// </summary>
 public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
-    Func<Meeting, Config, Task<string>>? summarize = null, Action<string>? log = null)
+    Func<Meeting, Config, Task<string>>? summarize = null, Action<string>? log = null, Func<string>? notesModel = null)
 {
     readonly Func<Meeting, Config, Task<string>> summarize = summarize ?? ((m, c) => Summarize.SummarizeTranscriptAsync(m, c));
     readonly Action<string> log = log ?? Console.WriteLine;
@@ -25,7 +25,7 @@ public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
         string summary = "", model = "", error = "";
         if (Summarize.WantsSummary(m, Cfg))
         {
-            model = Cfg.EffectiveSummaryModel;
+            model = notesModel?.Invoke() ?? Cfg.EffectiveSummaryModel; // what writes the notes, as the note records it
             var watch = Stopwatch.StartNew();
             try
             {

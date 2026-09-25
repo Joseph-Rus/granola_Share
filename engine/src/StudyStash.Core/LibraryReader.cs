@@ -233,7 +233,10 @@ public sealed partial class LibraryReader(Config cfg, Store store)
             .OrderByDescending(x => x.score).ThenBy(x => x.i).Take(n).OrderBy(x => x.i).Select(x => x.p);
     }
 
-    async Task<string> OllamaAsk(string prompt, JsonObject schema)
+    Task<string> OllamaAsk(string prompt, JsonObject schema) => OllamaAskAsync(Cfg, prompt, schema);
+
+    /// <summary>An answer from the library's own Ollama model.</summary>
+    public static async Task<string> OllamaAskAsync(Config Cfg, string prompt, JsonObject schema)
     {
         if (!Cfg.OllamaEnabled) throw new InvalidOperationException("Asking needs the library's AI model: turn it on in the library's Settings.");
         var body = new JsonObject
