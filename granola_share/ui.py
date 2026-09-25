@@ -350,7 +350,7 @@ def sidebar(ctx: dict) -> str:
     classes = ctx["classes"]  # [(name, count)] from the store, plus configured classes with 0
 
     def item(href, label, n=None, key=None, style=None):
-        current = ' aria-current="page"' if key == cur else ""
+        current = ' aria-current="page"' if key is not None and key == cur else ""  # Log out has no key
         dot = f'<span class="dot" style="{style}"></span>' if style is not None else ""
         count = f'<span class="n">{n}</span>' if n is not None else ""
         return f'<a href="{href}"{current}>{dot}<span class="name">{esc(label)}</span>{count}</a>'
