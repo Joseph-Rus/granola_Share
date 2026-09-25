@@ -229,7 +229,7 @@ jobs:
         with:
           name: windows-app
           path: |
-            dist/Study-Stash-windows.zip dist/Study-Stash-helper-windows.zip
+            dist/Study-Stash-windows.zip
             dist/Study-Stash-Laptop-Setup.exe
             dist/Study-Stash-Library-Setup.exe
 
@@ -270,4 +270,4 @@ jobs:
           gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
             dist/Study-Stash-Laptop.dmg dist/Study-Stash-Library.dmg dist/Study-Stash-Laptop-Setup.exe \
             dist/Study-Stash-Library-Setup.exe dist/Study-Stash-mac.zip dist/Study-Stash-Library-mac.zip \
-            dist/Study-Stash-windows.zip
+            dist/Study-Stash-windows.zip dist/Study-Stash-helper-windows.zip
