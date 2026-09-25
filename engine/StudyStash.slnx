@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StudyStash.Core/StudyStash.Core.csproj" />
+    <Project Path="src/StudyStash.Engine/StudyStash.Engine.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StudyStash.Core.Tests/StudyStash.Core.Tests.csproj" />
+  </Folder>
+</Solution>

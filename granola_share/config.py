@@ -136,7 +136,9 @@ def _toml_value(v) -> str:
         return str(v)
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
-    return json.dumps(str(v), ensure_ascii=True)
+    # json.dumps writes an emoji as two surrogate escapes (\ud83e\uddec), which TOML refuses to read back.
+    return '"' + "".join(f"\\U{ord(ch):08x}" if ord(ch) > 0xFFFF else json.dumps(ch, ensure_ascii=True)[1:-1]
+                         for ch in str(v)) + '"'
 
 
 def dump_config(cfg: Config) -> str:

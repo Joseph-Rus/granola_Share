@@ -8,6 +8,7 @@ and saves it here as a Markdown file.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -293,8 +294,10 @@ class Store:
         path.write_text(render_markdown(m, c, summary_md, summary_model, keep_granola), encoding="utf-8")
         now = _now()
         row = self.conn.execute("SELECT md_path, first_seen FROM notes WHERE id=?", (m.id,)).fetchone()
-        if row and row["md_path"] and row["md_path"] != str(path) and Path(row["md_path"]).exists():
-            Path(row["md_path"]).unlink()
+        old = Path(row["md_path"]) if row and row["md_path"] else None
+        # On a Mac or Windows "bio 110/x.md" and "Bio 110/x.md" are one file: the one just written.
+        if old and str(old) != str(path) and old.exists() and not os.path.samefile(old, path):
+            old.unlink()
         self.conn.execute(
             """INSERT INTO notes(id,title,date,owner,attendees,folder,class_name,confidence,classified_by,
                 lecture_title,topics,md_path,has_transcript,raw_json,payload_json,summary_md,summary_model,

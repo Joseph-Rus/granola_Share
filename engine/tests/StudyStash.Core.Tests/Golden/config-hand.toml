@@ -1,0 +1,10 @@
+pool_dir = "/srv/notes//fall/./"
+web_port = 8790.0
+[ollama]
+min_confidence = 1
+enabled = "false"
+[summary]
+max_context = "8_192"
+[[classes]]
+name = 101
+aliases = ["a", 2]
