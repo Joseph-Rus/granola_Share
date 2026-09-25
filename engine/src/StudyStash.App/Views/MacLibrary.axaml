@@ -218,7 +218,7 @@
                        HorizontalAlignment="Center" VerticalAlignment="Center" />
 
             <!-- The answer to what you asked, over the page -->
-            <Border IsVisible="{Binding HasAnswer}" Width="540" MaxHeight="360" CornerRadius="16" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
+            <Border IsVisible="{Binding HasAnswer}" Width="540" MaxHeight="420" CornerRadius="16" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
                     VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,80" Padding="18,14,10,14">
               <DockPanel>
                 <Button DockPanel.Dock="Right" Theme="{StaticResource Surface}" Width="24" Height="24" CornerRadius="12" VerticalAlignment="Top"
@@ -228,8 +228,9 @@
                 <StackPanel Spacing="8" Margin="0,0,8,0">
                   <TextBlock Text="{Binding AskedQuestion}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" />
                   <c:Spinner IsVisible="{Binding Thinking}" Width="16" Height="16" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
-                  <SelectableTextBlock Text="{Binding Answer}" FontFamily="{DynamicResource SerifFont}" FontSize="16" LineHeight="24.8" TextWrapping="Wrap"
-                                       SelectionBrush="{DynamicResource Hl}" />
+                  <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                    <c:NoteView Markdown="{Binding Answer}" />
+                  </ScrollViewer>
                   <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>

@@ -103,9 +103,13 @@ public sealed partial class LibraryModel : ObservableObject
 
     [RelayCommand] void OpenSource(SourceChip chip) => OnSource?.Invoke(chip);
 
+    /// <summary>The answer was closed: the next question starts a new conversation.</summary>
+    public Action? OnCloseAnswer { get; set; }
+
     [RelayCommand]
     void CloseAnswer()
     {
+        OnCloseAnswer?.Invoke();
         Answer = null;
         Thinking = false;
         Sources.Clear();

@@ -151,6 +151,27 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
     public async Task<string?> FileTextAsync(string className, string path) =>
         (await SendAsync(HttpMethod.Get, $"/files?class={Q(className)}&path={Q(path)}") as JsonObject)?["text"]?.GetValue<string>();
 
+    /// <summary>One chat turn, streamed: <paramref name="onEvent"/> gets each event ({"chat"} first, then {"kind", "text",
+    /// "name", "path"}). Null when the library is older than chat.</summary>
+    public async Task<bool> ChatAsync(JsonObject body, Action<JsonObject> onEvent, CancellationToken stop = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, root + "/chat")
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
+        using var r = await ChatClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop);
+        if (r.StatusCode == HttpStatusCode.NotFound) return false;
+        if (!r.IsSuccessStatusCode) throw new LibraryRefusedException((int)r.StatusCode, r.ReasonPhrase ?? "");
+        using var reader = new StreamReader(await r.Content.ReadAsStreamAsync(stop));
+        while (await reader.ReadLineAsync(stop) is { } line)
+            if (line.Length > 0 && JsonNode.Parse(line) is JsonObject ev) onEvent(ev);
+        return true;
+    }
+
+    /// <summary>A chat turn can take minutes (an AI reading around): its own client with no time limit.</summary>
+    static readonly HttpClient ChatClient = new() { Timeout = Timeout.InfiniteTimeSpan };
+
     /// <summary>Which AI does the library's work: /api/v2/ai (GET, or POST a choice), and "/test" to try one.</summary>
     public async Task<JsonObject?> AiAsync(HttpMethod method, string path = "", JsonObject? body = null) =>
         await SendAsync(method, "/ai" + path, body) as JsonObject;

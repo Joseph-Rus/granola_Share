@@ -171,6 +171,50 @@ public static partial class Shell
         library.Scope = "This lecture";
     }
 
+    /// <summary>Ask through the library's chat: the answer streams in, and a follow-up continues the conversation. False
+    /// when the library is older than chat (then the one-shot Ask answers).</summary>
+    static async Task<bool> ChatTurnAsync(RemoteLibrary lib, string question, string scope)
+    {
+        string text = "";
+        var body = new JsonObject
+        {
+            ["message"] = question, ["chat"] = chatId,
+            ["class"] = scope != "All classes" ? (library.Note?.ClassName ?? openClass) : null,
+            ["lecture"] = scope == "This lecture" && library.Note is { } n && !n.Id.StartsWith("asg:", StringComparison.Ordinal) ? n.Id : null,
+        };
+        try
+        {
+            bool ok = await lib.ChatAsync(body, ev => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ev["chat"] is JsonValue c) chatId = c.GetValue<string>();
+                switch (S(ev["kind"]))
+                {
+                    case "text":
+                        text += S(ev["text"]);
+                        library.Thinking = false;
+                        library.Answer = text;
+                        break;
+                    case "error":
+                        library.Thinking = false;
+                        library.Answer = S(ev["text"]);
+                        break;
+                    case "done":
+                        library.Thinking = false;
+                        library.Answer = S(ev["text"]) is { Length: > 0 } whole ? whole : text;
+                        break;
+                }
+            }));
+            if (!ok) chatUnavailable = true;
+            return ok;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException or System.Text.Json.JsonException)
+        {
+            library.Thinking = false;
+            library.Answer = e is LibraryRefusedException r ? r.Message : "Your library didn't answer. Is it on?";
+            return true;
+        }
+    }
+
     // --- Canvas: what's due, and each assignment's instructions and feedback --------------------------------------
 
     static bool dueOpen;
@@ -328,12 +372,19 @@ public static partial class Shell
         };
     }
 
+    /// <summary>The conversation the ask bar is in (follow-ups continue it until the answer is closed).</summary>
+    static string? chatId;
+    static bool chatUnavailable;
+    public static Task AskForSelfTest(string question) => AskLibrary(question, "This class");
+    public static string? AnswerForSelfTest => library.Answer;
+
     static async Task AskLibrary(string question, string scope)
     {
         library.AskedQuestion = question;
         library.Answer = null;
         library.Sources.Clear();
         library.Thinking = true;
+        if (!chatUnavailable && host.Remote() is { } remote && await ChatTurnAsync(remote, question, scope)) return;
         var into = new ChatMessage();
         await Answer(into, lib => lib.AskAsync(question,
             lectureId: scope == "This lecture" ? library.Note?.Id : null,

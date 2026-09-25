@@ -83,6 +83,16 @@ public static class SelfTest
             Shot(Shell.Windows.Main, "library-due");
         }
 
+        // STUDYSTASH_SELFTEST_ASK: ask the library's AI in the full app, and picture the answer.
+        if (Environment.GetEnvironmentVariable("STUDYSTASH_SELFTEST_ASK") is { Length: > 0 } question)
+        {
+            var asking = Shell.AskForSelfTest(question);
+            bool answered = await Until(() => asking.IsCompleted, 120);
+            await Wait(1);
+            Say(answered ? $"answered: {Py.Head(Shell.AnswerForSelfTest ?? "", 120)}" : "no answer in 120 s");
+            Shot(Shell.Windows.Main, "library-answer");
+        }
+
         Shell.Windows.TogglePanel();
         await Wait(1);
         Shot(Shell.Windows.Panel, "panel-idle");
