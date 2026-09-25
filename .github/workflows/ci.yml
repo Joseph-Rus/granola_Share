@@ -110,7 +110,8 @@ jobs:
           granola-share --home "$H" doctor --role server || true
           granola-share --home "$H" autostart uninstall --role server
           granola-share --home "$RUNNER_TEMP/laptop2" client open --install --no-browser
-          powershell -NoProfile -Command '$l = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Study Stash.lnk"; if (-not ((New-Object -ComObject WScript.Shell).CreateShortcut($l).IconLocation -like "*study-stash.ico*")) { exit 1 }'
+          # the Start Menu entry opens the Windows app (fetched from the newest release), or the page with our icon
+          powershell -NoProfile -Command '$s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Study Stash.lnk")); Write-Host "$($s.TargetPath) | $($s.IconLocation)"; if (-not ($s.TargetPath -like "*\Study Stash.exe" -or $s.IconLocation -like "*study-stash.ico*")) { exit 1 }'
       - name: Server log
         if: failure()
         shell: bash
