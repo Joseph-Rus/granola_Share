@@ -1,0 +1,167 @@
+<!-- The floating recorder (Surfaces, macOS 02): a pill, 320 × 56, recording or paused; expanded, 360 × 520, the transcript
+     fading upward and a chat below whose answers link to moments in the recording. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.MacRecorder"
+             x:DataType="vm:RecorderModel"
+             ClipToBounds="False">
+  <UserControl.Styles>
+    <Style Selector="Button.round">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="CornerRadius" Value="20" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.old">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="TextBlock.paused">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Button.square">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+  <Panel>
+    <!-- The pill -->
+    <Border IsVisible="{Binding !Expanded}" Width="320" Height="56" CornerRadius="28" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
+            Padding="20,0,8,0">
+      <Grid ColumnDefinitions="Auto,12,Auto,12,Auto,12,Auto,*,Auto">
+        <Border Width="10" Height="10" CornerRadius="5" Background="{DynamicResource Accent}" BoxShadow="{DynamicResource Ring4}" VerticalAlignment="Center"
+                IsVisible="{Binding IsRunning}" />
+        <Border Width="10" Height="10" CornerRadius="5" Background="{DynamicResource Fg3}" VerticalAlignment="Center" IsVisible="{Binding IsPaused}" />
+        <TextBlock Grid.Column="2" Classes="num" Text="{Binding Elapsed}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
+                   Classes.paused="{Binding IsPaused}" />
+        <c:Waveform Grid.Column="4" Bars="5" Height="20" MinBar="4" Levels="{Binding Levels}" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center"
+                    IsVisible="{Binding IsRunning}" />
+        <TextBlock Grid.Column="4" Text="Paused" FontSize="13" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" IsVisible="{Binding IsPaused}" />
+        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Ellipse Width="6" Height="6" Fill="{Binding ClassDot}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding DisplayClass}" FontSize="13" Foreground="{DynamicResource Fg2}" />
+        </StackPanel>
+        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="6">
+          <Button Classes="round" Background="{DynamicResource Fill2}" Command="{Binding PauseCommand}" ToolTip.Tip="{Binding PauseTip}">
+            <c:Icon Glyph="{Binding PauseGlyph}" Filled="True" Size="20" Foreground="{DynamicResource Fg}" />
+          </Button>
+          <Button Classes="round" Background="{DynamicResource Accent}" Command="{Binding StopCommand}" ToolTip.Tip="Stop">
+            <c:Icon Glyph="stop" Filled="True" Size="20" Foreground="{DynamicResource OnAccent}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Expanded -->
+    <Border IsVisible="{Binding Expanded}" Width="360" Height="520" CornerRadius="18" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
+            ClipToBounds="True">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" Height="52" Margin="18,0,10,0" ColumnDefinitions="Auto,10,Auto,10,Auto,*,Auto">
+          <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource Accent}" BoxShadow="{DynamicResource Ring3}" VerticalAlignment="Center"
+                  IsVisible="{Binding IsRunning}" />
+          <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource Fg3}" VerticalAlignment="Center" IsVisible="{Binding IsPaused}" />
+          <TextBlock Grid.Column="2" Text="{Binding DisplayClass}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="4" Classes="num" Text="{Binding Elapsed}" FontSize="13" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="4">
+            <Button Classes="square" Command="{Binding ToggleCommand}" ToolTip.Tip="Make it small">
+              <c:Icon Glyph="close_fullscreen" Size="18" Foreground="{DynamicResource Fg2}" />
+            </Button>
+            <Button Classes="square" Background="{DynamicResource Fill2}" Command="{Binding PauseCommand}" ToolTip.Tip="{Binding PauseTip}">
+              <c:Icon Glyph="{Binding PauseGlyph}" Filled="True" Size="18" Foreground="{DynamicResource Fg}" />
+            </Button>
+            <Button Classes="square" Background="{DynamicResource Accent}" Command="{Binding StopCommand}" ToolTip.Tip="Stop">
+              <c:Icon Glyph="stop" Filled="True" Size="18" Foreground="{DynamicResource OnAccent}" />
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- Ask about this lecture -->
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="14,14,14,12">
+          <ItemsControl ItemsSource="{Binding Chat}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChatMessage">
+                <Panel>
+                  <Border IsVisible="{Binding Mine}" HorizontalAlignment="Right" MaxWidth="281" CornerRadius="16" Background="{DynamicResource Accent}" Padding="12,8">
+                    <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.2" TextWrapping="Wrap" Foreground="{DynamicResource OnAccent}" />
+                  </Border>
+                  <Border IsVisible="{Binding !Mine}" HorizontalAlignment="Left" MaxWidth="316" CornerRadius="16" Background="{DynamicResource Fill}" Padding="12,10">
+                    <StackPanel Spacing="8">
+                      <c:Spinner IsVisible="{Binding Thinking}" Width="14" Height="14" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
+                      <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.85" TextWrapping="Wrap" />
+                      <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SourceChip">
+                            <Button Theme="{StaticResource Surface}" Height="24" CornerRadius="6" Background="{DynamicResource Fill2}" Padding="8,0"
+                                    Command="{Binding $parent[UserControl].((vm:RecorderModel)DataContext).PlayCommand}" CommandParameter="{Binding}"
+                                    ToolTip.Tip="Play from here">
+                              <StackPanel Orientation="Horizontal" Spacing="3">
+                                <c:Icon Glyph="play_arrow" Filled="True" Size="15" Foreground="{DynamicResource AccentText}" />
+                                <TextBlock Classes="num" Text="{Binding Label}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Border>
+                </Panel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Height="36" CornerRadius="18" Background="{DynamicResource Fill}" Padding="14,0,4,0" Margin="0,2,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Classes="bare" Text="{Binding Question}" PlaceholderText="Ask about this lecture" FontSize="13">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding AskCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+              <Button Grid.Column="1" Theme="{StaticResource Surface}" Width="28" Height="28" CornerRadius="14" Background="{DynamicResource Fill2}"
+                      HorizontalContentAlignment="Center" Command="{Binding AskCommand}" ToolTip.Tip="Ask">
+                <c:Icon Glyph="arrow_upward" Size="18" Foreground="{DynamicResource Fg2}" />
+              </Button>
+            </Grid>
+          </Border>
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" Height="1" Background="{DynamicResource Sep}" />
+
+        <!-- What's been said, newest at the bottom, fading out toward the top -->
+        <ScrollViewer Name="Heard" Padding="18,0,18,16" VerticalScrollBarVisibility="Hidden">
+          <ScrollViewer.OpacityMask>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+              <GradientStop Color="Transparent" Offset="0" />
+              <GradientStop Color="Black" Offset="0.55" />
+            </LinearGradientBrush>
+          </ScrollViewer.OpacityMask>
+          <Panel VerticalAlignment="Bottom">
+            <TextBlock IsVisible="{Binding NoLines}" Text="{Binding Waiting}" FontSize="13" Foreground="{DynamicResource Fg3}" TextWrapping="Wrap" />
+            <ItemsControl ItemsSource="{Binding Lines}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:HeardLine">
+                  <Grid ColumnDefinitions="34,10,*">
+                    <TextBlock Classes="num" Text="{Binding Time}" FontSize="11" Foreground="{DynamicResource Fg3}" Margin="0,2,0,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="13" LineHeight="18.85" TextWrapping="Wrap"
+                               Classes.old="{Binding !Latest}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Panel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </Panel>
+</UserControl>

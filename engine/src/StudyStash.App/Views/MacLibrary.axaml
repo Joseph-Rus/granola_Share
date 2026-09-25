@@ -1,0 +1,248 @@
+<!-- The full app (Surfaces, macOS 04): three panes. Classes with dots and counts, lectures by date, then the note.
+     Headings in SF Pro Display, reading text in New York. The ask bar floats over the note. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.MacLibrary"
+             x:DataType="vm:LibraryModel">
+  <UserControl.Styles>
+    <Style Selector="Button.cls">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <Style Selector="Button.cls.selected">
+      <Setter Property="Background" Value="{DynamicResource Fill2}" />
+    </Style>
+    <Style Selector="Button.cls TextBlock.count">
+      <Setter Property="Foreground" Value="{DynamicResource Fg3}" />
+    </Style>
+    <Style Selector="Button.cls.selected TextBlock.count">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Button.card">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Margin" Value="8,0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Button.card.selected">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    </Style>
+    <Style Selector="Button.card TextBlock.sub">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Button.card.selected TextBlock.sub">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Button.card Border.rule">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.card.selected Border.rule, Button.card.last Border.rule">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="TextBlock.group">
+      <Setter Property="Margin" Value="20,14,20,6" />
+    </Style>
+    <Style Selector="TextBlock.group.first">
+      <Setter Property="Margin" Value="20,10,20,6" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.seg">
+      <Setter Property="Padding" Value="16,3" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style Selector="Border.seg.on">
+      <Setter Property="Background" Value="{DynamicResource Raised}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource ShadowSmall}" />
+    </Style>
+    <Style Selector="Border.seg TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Border.seg.on TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource Win}" CornerRadius="12" BoxShadow="{DynamicResource Shadow}" ClipToBounds="True">
+    <Grid ColumnDefinitions="232,312,*">
+      <!-- Classes -->
+      <DockPanel Background="{DynamicResource Side}">
+        <Grid DockPanel.Dock="Top" Height="52">
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="20,0,0,0" VerticalAlignment="Center" IsVisible="{Binding DrawChrome}">
+            <Ellipse Width="12" Height="12" Fill="#FF5F57" />
+            <Ellipse Width="12" Height="12" Fill="#FEBC2E" />
+            <Ellipse Width="12" Height="12" Fill="#28C840" />
+          </StackPanel>
+        </Grid>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="20,0,20,14">
+          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Fg2}" />
+        </StackPanel>
+        <StackPanel Margin="10,0">
+          <TextBlock Text="Classes" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Fg3}" Margin="10,6" />
+          <ItemsControl ItemsSource="{Binding Classes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ClassItem">
+                <Button Classes="cls" Classes.selected="{Binding Selected}"
+                        Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).PickClassCommand}" CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="Auto,8,*,Auto">
+                    <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="3" Classes="count" Text="{Binding Count}" FontSize="13" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="cls" Classes.selected="{Binding Unsorted.Selected, FallbackValue=False}" Padding="7,0" Margin="0,8,0,0" IsVisible="{Binding Unsorted, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  Command="{Binding PickClassCommand}" CommandParameter="{Binding Unsorted}">
+            <Grid ColumnDefinitions="Auto,8,*,Auto">
+              <c:Icon Glyph="inbox" Size="15" Foreground="{DynamicResource Fg2}" />
+              <TextBlock Grid.Column="2" Text="Unsorted" FontSize="13" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Classes="count" Text="{Binding Unsorted.Count, FallbackValue=0}" FontSize="13" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+        </StackPanel>
+      </DockPanel>
+
+      <!-- Lectures by week -->
+      <DockPanel Grid.Column="1">
+        <Border DockPanel.Dock="Left" Width="1" Background="{DynamicResource Sep}" />
+        <StackPanel DockPanel.Dock="Top" Height="52" VerticalAlignment="Center" Margin="20,0">
+          <StackPanel VerticalAlignment="Center" Margin="0,9,0,0">
+            <TextBlock Text="{Binding ClassTitle}" FontSize="15" FontWeight="Bold" />
+            <TextBlock Text="{Binding ClassCount}" FontSize="11" Foreground="{DynamicResource Fg2}" />
+          </StackPanel>
+        </StackPanel>
+        <Panel>
+          <TextBlock IsVisible="{Binding HasEmpty}" Text="{Binding Empty}" FontSize="13" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" Margin="20,10" />
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Groups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LectureGroup">
+                  <StackPanel>
+                    <TextBlock Classes="group" Classes.first="{Binding First}" Text="{Binding Label}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Fg3}" />
+                    <ItemsControl ItemsSource="{Binding Items}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LectureCard">
+                          <Button Classes="card" Classes.selected="{Binding Selected}" Classes.last="{Binding Last}"
+                                  Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).PickLectureCommand}" CommandParameter="{Binding}">
+                            <Panel>
+                              <StackPanel Margin="12,10">
+                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="sub" Text="{Binding Meta}" FontSize="12" Margin="0,2,0,0" />
+                                <TextBlock Classes="sub" Text="{Binding Summary}" IsVisible="{Binding HasSummary}" FontSize="12" LineHeight="16.8" Margin="0,4,0,0"
+                                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                              <Border Classes="rule" Height="1" Background="{DynamicResource Sep}" VerticalAlignment="Bottom" />
+                            </Panel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </DockPanel>
+
+      <!-- The lecture -->
+      <Panel Grid.Column="2">
+        <Border Width="1" Background="{DynamicResource Sep}" HorizontalAlignment="Left" />
+        <DockPanel Margin="1,0,0,0">
+          <StackPanel DockPanel.Dock="Top" Height="52" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4" Margin="0,0,14,0">
+            <Button Classes="tool" Command="{Binding MoveCommand}" ToolTip.Tip="Move to another class" IsEnabled="{Binding HasNote}">
+              <c:Icon Glyph="drive_file_move" Size="19" Foreground="{DynamicResource Fg2}" />
+            </Button>
+            <Button Classes="tool" Command="{Binding ExportCommand}" ToolTip.Tip="Export" IsEnabled="{Binding HasNote}">
+              <c:Icon Glyph="ios_share" Size="19" Foreground="{DynamicResource Fg2}" />
+            </Button>
+            <Button Classes="tool" Command="{Binding SearchCommand}" ToolTip.Tip="Search">
+              <c:Icon Glyph="search" Size="19" Foreground="{DynamicResource Fg2}" />
+            </Button>
+          </StackPanel>
+          <Panel>
+            <ScrollViewer Name="NoteScroll" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasNote}">
+              <StackPanel MaxWidth="620" HorizontalAlignment="Left" Margin="64,16,64,140" Spacing="14" DataContext="{Binding Note}" x:DataType="vm:NoteModel">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+                </StackPanel>
+                <TextBlock Text="{Binding Title}" FontFamily="{DynamicResource DisplayFont}" FontSize="30" FontWeight="Bold" LineHeight="34.5"
+                           c:Typography.Extra="-0.6" TextWrapping="Wrap" />
+                <Border HorizontalAlignment="Left" Padding="2" CornerRadius="7" Background="{DynamicResource Fill}" Margin="0,4,0,0">
+                  <StackPanel Orientation="Horizontal">
+                    <Border Classes="seg" Classes.on="{Binding ShowNotes}" PointerPressed="OnNotesTab">
+                      <TextBlock Text="Notes" FontSize="12" FontWeight="Medium" />
+                    </Border>
+                    <Border Classes="seg" Classes.on="{Binding ShowTranscript}" PointerPressed="OnTranscriptTab">
+                      <TextBlock Text="Transcript" FontSize="12" FontWeight="Medium" />
+                    </Border>
+                  </StackPanel>
+                </Border>
+                <TextBlock IsVisible="{Binding HasPending}" Text="{Binding Pending}" FontSize="13" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                <c:NoteView IsVisible="{Binding ShowNotes}" Markdown="{Binding Markdown}" />
+                <StackPanel IsVisible="{Binding ShowTranscript}" Margin="0,18,0,0">
+                  <TextBlock IsVisible="{Binding NoTranscript}" Text="This lecture has no transcript." FontSize="13" Foreground="{DynamicResource Fg2}" />
+                  <ItemsControl ItemsSource="{Binding Transcript}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:HeardLine">
+                        <Grid ColumnDefinitions="48,12,*">
+                          <TextBlock Classes="num" Text="{Binding Time}" FontSize="12" Foreground="{DynamicResource Fg3}" Margin="0,3,0,0" />
+                          <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" FontFamily="{DynamicResource SerifFont}" FontSize="16" LineHeight="25.6" TextWrapping="Wrap"
+                                               SelectionBrush="{DynamicResource Hl}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+            <TextBlock IsVisible="{Binding NoNote}" Text="Choose a lecture to read its notes." FontSize="13" Foreground="{DynamicResource Fg3}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+            <!-- The page fades out under the ask bar -->
+            <Border Height="120" VerticalAlignment="Bottom" IsHitTestVisible="False" Name="Fade" />
+            <Border Width="540" Height="44" CornerRadius="22" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Padding="18,0,8,0">
+              <Grid ColumnDefinitions="*,Auto,8,Auto">
+                <TextBox Classes="bare" Text="{Binding Question}" PlaceholderText="Ask about this lecture" FontSize="13">
+                  <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding AskCommand}" />
+                  </TextBox.KeyBindings>
+                </TextBox>
+                <Button Grid.Column="1" Theme="{StaticResource Surface}" Height="26" CornerRadius="13" Background="{DynamicResource Fill2}" Padding="10,0,6,0"
+                        Command="{Binding PickScopeCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="2">
+                    <TextBlock Text="{Binding Scope}" FontSize="12" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+                    <c:Icon Glyph="unfold_more" Size="16" Foreground="{DynamicResource Fg2}" />
+                  </StackPanel>
+                </Button>
+                <Button Grid.Column="3" Theme="{StaticResource Surface}" Width="28" Height="28" CornerRadius="14" Background="{DynamicResource Fill2}"
+                        HorizontalContentAlignment="Center" Command="{Binding AskCommand}" ToolTip.Tip="Ask">
+                  <c:Icon Glyph="arrow_upward" Size="18" Foreground="{DynamicResource Fg3}" />
+                </Button>
+              </Grid>
+            </Border>
+          </Panel>
+        </DockPanel>
+      </Panel>
+    </Grid>
+  </Border>
+</UserControl>

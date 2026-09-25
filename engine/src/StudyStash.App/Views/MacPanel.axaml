@@ -1,0 +1,129 @@
+<!-- The menu bar dropdown (Surfaces, macOS 01): 360 pt, Control Center material. Idle: Record for the class on now,
+     the square button beside it switches class. Recording: the timer, the waveform, the last line heard, Pause and Stop. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.MacPanel"
+             x:DataType="vm:PanelModel"
+             Width="360" ClipToBounds="False">
+  <UserControl.Styles>
+    <Style Selector="Button.row">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8" />
+    </Style>
+    <Style Selector="Button.row.selected">
+      <Setter Property="Background" Value="{DynamicResource Fill}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource Mat}" CornerRadius="14" BoxShadow="{DynamicResource Shadow}" Padding="12">
+    <StackPanel Spacing="12">
+
+      <!-- Idle: Record, and the class switcher -->
+      <StackPanel Spacing="8" IsVisible="{Binding IsIdle}">
+        <Grid ColumnDefinitions="*,8,56">
+          <Button Theme="{StaticResource Surface}" Height="56" CornerRadius="12" Background="{DynamicResource Accent}"
+                  Foreground="{DynamicResource OnAccent}" Padding="16,0" Command="{Binding RecordCommand}" IsEnabled="{Binding CanRecord}"
+                  ToolTip.Tip="Start recording">
+            <Grid ColumnDefinitions="Auto,12,*,Auto">
+              <Ellipse Width="14" Height="14" Fill="{DynamicResource OnAccent}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="{Binding RecordLabel}" FontSize="15" FontWeight="SemiBold" c:Typography.Extra="-0.15"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="3" Text="{Binding RecordShortcut}" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <Button Grid.Column="2" Theme="{StaticResource Surface}" Width="56" Height="56" CornerRadius="12" Background="{DynamicResource Fill2}"
+                  HorizontalContentAlignment="Center" Command="{Binding SwitchClassCommand}" ToolTip.Tip="Switch class">
+            <c:Icon Glyph="unfold_more" Size="20" Foreground="{DynamicResource Fg}" />
+          </Button>
+        </Grid>
+        <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}" FontSize="11" Foreground="{DynamicResource Fg2}" Margin="4,0" />
+      </StackPanel>
+
+      <!-- Recording -->
+      <Border IsVisible="{Binding IsRecording}" Background="{DynamicResource Fill}" CornerRadius="12" Padding="16,14">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="Auto,8,*,Auto">
+            <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource Accent}" BoxShadow="{DynamicResource Ring3}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding RecordingLabel}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Grid.Column="3" Theme="{StaticResource Surface}" CornerRadius="4" Padding="4,1" Margin="0,-1,-4,-1" Command="{Binding ShowRecorderCommand}">
+              <TextBlock Text="Show recorder" FontSize="12" Foreground="{DynamicResource Fg2}" />
+            </Button>
+          </Grid>
+          <Grid ColumnDefinitions="Auto,16,*">
+            <TextBlock Classes="num" Text="{Binding Elapsed}" FontFamily="{DynamicResource DisplayFont}" FontSize="34" FontWeight="Light"
+                       c:Typography.Extra="-0.34" VerticalAlignment="Center" />
+            <c:Waveform Grid.Column="2" Height="28" Bars="22" Levels="{Binding Levels}" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+          </Grid>
+          <TextBlock Text="{Binding LastLine}" IsVisible="{Binding HasLastLine}" FontSize="12" LineHeight="17.4" TextWrapping="Wrap"
+                     Foreground="{DynamicResource Fg2}" />
+          <Grid ColumnDefinitions="*,8,*">
+            <Button Theme="{StaticResource Surface}" Height="36" CornerRadius="8" Background="{DynamicResource Fill2}" HorizontalContentAlignment="Center"
+                    Command="{Binding PauseCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <c:Icon Glyph="{Binding PauseGlyph}" Filled="True" Size="18" Foreground="{DynamicResource Fg}" />
+                <TextBlock Text="{Binding PauseLabel}" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Theme="{StaticResource Surface}" Height="36" CornerRadius="8" Background="{DynamicResource Accent}"
+                    Foreground="{DynamicResource OnAccent}" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <c:Icon Glyph="stop" Filled="True" Size="18" Foreground="{DynamicResource OnAccent}" />
+                <TextBlock Text="Stop" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Recent lectures -->
+      <StackPanel IsVisible="{Binding HasRecent}">
+        <TextBlock Text="Recent" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Fg2}" Margin="4,4,4,6" />
+        <ItemsControl ItemsSource="{Binding Recent}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LectureItem">
+              <Button Classes="row" Classes.selected="{Binding Selected}"
+                      Command="{Binding $parent[UserControl].((vm:PanelModel)DataContext).OpenLectureCommand}" CommandParameter="{Binding}">
+                <Grid ColumnDefinitions="8,10,*,10,Auto">
+                  <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{DynamicResource Fg2}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    <Border IsVisible="{Binding HasProgress}" Width="140" Height="3" CornerRadius="2" Background="{DynamicResource Fill2}"
+                            HorizontalAlignment="Left" Margin="0,5,0,0">
+                      <Border Width="{Binding ProgressWidth}" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Grid.Column="4" Classes="num" Text="{Binding Time}" FontSize="11" Foreground="{DynamicResource Fg3}" VerticalAlignment="Center" />
+                </Grid>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Search -->
+      <Button Theme="{StaticResource Surface}" Height="30" CornerRadius="8" Background="{DynamicResource Fill}" Padding="10,0" Command="{Binding SearchCommand}">
+        <Grid ColumnDefinitions="Auto,8,*,Auto">
+          <c:Icon Glyph="search" Size="17" Foreground="{DynamicResource Fg2}" />
+          <TextBlock Grid.Column="2" Text="Search notes and lectures" FontSize="13" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="{Binding SearchShortcut}" FontSize="11" Foreground="{DynamicResource Fg3}" VerticalAlignment="Center" />
+        </Grid>
+      </Button>
+
+      <!-- Status, and the app -->
+      <StackPanel Spacing="12">
+        <Border Height="1" Background="{DynamicResource Sep}" Margin="4,0" />
+        <Grid ColumnDefinitions="Auto,8,*,Auto" Margin="4,0,4,2">
+          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <Button Grid.Column="3" Theme="{StaticResource Surface}" CornerRadius="4" Padding="4,1" Margin="0,-1,-4,-1" Command="{Binding OpenAppCommand}">
+            <TextBlock Text="Open Study Stash" FontSize="12" FontWeight="Medium" />
+          </Button>
+        </Grid>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>
