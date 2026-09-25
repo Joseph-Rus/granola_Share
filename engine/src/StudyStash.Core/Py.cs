@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace StudyStash.Core;
 
@@ -74,6 +75,106 @@ public static class Py
         int start = s.Length - n;
         if (char.IsLowSurrogate(s[start]) && start > 0) start--;
         return s[start..];
+    }
+
+    static readonly Regex WhitespaceOnly = new("^[ \t]+$", RegexOptions.Multiline);
+    static readonly Regex LeadingWhitespace = new("(^[ \t]*)(?:[^ \t\n])", RegexOptions.Multiline);
+
+    /// <summary>textwrap.dedent: remove the indentation every line shares; blank lines become empty.</summary>
+    public static string Dedent(string text)
+    {
+        string? margin = null;
+        text = WhitespaceOnly.Replace(text, "");
+        foreach (Match m in LeadingWhitespace.Matches(text))
+        {
+            string indent = m.Groups[1].Value;
+            if (margin is null) margin = indent;
+            else if (indent.StartsWith(margin, StringComparison.Ordinal)) { }
+            else if (margin.StartsWith(indent, StringComparison.Ordinal)) margin = indent;
+            else
+            {
+                int i = 0;
+                while (i < margin.Length && i < indent.Length && margin[i] == indent[i]) i++;
+                margin = margin[..i];
+            }
+        }
+        return string.IsNullOrEmpty(margin) ? text : Regex.Replace(text, "(?m)^" + Regex.Escape(margin), "");
+    }
+
+    /// <summary>
+    /// urllib.parse.quote_plus: what Python's urlencode does to each key and value. Letters, digits and "_.-~"
+    /// stay, a space becomes "+", and everything else becomes %XX of its UTF-8 bytes.
+    /// </summary>
+    public static string QuotePlus(string s)
+    {
+        var sb = new StringBuilder();
+        foreach (byte b in Encoding.UTF8.GetBytes(s))
+        {
+            char c = (char)b;
+            if (char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-' or '~') sb.Append(c);
+            else if (c == ' ') sb.Append('+');
+            else sb.Append('%').Append(b.ToString("X2", Inv));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>urllib.parse.urlencode(dict).</summary>
+    public static string UrlEncode(IEnumerable<(string Key, string Value)> pairs) =>
+        string.Join("&", pairs.Select(p => QuotePlus(p.Key) + "=" + QuotePlus(p.Value)));
+
+    /// <summary>urllib.parse.parse_qs(q) with the first value of each key: blank values are dropped, as there.</summary>
+    public static Dictionary<string, string> ParseQs(string query)
+    {
+        var result = new Dictionary<string, string>();
+        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int eq = part.IndexOf('=');
+            if (eq < 0) continue;
+            string key = Unquote(part[..eq]), value = Unquote(part[(eq + 1)..]);
+            if (value.Length > 0) result.TryAdd(key, value);
+        }
+        return result;
+        static string Unquote(string s) => Uri.UnescapeDataString(s.Replace('+', ' '));
+    }
+
+    /// <summary>datetime.now(timezone.utc).isoformat(): microseconds, unless there are none.</summary>
+    public static string IsoNowUtc()
+    {
+        var now = DateTime.UtcNow;
+        long micro = now.Ticks / 10 % 1_000_000;
+        return now.ToString("yyyy-MM-dd'T'HH:mm:ss", Inv) + (micro != 0 ? "." + micro.ToString("000000", Inv) : "") + "+00:00";
+    }
+
+    /// <summary>time.time(): seconds since 1970, as a float.</summary>
+    public static double Time() => (DateTime.UtcNow - DateTime.UnixEpoch).Ticks / (double)TimeSpan.TicksPerSecond;
+
+    /// <summary>
+    /// json.loads: a key given twice keeps its last value (System.Text.Json refuses the object), and numbers keep
+    /// exactly the digits they were sent with.
+    /// </summary>
+    public static JsonNode? JsonLoads(string text)
+    {
+        using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = 512 });
+        return Build(doc.RootElement);
+
+        static JsonNode? Build(JsonElement e)
+        {
+            switch (e.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    var o = new JsonObject();
+                    foreach (var p in e.EnumerateObject()) o[p.Name] = Build(p.Value);
+                    return o;
+                case JsonValueKind.Array:
+                    var a = new JsonArray();
+                    foreach (var item in e.EnumerateArray()) a.Add(Build(item));
+                    return a;
+                case JsonValueKind.Null:
+                    return null;
+                default:
+                    return JsonValue.Create(e.Clone());
+            }
+        }
     }
 
     // --- numbers -----------------------------------------------------------------------------------

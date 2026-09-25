@@ -38,6 +38,47 @@ public static class PyJson
         return sb.Append(']').ToString();
     }
 
+    /// <summary>json.dumps(value, indent=n): one item per line, "," then a line break, ": " after keys.</summary>
+    public static string Dumps(JsonNode? node, int indent)
+    {
+        var sb = new StringBuilder();
+        WriteIndented(sb, node, indent, 0);
+        return sb.ToString();
+    }
+
+    static void WriteIndented(StringBuilder sb, JsonNode? node, int indent, int level)
+    {
+        string inner = "\n" + new string(' ', indent * (level + 1)), outer = "\n" + new string(' ', indent * level);
+        switch (node)
+        {
+            case JsonObject { Count: > 0 } o:
+                sb.Append('{');
+                bool first = true;
+                foreach (var (key, value) in o)
+                {
+                    sb.Append(first ? "" : ",").Append(inner);
+                    WriteString(sb, key);
+                    sb.Append(": ");
+                    WriteIndented(sb, value, indent, level + 1);
+                    first = false;
+                }
+                sb.Append(outer).Append('}');
+                return;
+            case JsonArray { Count: > 0 } a:
+                sb.Append('[');
+                for (int i = 0; i < a.Count; i++)
+                {
+                    sb.Append(i > 0 ? "," : "").Append(inner);
+                    WriteIndented(sb, a[i], indent, level + 1);
+                }
+                sb.Append(outer).Append(']');
+                return;
+            default:
+                Write(sb, node);
+                return;
+        }
+    }
+
     /// <summary>A JSON object from fields already written as JSON, in this order.</summary>
     public static string Object(IEnumerable<(string Key, string Json)> fields) =>
         "{" + string.Join(", ", fields.Select(f => Dumps(f.Key) + ": " + f.Json)) + "}";

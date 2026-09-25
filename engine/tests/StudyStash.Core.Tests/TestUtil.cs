@@ -29,6 +29,7 @@ public sealed class TempDir : IDisposable
 public static class Golden
 {
     static readonly Lazy<JsonObject> cases = new(() => (JsonObject)JsonNode.Parse(Text("cases.json"))!);
+    static readonly Lazy<JsonObject> granola = new(() => (JsonObject)JsonNode.Parse(Text("granola.json"))!);
 
     public static string Text(string name) =>
         new UTF8Encoding(false).GetString(File.ReadAllBytes(System.IO.Path.Combine(AppContext.BaseDirectory, "Golden", name)));
@@ -36,6 +37,12 @@ public static class Golden
     public static JsonArray Cases(string name) => (JsonArray)cases.Value[name]!;
 
     public static JsonNode Case(string name) => cases.Value[name]!;
+
+    /// <summary>Stage 2's cases: Granola's replies, and signing in.</summary>
+    public static JsonNode? Granola(string name) => granola.Value[name];
+
+    /// <summary>Data compared as json.dumps writes it, so key order counts too.</summary>
+    public static string Dump(JsonNode? node) => PyJson.Dumps(node);
 
     public static string S(this JsonNode? node) => node!.GetValue<string>();
 }
