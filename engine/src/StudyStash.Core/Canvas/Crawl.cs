@@ -288,6 +288,13 @@ public sealed partial class Crawl
         return n[..Math.Min(n.Length, limit)].TrimEnd(' ', '.', '-');
     }
 
+    /// <summary>Where an assignment's spec and feedback are, inside its class's folder ("Canvas/assignments/Lab 1"), once a
+    /// sync has written them.</summary>
+    public string? AssignmentFolder(string cls, long id)
+    {
+        lock (gate) return S(Manifest[$"asgdir:{cls}:{id}"]) is { Length: > 0 } rel ? rel.Replace('\\', '/') : null;
+    }
+
     /// <summary>An assignment's folder: the one already made for its Canvas id, else a new one named after it.</summary>
     string AssignmentDir(string cls, JsonObject a)
     {

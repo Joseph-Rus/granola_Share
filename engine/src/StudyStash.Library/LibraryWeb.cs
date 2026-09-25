@@ -32,6 +32,8 @@ public sealed class LibraryWebOptions
     public LibraryReader.AskChatFn? AskChat { get; init; }
     /// <summary>The AI picked for each kind of work (ai.json): Settings shows and tests it. Null: kept beside the config.</summary>
     public StudyStash.Core.Ai.AiJobs? Ai { get; init; }
+    /// <summary>Canvas through the Chrome extension. Null: made here, with the library's class folders.</summary>
+    public StudyStash.Core.Canvas.CanvasSync? Canvas { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -218,6 +220,7 @@ public sealed partial class LibraryWeb
         {
             PoolName = cfg.PoolName, Classes = classes, Total = counts.Values.Sum(), Processing = store.Processing().Count,
             Admin = role == "admin", Current = current, Password = cfg.PoolPassword.Length > 0, Back = back, Nonce = options.Nonce(),
+            Due = CanvasOn ? StudyStash.Core.Canvas.Assignments.Upcoming(StudyStash.Core.Canvas.Assignments.Load(cfg.Home), DateTime.Now, 7).Count : null,
         };
     }
 
@@ -372,6 +375,7 @@ public sealed partial class LibraryWeb
         })));
 
         MapApp(app);
+        MapCanvas(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 
@@ -445,11 +449,12 @@ public sealed partial class LibraryWeb
     {
         var c = Context(role, current, ("/", cfg.PoolName));
         var rows = store.ListNotes(name);
+        string canvasPart = ClassCanvas(name);
         string zip = rows.Count > 0
             ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\"><a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a></div>"
             : "";
         string body = $"<h1>{Ui.Esc(name)}</h1><p class=\"sub\"><span class=\"tag\" style=\"{Ui.HueStyle(name)}\">{lede}</span></p>"
-            + zip + Ui.NoteList(rows, "Nothing here yet",
+            + zip + canvasPart + (canvasPart.Length > 0 ? "<h2>Lectures</h2>" : "") + Ui.NoteList(rows, "Nothing here yet",
                 name != Configs.Unsorted ? "Lectures sorted into this class show up here." : "Every lecture found its class.");
         return Show(name, body, c);
     }
@@ -602,7 +607,7 @@ public sealed partial class LibraryWeb
         return $"<select id=\"{field}\" name=\"{field}\">{string.Concat(opts)}</select>";
     }
 
-    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued) => await WithMemberAsync(ctx, async role =>
+    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued, string? canvas) => await WithMemberAsync(ctx, async role =>
     {
         var c = Context(role, "settings", ("/", cfg.PoolName));
         var models = await options.ListModels(cfg.OllamaHost);
@@ -740,7 +745,11 @@ public sealed partial class LibraryWeb
             + "<p class=\"group-foot\">Useful after switching models. Lectures stay readable while they are "
             + "rewritten, one at a time.</p>"
             + "<p class=\"group-foot\" style=\"margin-top:2.4rem\">Study Stash is an independent project, not affiliated with or endorsed by Granola. Granola is a trademark of its owner.</p>";
-        string body = $"<h1>Settings</h1>{flash}{form}{invite}{maintenance}";
+        // Canvas shows once it's set up or asked about, so a library without it looks as it always has.
+        string canvasGroup = CanvasOn || canvas is not null || Canvas.Settings.On ? CanvasSettingsGroup(canvas)
+            : "<div class=\"group-head\" id=\"canvas\">Canvas</div><div class=\"group\"><form class=\"row\" method=\"get\" action=\"/settings#canvas\">"
+              + "<input type=\"hidden\" name=\"canvas\" value=\"start\"><span class=\"grow\">Bring in assignments, feedback and course files from Canvas</span><button>Set up Canvas</button></form></div>";
+        string body = $"<h1>Settings</h1>{flash}{form}{canvasGroup}{invite}{maintenance}";
         return Show("Settings", body, c);
     });
 

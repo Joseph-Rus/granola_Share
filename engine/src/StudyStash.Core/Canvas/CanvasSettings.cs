@@ -15,6 +15,8 @@ public sealed class CanvasSettings
     public string Url { get; set; } = "";
     /// <summary>Class name → Canvas course id.</summary>
     public Dictionary<string, long> Courses { get; set; } = [];
+    /// <summary>The person's Canvas courses (id → name), as last looked up, for picking which class is which.</summary>
+    public Dictionary<string, string> Available { get; set; } = [];
     /// <summary>How often the extension reads Canvas again.</summary>
     public int PollMinutes { get; set; } = 60;
     /// <summary>When the last sync started (ISO), and when the extension last asked for work.</summary>

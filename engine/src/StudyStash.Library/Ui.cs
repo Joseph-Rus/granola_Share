@@ -24,6 +24,8 @@ public sealed class PageContext
     public (string Href, string Label)? Back { get; set; }
     public required string Nonce { get; init; }
     public string Q { get; set; } = "";
+    /// <summary>With Canvas on: how many assignments are due within a week (the sidebar's Due). Null hides it.</summary>
+    public int? Due { get; init; }
 }
 
 /// <summary>
@@ -192,6 +194,7 @@ public static partial class Ui
         }
 
         var items = new List<string> { Item("/", "Recent", key: "home") };
+        if (ctx.Due is int due) items.Add(Item("/due", "Due", due, "due"));
         if (ctx.Processing > 0) items.Add(Item("/#queue", "Being written", ctx.Processing, "queue"));
         items.Add("<div class=\"nav-head\">Classes</div>");
         foreach (var (name, n) in ctx.Classes)

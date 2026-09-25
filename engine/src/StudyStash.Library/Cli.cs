@@ -160,17 +160,19 @@ public static class Cli
             // Settings' "Update now": on a Mac or Linux this restarts the service onto the new version, this copy included.
             // One record of who may read through Claude, for the library's Settings and for Claude's door alike.
             var access = new ClaudeAccess(home);
+            // Canvas, through the Chrome extension: one queue for the sync and for AIs' reads.
+            var canvas = new StudyStash.Core.Canvas.CanvasSync(home, c => store.ClassDir(c)) { KnownClass = c => cfg.ClassNames().Contains(c) };
             var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions
             {
                 Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
-                AskChat = ai.Ask(() => cfg), Ai = ai,
+                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas,
             });
             await app.StartAsync(stop.Token);
             // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.
             var claudeBuilder = WebApplication.CreateSlimBuilder();
             claudeBuilder.Logging.ClearProviders();
             claudeBuilder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, ClaudeWeb.PortFor(cfg)));
-            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access);
+            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access, canvas);
             try
             {
                 await claude.StartAsync(stop.Token);

@@ -88,7 +88,8 @@ public sealed partial class CanvasSync
         CanvasSettings.Update(home, st =>
         {
             st.Error = done.Errors.Count > 0 ? $"{done.Errors.Count} thing(s) couldn't be read: {done.Errors[0]}" : "";
-            if (changes.Count > 0) st.Changes = changes.Take(60).ToList();
+            // The first sync finds everything new: that isn't news.
+            if (changes.Count > 0 && before.Count > 0) st.Changes = changes.Take(60).ToList();
         });
         log($"[canvas] sync done: {items.Count} assignments, {changes.Count} changes, {files} files" + (done.Errors.Count > 0 ? $", {done.Errors.Count} errors" : ""));
         if (before.Count > 0 && changes.Count > 0) Finished?.Invoke(changes);
