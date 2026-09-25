@@ -90,6 +90,13 @@ public static class SelfTest
         Shell.ShowSettings();
         await Wait(1);
         Shot(Shell.Windows.Settings, "settings");
+        foreach (string section in new[] { "AI" })
+        {
+            if ((Shell.Windows.Settings?.Content as Control)?.DataContext is not Services.SettingsModel sm) break;
+            sm.Section = section;
+            await Wait(2);
+            Shot(Shell.Windows.Settings, "settings-" + section.ToLowerInvariant());
+        }
         Shell.Windows.Settings?.Close();
 
         if (!host.ModelReady)

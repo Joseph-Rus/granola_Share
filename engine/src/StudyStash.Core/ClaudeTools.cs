@@ -88,6 +88,10 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
 
     public async Task<JsonObject?> ClaudeAsync(HttpMethod method, string path = "", JsonObject? body = null) =>
         await SendAsync(method, "/claude" + path, body) as JsonObject;
+
+    /// <summary>Which AI does the library's work: /api/v2/ai (GET, or POST a choice), and "/test" to try one.</summary>
+    public async Task<JsonObject?> AiAsync(HttpMethod method, string path = "", JsonObject? body = null) =>
+        await SendAsync(method, "/ai" + path, body) as JsonObject;
 }
 
 /// <summary>

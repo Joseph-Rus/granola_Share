@@ -96,6 +96,9 @@
       <Button Classes="nav" Classes.on="{Binding OnClasses}" Command="{Binding GoCommand}" CommandParameter="Classes">
         <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="schedule" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Classes" FontSize="13" VerticalAlignment="Center" /></StackPanel>
       </Button>
+      <Button Classes="nav" Classes.on="{Binding OnAi}" Command="{Binding GoCommand}" CommandParameter="AI">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="hub" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="AI" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
       <Button Classes="nav" Classes.on="{Binding OnClaude}" Command="{Binding GoCommand}" CommandParameter="Claude">
         <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="auto_awesome" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Claude" FontSize="13" VerticalAlignment="Center" /></StackPanel>
       </Button>
@@ -192,6 +195,52 @@
             <Button Grid.Column="4" Classes="push" Command="{Binding AddClassCommand}"><TextBlock Text="Add" FontSize="13" /></Button>
           </Grid>
           <TextBlock Classes="say" Text="{Binding ClassesSay}" IsVisible="{Binding ClassesSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <!-- AI -->
+        <StackPanel IsVisible="{Binding OnAi}">
+          <TextBlock Classes="h" Text="AI" />
+          <TextBlock Classes="body" Text="What writes your study notes, sorts lectures, and answers questions. Claude, ChatGPT and Gemini use your own account through their apps on the library's computer; a local model stays on it." />
+          <TextBlock Classes="sub" Text="Does the work" />
+          <ItemsControl ItemsSource="{Binding Ais}" MaxWidth="480" HorizontalAlignment="Left">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="s:AiChoiceRow">
+                <Button Theme="{StaticResource Surface}" CornerRadius="{DynamicResource RadiusPanel}" Margin="0,0,0,8" Padding="0"
+                        Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).PickAiCommand}" CommandParameter="{Binding}">
+                  <Border Classes="card" Classes.on="{Binding Chosen}" Margin="0">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding About}" FontSize="12" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <c:Icon Grid.Column="1" IsVisible="{Binding Works}" Glyph="check_circle" Filled="True" Size="18" Foreground="{DynamicResource Accent}" Margin="10,0,0,0" />
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel IsVisible="{Binding HasAiModels}">
+            <TextBlock Classes="sub" Text="Model" />
+            <ItemsControl ItemsSource="{Binding AiModels}" Width="480" HorizontalAlignment="Left">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="s:AiChoiceRow">
+                  <Button Theme="{StaticResource Surface}" CornerRadius="{DynamicResource RadiusPanel}" Margin="0,0,0,8" Padding="0"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).PickAiModelCommand}" CommandParameter="{Binding}">
+                    <Border Classes="card" Classes.on="{Binding Chosen}" Margin="0">
+                      <TextBlock Text="{Binding Name}" FontSize="13" />
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <Button Classes="push default" Command="{Binding TestAiCommand}" IsEnabled="{Binding !AiBusy}"><TextBlock Text="Try it" FontSize="13" FontWeight="Medium" /></Button>
+          </StackPanel>
+          <TextBlock Classes="say" Text="{Binding AiSay}" IsVisible="{Binding AiSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="body" Margin="0,12,0,0" Text="To use a different AI for notes, sorting or questions, open the library's Settings page." />
         </StackPanel>
 
         <!-- Claude -->

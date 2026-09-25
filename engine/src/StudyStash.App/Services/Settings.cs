@@ -28,6 +28,16 @@ public sealed partial class TimetableRow : ObservableObject
     public Avalonia.Media.IBrush Dot { get; init; } = Avalonia.Media.Brushes.Gray;
 }
 
+/// <summary>An AI the library can use (Claude, ChatGPT, Gemini, a local model), or one of its models.</summary>
+public sealed partial class AiChoiceRow : ObservableObject
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    [ObservableProperty] public partial string About { get; set; } = "";
+    [ObservableProperty] public partial bool Chosen { get; set; }
+    [ObservableProperty] public partial bool Works { get; set; }
+}
+
 /// <summary>A connection Claude has to the library, for the Claude section's list.</summary>
 public sealed class ClaudeConnection
 {
@@ -70,6 +80,13 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string NewTimes { get; set; } = "";
     [ObservableProperty] public partial string? ClassesSay { get; set; }
 
+    // AI
+    public ObservableCollection<AiChoiceRow> Ais { get; } = [];
+    public ObservableCollection<AiChoiceRow> AiModels { get; } = [];
+    [ObservableProperty] public partial string? AiSay { get; set; }
+    [ObservableProperty] public partial bool AiBusy { get; set; }
+    public bool HasAiModels => AiModels.Count > 1;
+
     // Claude
     [ObservableProperty] public partial string? ClaudeSay { get; set; }
     [ObservableProperty] public partial string ClaudeCommand { get; set; } = "";
@@ -87,6 +104,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     public bool OnLibrary => Section == "Library";
     public bool OnRecording => Section == "Recording";
     public bool OnClasses => Section == "Classes";
+    public bool OnAi => Section == "AI";
     public bool OnClaude => Section == "Claude";
     public bool OnGeneral => Section == "General";
     public bool HasWebUrl => !string.IsNullOrEmpty(WebUrl);
@@ -116,8 +134,10 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
             Rows.Add(new TimetableRow { Name = name, Dot = Skin.ClassDot(color) });
         Connections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasConnections));
         host.Changed += OnHostChanged;
+        AiModels.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAiModels));
         Refresh();
         _ = LoadClaudeAsync();
+        _ = LoadAiAsync();
     }
 
     void OnHostChanged() => Dispatcher.UIThread.Post(Refresh);
@@ -145,7 +165,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
 
     partial void OnSectionChanged(string value)
     {
-        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnClaude), nameof(OnGeneral) }) OnPropertyChanged(p);
+        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnAi), nameof(OnClaude), nameof(OnGeneral) }) OnPropertyChanged(p);
     }
 
     partial void OnWebUrlChanged(string? value) => OnPropertyChanged(nameof(HasWebUrl));
@@ -337,6 +357,82 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         {
             WebSay = "Couldn't disconnect it: the library didn't answer.";
         }
+    }
+
+    // --- AI ---------------------------------------------------------------------------------------------------------
+
+    async Task LoadAiAsync() => await AiCallAsync(lib => lib.AiAsync(HttpMethod.Get));
+
+    /// <summary>Ask the library, show what it says, and say what went wrong when it can't.</summary>
+    async Task AiCallAsync(Func<RemoteLibrary, Task<JsonObject?>> call, string? done = null)
+    {
+        if (host.Remote() is not { } lib)
+        {
+            AiSay = "Connect to your library first.";
+            return;
+        }
+        AiBusy = true;
+        try
+        {
+            var r = await call(lib);
+            ShowAi(r);
+            AiSay = r?["tested"] is not null
+                ? r["ok"]?.GetValue<bool>() == true ? "It works." : $"It didn't answer: {r["why"]?.GetValue<string>()}"
+                : done;
+        }
+        catch (LibraryRefusedException e)
+        {
+            AiSay = e.Status == 404 ? "Your library runs an older Study Stash: update it to pick its AI here." : e.Message;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            AiSay = "Your library didn't answer.";
+        }
+        finally
+        {
+            AiBusy = false;
+        }
+    }
+
+    void ShowAi(JsonObject? a)
+    {
+        if (a is null) return;
+        string chosen = a["provider"]?.GetValue<string>() ?? "ollama";
+        string model = a["jobs"]?["agent"]?["model"]?.GetValue<string>() ?? "";
+        Ais.Clear();
+        AiModels.Clear();
+        foreach (var p in (a["providers"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            string id = p["id"]?.GetValue<string>() ?? "";
+            bool installed = p["installed"]?.GetValue<bool>() == true;
+            string test = p["test"]?.GetValue<string>() ?? "";
+            Ais.Add(new AiChoiceRow
+            {
+                Id = id, Name = p["name"]?.GetValue<string>() ?? id, Chosen = id == chosen, Works = test == "works",
+                About = !installed ? $"Not on the library's computer yet: {p["site"]?.GetValue<string>()}"
+                    : id == "ollama" ? "On the library's computer: private and free."
+                    : test is "works" or "" ? "With your own account and plan." : $"Last try failed: {test}",
+            });
+            if (id != chosen) continue;
+            foreach (var m in (p["models"] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                string mid = m["id"]?.GetValue<string>() ?? "";
+                AiModels.Add(new AiChoiceRow { Id = mid, Name = m["label"]?.GetValue<string>() ?? mid, Chosen = mid == model });
+            }
+        }
+    }
+
+    [RelayCommand]
+    Task PickAi(AiChoiceRow ai) => AiCallAsync(lib => lib.AiAsync(HttpMethod.Post, "", new JsonObject { ["provider"] = ai.Id }), $"{ai.Name} does the library's work now.");
+
+    [RelayCommand]
+    Task PickAiModel(AiChoiceRow m) => AiCallAsync(lib => lib.AiAsync(HttpMethod.Post, "", new JsonObject { ["model"] = m.Id }), "Saved.");
+
+    [RelayCommand]
+    Task TestAi()
+    {
+        AiSay = "Trying it…";
+        return AiCallAsync(lib => lib.AiAsync(HttpMethod.Post, "/test", new JsonObject()));
     }
 
     [RelayCommand] static void Quit() => Shell.Quit();
