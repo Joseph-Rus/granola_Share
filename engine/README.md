@@ -19,15 +19,25 @@ That way a computer can switch engines and keep its library as it is.
 |---|---|---|
 | 1 | Config, lectures, the database and note files, Ollama notes and sorting, the pipeline | done |
 | 2 | Granola sign-in, reading lectures from its MCP server, and the library's own sync | done |
-| 3 | The library: its web pages, API and setup page | |
+| 3 | The library: its web pages, the laptop's API, and the setup page (ASP.NET Core) | done |
 | 4 | The laptop: watching Granola and its local page | |
-| 5 | Start at login, updates, `doctor`, Windows firewall and sleep | |
+| 5 | Installing Ollama and Tailscale, start at login, updates, `doctor`, Windows firewall and sleep | |
 | 6 | Mac transcript copying moves into the Swift app | |
 | 7 | The installers and apps switch to this engine; Python retires | |
 
-`src/StudyStash.Core` is the engine, and `src/StudyStash.Engine` the command. For now the command only checks that
-it would leave this computer's config files as they are (`studystash config-check`). It prints line numbers, never
-contents.
+The code:
+- `src/StudyStash.Core` is the engine.
+- `src/StudyStash.Library` has the library's pages and the setup page.
+- `src/StudyStash.Engine` is the command. The Study Stash apps still start the Python engine; these are for trying
+  this one:
+  - `studystash run` serves the library, as `granola-share run` does;
+  - `studystash setup --page` serves the setup page;
+  - `studystash config-check` checks it would leave this computer's config files as they are. It prints line
+    numbers, never contents.
+
+The setup page's buttons that change the computer come with stage 5. That covers installing Ollama or Tailscale, the
+Windows firewall rule, keeping a PC awake, starting at login, and installing updates. Until then they give Python's own
+"do it by hand" answer, or say they aren't in this engine yet.
 
 ## Tests
 
@@ -41,6 +51,14 @@ dotnet test engine/StudyStash.slnx
 - **Cross-engine** (`CrossEngineTests`, `tests/crosscheck.py`): Python builds a library, C# reads every row, then moves,
   deletes, adds and files notes, and Python checks every row and file C# wrote. It uses the repo's `.venv`, or set
   `STUDYSTASH_PYTHON`.
+- **Pages** (`LibraryWebTests`, `LibrarySetupTests`): the Python engine serves 19 library pages and draws the setup
+  page in four states, with the nonce pinned. The C# engine must serve the same bytes. The only exception is a
+  lecture's note text: Markdown libraries differ, so that's checked for safety instead.
+  - The pages' CSS and JavaScript are copied from Python by `golden.py` into `src/StudyStash.Library/PageText.cs`, so
+    there's nothing to retype.
+- **The laptop** (`CrossEngineTests`, `tests/laptop_check.py`): the Python engine's own laptop code talks to a C#
+  library over HTTP. It checks health, a wrong password, sending a lecture, asking if it's filed, and setup's checks
+  that the library is running.
 - **Signing in** (`OAuthTests`): checked against the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
   and the RFCs it builds on:
   - RFC 7636's own PKCE example;
@@ -70,5 +88,10 @@ Only where Python lost data, could not read its own files, or skipped part of a 
   - it falls back to OpenID discovery;
   - it refuses a sign-in server that doesn't advertise S256 PKCE;
   - the callback also answers on `::1`, since `localhost` may mean either.
+- On pages with no sidebar item of their own (search, not found), Python marked Log out as the current page. Both
+  engines mark nothing now.
+- Note text goes through Markdig instead of Python-Markdown, with the same rules: no raw HTML, only http, https and
+  mailto links, and math left for KaTeX. Markdown's own attribute syntax is off, so a note can't add an HTML attribute.
+- A class with "/" in its name opens. Python's web framework decoded "%2F" before routing, so it couldn't.
 - An Ollama error reads as Ollama's own words ("Ollama answered 404: model 'x' not found"). Odd answers from the
   sorting model send the note to Unsorted instead of failing it.

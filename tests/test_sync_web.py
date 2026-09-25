@@ -194,3 +194,13 @@ def test_login_never_redirects_off_site():
     assert safe_next("/note/n1?x=1") == "/note/n1?x=1"
     for bad in ["https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "evil.com", ""]:
         assert safe_next(bad) == "/", bad
+
+
+def test_log_out_is_never_marked_as_the_page_you_are_on(tmp_path):
+    """Pages with no sidebar item of their own (search, not found) marked Log out as the current page."""
+    cfg = make_cfg(tmp_path, password="pw")
+    store = Store(cfg.db_path, cfg.pool_dir)
+    c = TestClient(app_for(cfg, store), follow_redirects=False)
+    c.post("/login", data={"password": "pw", "next": "/"})
+    for page in ("/search?q=x", "/note/missing"):
+        assert '<a href="/logout" aria-current' not in c.get(page).text, page

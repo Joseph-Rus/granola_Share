@@ -301,6 +301,188 @@ def granola_cases() -> dict:
     }
 
 
+def page_text() -> None:
+    """The pages' CSS and JavaScript, copied into C# exactly (src/StudyStash.Library/PageText.cs)."""
+    from granola_share import client_app, library_setup, ui, web
+
+    consts = [("Css", ui.CSS), ("Js", ui.JS), ("MathJs", ui.MATH_JS), ("Katex", ui.KATEX), ("IconLinks", ui.ICON_LINKS),
+              ("LibraryCsp", web.CSP), ("AppCss", client_app.APP_CSS), ("AppJs", client_app.APP_JS),
+              ("AppCsp", client_app.CSP), ("SetupCss", library_setup.SETUP_CSS), ("SetupJs", library_setup.SETUP_JS)]
+
+    def literal(s: str) -> str:
+        out = []
+        for ch in s:
+            if ch == "\\":
+                out.append("\\\\")
+            elif ch == '"':
+                out.append('\\"')
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\t":
+                out.append("\\t")
+            elif " " <= ch <= "~":
+                out.append(ch)
+            else:
+                out.append(f"\\u{ord(ch):04x}")
+        return '"' + "".join(out) + '"'
+
+    lines = ["// Made by engine/tests/golden.py from the Python engine's own text: run that again rather than edit this.",
+             "// (The pages must look the same whichever engine serves them.)", "", "namespace StudyStash.Library;", "",
+             "internal static class PageText", "{"]
+    for name, value in consts:
+        parts = value.splitlines(keepends=True) or [""]
+        lines.append(f"    public const string {name} =")
+        lines += [f"        {literal(p)}" + (" +" if i < len(parts) - 1 else ";") for i, p in enumerate(parts)]
+        lines.append("")
+    lines[-1] = "}"
+    (ROOT / "engine" / "src" / "StudyStash.Library" / "PageText.cs").write_bytes(("\n".join(lines) + "\n").encode())
+
+
+def library_cases() -> dict:
+    """Stage 3: the helpers the library's pages are made of."""
+    from granola_share import hostinfo, ui, update
+
+    names = ["CS 101", "Bio 110", "Unsorted", "", "Calc II", "Bio 🧬 110", "Ümlaut", "a/b c"]
+    dates = ["2026-09-14T10:00:00", "2026-09-14T10:00:00Z", "2026-09-14", "2026-09-14T00:05:00", "2026-09-14T12:30",
+             "2026-09-14 23:59:59", "Sep 14", "", None, "2026-02-29", "2026-09-14T10", "2026-09-14T10:00:00.123+00:00"]
+    snippets = [["The derivative measures how fast a function changes at a point.", "fast"],
+                ["# Heading\n\n**Bold** osmosis and *more* `code` > quote | pipe", "osmosis"], ["short", "SHORT"],
+                ["no match here", "zebra"], ["x" * 200 + "needle" + "y" * 200, "needle"], ["text", ""],
+                ["<b>&amp;</b> tags & osmosis", "OSMOSIS"]]
+    ts = [{"installed": False}, {"installed": True, "state": "NeedsLogin"}, {"installed": True, "state": "Stopped"},
+          {"installed": True, "state": "NeedsMachineAuth"}, {"installed": True, "state": "Starting"},
+          {"installed": True, "running": True}]
+    return {
+        "esc": [[s, ui.esc(s)] for s in ["<b>\"x\" & 'y'</b>", "plain", "", "é → ✓"]],
+        "hue": [[n, ui.hue(n), ui.hue_style(n)] for n in names],
+        "class_url": [[n, ui.class_url(n)] for n in names],
+        "short_date": [[d, ui.short_date(d)] for d in dates],
+        "long_date": [[d, ui.long_date(d)] for d in dates],
+        "snippet": [[t, q, ui.snippet(t, q)] for t, q in snippets],
+        "tailscale_problem": [[t, hostinfo.tailscale_problem(t)] for t in ts],
+        "invite": [[u, k, hostinfo.invite_commands(u, k)] for u, k in
+                   [["http://mini.tail.ts.net:8787", "maple-otter"], ["http://100.64.0.9:8787", "it's a \"pass\" $word"],
+                    ["http://pc:8787", ""], ["http://x:1", "a b;c"]]],
+        "parse_version": [[v, list(update.parse_version(v))] for v in ["v0.4.4", "0.4", "v1.2.3.4", "", "x", "2.0.0+dev"]],
+        "safe_next": [[n, __import__("granola_share.web", fromlist=["safe_next"]).safe_next(n)]
+                      for n in ["/note/n1?x=1", "https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com",
+                                "evil.com", "", "/", "/settings?saved=1"]],
+    }
+
+
+PAGE_MODELS = [{"name": "qwen3:1.7b", "size_gb": 1.4}, {"name": "gemma4:e4b", "size_gb": 9.6}]
+PAGE_TAILSCALE = {"installed": True, "running": True, "state": "Running", "dns": "mini.tail.ts.net", "ips": ["100.64.0.9"]}
+
+
+def seed_library(store) -> None:
+    """The lectures the page cases show: the C# tests seed the same ones (LibraryPageTests.Seed)."""
+    from granola_share.granola import Meeting
+
+    def save(mid, title, date, cls, by, conf, topics, **kw):
+        store.save(Meeting(id=mid, title=title, date=date, owner="Sam", **kw),
+                   Classification(cls, conf, by, kw.pop("lecture", ""), topics))
+
+    save("n1", "Cells", "2026-09-01T09:00:00", "Bio 110", "folder", 0.95, ["cells", "membranes"],
+         notes_markdown="membranes", transcript="today we talk about the cell membrane and osmosis")
+    save("n2", "Loops & <b>ranges</b>", "2026-09-03", "CS 101", "ollama", 0.875, ["loops"], notes_markdown="for loops")
+    save("n3", "Lunch", "2026-09-02T12:30:00", "Unsorted", "none", 0.0, [])
+    save("n4", "Old class lecture", "2026-08-30", "History 9", "human", 1.0, [], notes_markdown="x")
+    store.enqueue(Meeting(id="q1", title="Waiting lecture", date="2026-09-04"))
+    store.enqueue(Meeting(id="f1", title="Broken lecture", date="2026-09-05"))
+    store.conn.execute("UPDATE notes SET status='failed', error=? WHERE id='f1'", ("Summary with big:35b failed: " + "x" * 200,))
+    store.conn.commit()
+
+
+def library_pages() -> dict:
+    """Pages as the Python engine serves them, with the nonce pinned to "NONCE"."""
+    import secrets
+    import tempfile
+
+    from fastapi.testclient import TestClient
+
+    from granola_share.pipeline import Pipeline
+    from granola_share.store import Store
+    from granola_share.update import Release
+    from granola_share.web import create_app
+
+    real = secrets.token_urlsafe
+    secrets.token_urlsafe = lambda n=None: "NONCE"
+    pages = {}
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(home=Path(tmp) / "home", pool_dir=Path(tmp) / "pool", pool_name="Fall \"26\" & co",
+                         pool_password="pw", ollama_model="qwen3:1.7b", summary_model="gemma4:e4b", min_confidence=0.7,
+                         classes=[ClassDef("CS 101", ["cs101"], "Intro to programming"), ClassDef("Bio 110", [], ""),
+                                  ClassDef("Calc II", ["math"], "Series.")])
+            store = Store(cfg.db_path, cfg.pool_dir)
+            seed_library(store)
+            pipeline = Pipeline(cfg, store, log=lambda *_: None)
+            newer = Release("v9.9.9", (9, 9, 9), "https://x/v9.9.9.tar.gz", "https://x/releases/v9.9.9")
+            apps = {
+                "": create_app(cfg, store, pipeline, list_models=lambda h: PAGE_MODELS, tailscale=lambda: PAGE_TAILSCALE,
+                               latest=lambda *a: None),
+                "no-ollama:": create_app(cfg, store, pipeline, list_models=lambda h: None, tailscale=lambda: {},
+                                         latest=lambda *a: newer),
+            }
+            paths = ["/", "/unsorted", "/class/Bio%20110", "/class/CS%20101", "/class/Calc%20II", "/class/History%209",
+                     "/search?q=osmosis", "/search?q=zzz", "/search?q=%20", "/search", "/settings", "/settings?saved=1",
+                     "/settings?queued=3", "/settings?queued=1", "/login", "/login?bad=1&next=/x%3Fy", "/note/missing"]
+            for prefix, app in apps.items():
+                c = TestClient(app, follow_redirects=False)
+                c.post("/login", data={"password": "pw", "next": "/"})
+                for p in (paths if not prefix else ["/settings"]):
+                    r = c.get(p)
+                    pages[prefix + p] = {"status": r.status_code, "html": r.text, "csp": r.headers.get("content-security-policy")}
+            cfg.pool_password = ""
+            pages["open:/"] = {"status": 200, "html": TestClient(apps[""]).get("/").text, "csp": None}
+    finally:
+        secrets.token_urlsafe = real
+    return pages
+
+
+def setup_pages() -> dict:
+    """The setup page in three states, with every check answered the same way the C# tests answer it."""
+    import tempfile
+
+    from granola_share import library_setup
+
+    def fakes(**over):
+        kw = dict(list_models=lambda host: PAGE_MODELS, ollama_installed=lambda: True, start_ollama=lambda host: True,
+                  install_ollama=lambda *a, **k: True, pull_model=lambda *a, **k: (True, ""),
+                  try_model=lambda host, model: (2.0, ""), tailscale=lambda: PAGE_TAILSCALE,
+                  install_tailscale=lambda *a, **k: True, open_tailscale=lambda system=None: True,
+                  firewall=lambda port: True, open_firewall=lambda port: True, sleep_minutes=lambda system=None: 0,
+                  keep_awake=lambda system=None: True, ram_gb=lambda: 32.0, disk_free=lambda: 200.4,
+                  port_status=lambda port: "free", install_autostart=lambda role, home: None,
+                  wait_healthy=lambda cfg: True, system="Darwin")
+        kw.update(over)
+        return kw
+
+    draft = {"pool_name": "Fall <2026>", "pool_password": "maple-otter", "pool_dir": "/srv/Lecture notes", "web_port": 8791}
+    states = {
+        "fresh": ({"pool_password": "maple-otter", "pool_dir": "/srv/Lecture notes"}, dict(list_models=lambda h: None, ollama_installed=lambda: False,
+                                                        tailscale=lambda: {"installed": False}, ram_gb=lambda: 15.6,
+                                                        disk_free=lambda: 12.5)),
+        "windows": ({**draft, "library": True, "models": True, "summary_model": "gemma4:e4b", "ollama_model": "qwen3:1.7b",
+                     "classes": [{"name": "CS 101", "aliases": ["cs101", "intro"], "description": "x"}, {"name": "Bio 110"}],
+                     "autostart": False, "auto_update": False},
+                    dict(system="Windows", firewall=lambda port: False, sleep_minutes=lambda system=None: 30,
+                         tailscale=lambda: {"installed": True, "state": "NeedsLogin"}, ram_gb=lambda: None, disk_free=lambda: None)),
+        "mac-asleep": ({**draft, "library": True}, dict(sleep_minutes=lambda system=None: 1, list_models=lambda h: [])),
+        "finished": ({**draft, "library": True, "models": True, "summary_model": "qwen3:1.7b"}, {}),
+    }
+    out = {}
+    for name, (data, over) in states.items():
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "setup_draft.json").write_text(json.dumps(data))
+            s = library_setup.LibrarySetup(home, **fakes(**over))
+            if name == "finished":
+                s.draft["finished"] = True
+            out[name] = {"draft": data, "html": library_setup.render(s)}
+    return out
+
+
 # Granola's sign-in server metadata as fetched from mcp-auth.granola.ai on 2026-09-25 (public, trimmed).
 GRANOLA_AUTH_META = {
     "authorization_endpoint": "https://mcp-auth.granola.ai/oauth2/authorize",
@@ -313,11 +495,18 @@ GRANOLA_AUTH_META = {
 
 
 def main() -> None:
+    import socket
+
+    # Pages name this computer when Tailscale is off: a made-up name, never the real one (and the same in CI).
+    socket.gethostname = lambda: "library-pc"
     OUT.mkdir(parents=True, exist_ok=True)
     configs()
     notes()
     write("cases.json", json.dumps(cases(), indent=1, ensure_ascii=False) + "\n")
     write("granola.json", json.dumps(granola_cases(), indent=1, ensure_ascii=False) + "\n")
+    write("library.json", json.dumps(library_cases(), indent=1, ensure_ascii=False) + "\n")
+    write("pages.json", json.dumps({"library": library_pages(), "setup": setup_pages()}, indent=1, ensure_ascii=False) + "\n")
+    page_text()
     print(f"wrote {OUT.relative_to(ROOT)}")
 
 

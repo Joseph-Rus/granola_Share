@@ -58,6 +58,76 @@ public static class Ollama
         return $"Ollama answered {(int)status}" + (why.Length > 0 ? ": " + why : "");
     }
 
+    // --- where Ollama is on this computer ------------------------------------------------------------------
+
+    static string[] MacApps() => ["/Applications/Ollama.app", Path.Combine(Py.UserHome(), "Applications", "Ollama.app")];
+
+    /// <summary>Where OllamaSetup.exe puts it: in your own account, no admin needed.</summary>
+    static string WindowsDir() => Path.Combine(
+        Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local ? local : Path.Combine(Py.UserHome(), "AppData", "Local"),
+        "Programs", "Ollama");
+
+    /// <summary>The `ollama` command. A fresh install isn't on this process's PATH yet, so its usual homes count too.</summary>
+    public static string? FindExe(string? system = null)
+    {
+        if (Machine.Which("ollama") is string onPath) return onPath;
+        string[] places = (system ?? Machine.Platform) switch
+        {
+            "Darwin" => [.. MacApps().Select(a => Path.Combine(a, "Contents", "Resources", "ollama")), "/opt/homebrew/bin/ollama", "/usr/local/bin/ollama"],
+            "Windows" => [Path.Combine(WindowsDir(), "ollama.exe")],
+            _ => ["/usr/local/bin/ollama", "/usr/bin/ollama"],
+        };
+        return places.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>The Ollama app (Mac) or its tray app (Windows): they keep Ollama running and start it at login.</summary>
+    public static string? AppPath(string? system = null) => (system ?? Machine.Platform) switch
+    {
+        "Darwin" => MacApps().FirstOrDefault(Directory.Exists),
+        "Windows" => File.Exists(Path.Combine(WindowsDir(), "ollama app.exe")) ? Path.Combine(WindowsDir(), "ollama app.exe") : null,
+        _ => null,
+    };
+
+    public static bool Installed(string? system = null) => FindExe(system) is not null || AppPath(system) is not null;
+
+    static void Launch(string exe, params string[] args)
+    {
+        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (string a in args) psi.ArgumentList.Add(a);
+        using var _ = Process.Start(psi);
+    }
+
+    /// <summary>Start Ollama when it's installed but not running. True once it answers.</summary>
+    public static async Task<bool> StartAsync(string host, double waitSeconds = 20)
+    {
+        if (await ListModelsAsync(host) is not null) return true;
+        string system = Machine.Platform;
+        string? app = AppPath(system), exe = FindExe(system);
+        try
+        {
+            if (system == "Darwin" && app is not null)
+            {
+                // Over SSH with nobody signed in on the Mac's screen, `open` can't start an app: serve directly.
+                if (Machine.Run("open", ["-g", "-a", app], TimeSpan.FromSeconds(10)) is not { ExitCode: 0 } && exe is not null)
+                    Launch(exe, "serve");
+            }
+            else if (system == "Windows" && app is not null) Launch(app);
+            else if (exe is not null) Launch(exe, "serve");
+            else return false;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return false;
+        }
+        var deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await ListModelsAsync(host) is not null) return true;
+            await Task.Delay(1000);
+        }
+        return false;
+    }
+
     /// <summary>Installed chat models, biggest first, or null when Ollama is not reachable.</summary>
     public static async Task<List<(string Name, double SizeGb)>?> ListModelsAsync(string host, HttpClient? http = null)
     {

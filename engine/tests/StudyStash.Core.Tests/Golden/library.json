@@ -1,0 +1,397 @@
+{
+ "esc": [
+  [
+   "<b>\"x\" & 'y'</b>",
+   "&lt;b&gt;&quot;x&quot; &amp; &#x27;y&#x27;&lt;/b&gt;"
+  ],
+  [
+   "plain",
+   "plain"
+  ],
+  [
+   "",
+   ""
+  ],
+  [
+   "é → ✓",
+   "é → ✓"
+  ]
+ ],
+ "hue": [
+  [
+   "CS 101",
+   10,
+   "--tag:var(--c10)"
+  ],
+  [
+   "Bio 110",
+   3,
+   "--tag:var(--c3)"
+  ],
+  [
+   "Unsorted",
+   null,
+   "--tag:var(--gray)"
+  ],
+  [
+   "",
+   null,
+   "--tag:var(--gray)"
+  ],
+  [
+   "Calc II",
+   7,
+   "--tag:var(--c7)"
+  ],
+  [
+   "Bio 🧬 110",
+   9,
+   "--tag:var(--c9)"
+  ],
+  [
+   "Ümlaut",
+   2,
+   "--tag:var(--c2)"
+  ],
+  [
+   "a/b c",
+   5,
+   "--tag:var(--c5)"
+  ]
+ ],
+ "class_url": [
+  [
+   "CS 101",
+   "/class/CS%20101"
+  ],
+  [
+   "Bio 110",
+   "/class/Bio%20110"
+  ],
+  [
+   "Unsorted",
+   "/class/Unsorted"
+  ],
+  [
+   "",
+   "/class/"
+  ],
+  [
+   "Calc II",
+   "/class/Calc%20II"
+  ],
+  [
+   "Bio 🧬 110",
+   "/class/Bio%20%F0%9F%A7%AC%20110"
+  ],
+  [
+   "Ümlaut",
+   "/class/%C3%9Cmlaut"
+  ],
+  [
+   "a/b c",
+   "/class/a%2Fb%20c"
+  ]
+ ],
+ "short_date": [
+  [
+   "2026-09-14T10:00:00",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14T10:00:00Z",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14T00:05:00",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14T12:30",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14 23:59:59",
+   "Sep 14"
+  ],
+  [
+   "Sep 14",
+   "Sep 14"
+  ],
+  [
+   "",
+   ""
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "2026-02-29",
+   "2026-02-29"
+  ],
+  [
+   "2026-09-14T10",
+   "Sep 14"
+  ],
+  [
+   "2026-09-14T10:00:00.123+00:00",
+   "Sep 14"
+  ]
+ ],
+ "long_date": [
+  [
+   "2026-09-14T10:00:00",
+   "Mon Sep 14, 2026, 10:00 AM"
+  ],
+  [
+   "2026-09-14T10:00:00Z",
+   "Mon Sep 14, 2026, 10:00 AM"
+  ],
+  [
+   "2026-09-14",
+   "Mon Sep 14, 2026"
+  ],
+  [
+   "2026-09-14T00:05:00",
+   "Mon Sep 14, 2026, 12:05 AM"
+  ],
+  [
+   "2026-09-14T12:30",
+   "Mon Sep 14, 2026, 12:30 PM"
+  ],
+  [
+   "2026-09-14 23:59:59",
+   "Mon Sep 14, 2026, 11:59 PM"
+  ],
+  [
+   "Sep 14",
+   "Sep 14"
+  ],
+  [
+   "",
+   ""
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "2026-02-29",
+   "2026-02-29"
+  ],
+  [
+   "2026-09-14T10",
+   "Mon Sep 14, 2026, 10:00 AM"
+  ],
+  [
+   "2026-09-14T10:00:00.123+00:00",
+   "Mon Sep 14, 2026, 10:00 AM"
+  ]
+ ],
+ "snippet": [
+  [
+   "The derivative measures how fast a function changes at a point.",
+   "fast",
+   "The derivative measures how <mark>fast</mark> a function changes at a point."
+  ],
+  [
+   "# Heading\n\n**Bold** osmosis and *more* `code` > quote | pipe",
+   "osmosis",
+   " Heading Bold <mark>osmosis</mark> and more code quote pipe"
+  ],
+  [
+   "short",
+   "SHORT",
+   "<mark>short</mark>"
+  ],
+  [
+   "no match here",
+   "zebra",
+   ""
+  ],
+  [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxneedleyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+   "needle",
+   "…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx<mark>needle</mark>yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy…"
+  ],
+  [
+   "text",
+   "",
+   ""
+  ],
+  [
+   "<b>&amp;</b> tags & osmosis",
+   "OSMOSIS",
+   "&lt;b&amp;amp;&lt;/b tags &amp; <mark>osmosis</mark>"
+  ]
+ ],
+ "tailscale_problem": [
+  [
+   {
+    "installed": false
+   },
+   "not installed"
+  ],
+  [
+   {
+    "installed": true,
+    "state": "NeedsLogin"
+   },
+   "installed, but signed out"
+  ],
+  [
+   {
+    "installed": true,
+    "state": "Stopped"
+   },
+   "installed, but turned off"
+  ],
+  [
+   {
+    "installed": true,
+    "state": "NeedsMachineAuth"
+   },
+   "waiting for approval in your Tailscale admin page"
+  ],
+  [
+   {
+    "installed": true,
+    "state": "Starting"
+   },
+   "installed, but not running"
+  ],
+  [
+   {
+    "installed": true,
+    "running": true
+   },
+   ""
+  ]
+ ],
+ "invite": [
+  [
+   "http://mini.tail.ts.net:8787",
+   "maple-otter",
+   {
+    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://mini.tail.ts.net:8787 GRANOLA_SHARE_KEY=maple-otter sh",
+    "windows": "$env:GRANOLA_SHARE_SERVER='http://mini.tail.ts.net:8787'; $env:GRANOLA_SHARE_KEY='maple-otter'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
+   }
+  ],
+  [
+   "http://100.64.0.9:8787",
+   "it's a \"pass\" $word",
+   {
+    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://100.64.0.9:8787 GRANOLA_SHARE_KEY='it'\"'\"'s a \"pass\" $word' sh",
+    "windows": "$env:GRANOLA_SHARE_SERVER='http://100.64.0.9:8787'; $env:GRANOLA_SHARE_KEY='it''s a \"pass\" $word'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
+   }
+  ],
+  [
+   "http://pc:8787",
+   "",
+   {
+    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://pc:8787 GRANOLA_SHARE_KEY='' sh",
+    "windows": "$env:GRANOLA_SHARE_SERVER='http://pc:8787'; $env:GRANOLA_SHARE_KEY=''; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
+   }
+  ],
+  [
+   "http://x:1",
+   "a b;c",
+   {
+    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://x:1 GRANOLA_SHARE_KEY='a b;c' sh",
+    "windows": "$env:GRANOLA_SHARE_SERVER='http://x:1'; $env:GRANOLA_SHARE_KEY='a b;c'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
+   }
+  ]
+ ],
+ "parse_version": [
+  [
+   "v0.4.4",
+   [
+    0,
+    4,
+    4
+   ]
+  ],
+  [
+   "0.4",
+   [
+    0,
+    4
+   ]
+  ],
+  [
+   "v1.2.3.4",
+   [
+    1,
+    2,
+    3
+   ]
+  ],
+  [
+   "",
+   [
+    0
+   ]
+  ],
+  [
+   "x",
+   [
+    0
+   ]
+  ],
+  [
+   "2.0.0+dev",
+   [
+    2,
+    0,
+    0
+   ]
+  ]
+ ],
+ "safe_next": [
+  [
+   "/note/n1?x=1",
+   "/note/n1?x=1"
+  ],
+  [
+   "https://evil.com",
+   "/"
+  ],
+  [
+   "//evil.com",
+   "/"
+  ],
+  [
+   "/\\evil.com",
+   "/"
+  ],
+  [
+   "/\t/evil.com",
+   "/"
+  ],
+  [
+   "/\n/evil.com",
+   "/"
+  ],
+  [
+   "evil.com",
+   "/"
+  ],
+  [
+   "",
+   "/"
+  ],
+  [
+   "/",
+   "/"
+  ],
+  [
+   "/settings?saved=1",
+   "/settings?saved=1"
+  ]
+ ]
+}
