@@ -189,11 +189,135 @@ def cases() -> dict:
     }
 
 
+def granola_cases() -> dict:
+    """Stage 2: Granola's replies, the sign-in URL, and the two sign-in files."""
+    import tempfile
+    import textwrap
+    from datetime import date
+    from types import SimpleNamespace
+    from urllib.parse import parse_qs, urlencode
+
+    sys.path.insert(0, str(ROOT / "tests"))
+    import test_granola as tg  # the replies captured from mcp.granola.ai
+    import test_granola_main as tgm
+
+    from granola_share import granola
+    from granola_share.oauth import GranolaOAuth, _write_private
+
+    xml = [tg.LIST_XML, tg.GET_XML, tg.MESSY_XML, tg.TRANSCRIPT_XML, tg.ZERO_XML, tg.LIVE_LIST, tgm.GRANOLA_XML,
+           '<account email="x@y.z"><active_workspace id="w1" display_name="Lab"/>'
+           "<mcp_note_access><scopes>personal</scopes></mcp_note_access></account>",
+           "not xml at all", "<broken><a>1", "   <a>  padded  </a>  ",
+           "<?xml version=\"1.0\"?><folders><folder id=\"f1\">CS</folder><folder id=\"f2\">Bio</folder></folders>",
+           "<a><![CDATA[x < y & z]]><!-- note --><b>1</b>tail</a>",
+           "<a>before<!-- c -->after<b/>tail</a>",
+           "<m title='single' other=\"double\" empty=\"\"><s>x</s><s>y</s><s k=\"v\">z</s></m>",
+           "<m id='m1' title=\"Two\">x &nbsp; <b>y</b> <inaudible> <c/></m>",
+           "<meetings_data><meeting id=\"1\" title=\"&amp; &lt;b&gt; &#x41;&#66;\"/></meetings_data>",
+           "<meetings_data count=\"1\"><meeting id=\"only\"/></meetings_data>",
+           "<notice>plan limits</notice>\n<warning>x</warning>\n<results><item id=\"r1\"><n>1</n></item></results>",
+           "<a>\n    line one\n      indented\n    line three\n  </a>",
+           "<ns:a xmlns:ns=\"urn:x\" ns:k=\"v\"><ns:b>1</ns:b></ns:a>",
+           "<a title=\"Ops &amp; Eng\"><summary>Cost < 5% & more <x@y.io></summary></a>",
+           "<transcript>just the words</transcript>",
+           "<root>\n<child a=\"1\">\n  text\n</child>\n<child>two</child>\n</root>", "<unclosed a=\"1\">x", "<self a='1'/>",
+           "<?xml version=\"1.0\"?>\n<a b=\"1\">&bogus; entity</a>", "<a>&amp;&amp; & &lt;</a>"]
+    tool_texts = [["{\"notes\": [{\"id\": \"x\"}]}"], ["hello"], ["```json\n{\"a\": 1}\n```"], ["```\n<a k=\"v\"/>\n```"],
+                  ["Here are your meetings:\n<meetings_data count=\"0\"></meetings_data>"], ["line one\nline two <b>"],
+                  ["", "   "], ["{\"a\": 1, \"a\": 2}"], ["123"], ["null"], ["part one", "<a k=\"1\"/>"],
+                  [tg.TRANSCRIPT_XML], ["<transcript>no attributes</transcript>"], [tg.LIVE_LIST], ["[1, 2]"]]
+    payloads = [[{"id": "1"}, "junk"], {"meetings": [{"document_id": "2"}]}, {"data": {"results": [{"id": "3"}]}},
+                {"id": "solo", "title": "t"}, "text", tg.LIST_XML, {"meetings_data": {"meeting": [{"id": "n"}]}},
+                {"data": {"x": 1}, "items": [{"id": "i"}, 3]}, {"count": 0}, None, 5, tgm.GRANOLA_XML]
+    schemas = [tg.LIST_SCHEMA, tg.LEGACY_SCHEMA, None, {"properties": {"meeting_ids": {"type": "array"}}},
+               {"properties": {"document_ids": {"type": "string"}, "limit": {"type": "integer"}}},
+               {"properties": {"time_range": {"type": "string", "enum": ["this_week", "last_week", "last_30_days"]}}},
+               {"properties": {"time_range": {"type": "string"}, "start_date": {}, "skip": {}}},
+               {"properties": {"id": {}, "since": {}, "to": {}, "max_results": {}, "page": {}}}]
+    wants = [{"since": "2026-09-01", "limit": 20, "offset": None}, {"ids": ["a", "b"]}, {"id": ["only"]},
+             {"id": "one", "until": "2026-09-30"}, {"folder": "f1", "unknown": 1}]
+    list_calls = [[None, None, 50, 0], ["2026-02-01", None, 50, 0], ["2026-02-01", "2026-02-03", 20, 40],
+                  [None, "2026-02-03", 10, 0]]
+    today = date(2026, 2, 4)
+
+    def day(s):
+        return date.fromisoformat(s) if s else None
+
+    accounts = [tg.ACCOUNT_JSON, {}, None, {"email": "a@b.c"},
+                '<account email="x@y.z"><active_workspace id="w1" display_name="Lab"/>'
+                "<mcp_note_access><scopes>personal</scopes></mcp_note_access></account>",
+                "Signed in as sam@example.edu (personal)", {"account": {"email": "w@x.y", "workspace": "Plain"},
+                                                            "workspace_id": "ignored"},
+                {"user": {"email": "u@v.w"}, "workspace": "Top", "workspace_id": "w9", "scopes": "a, b;c d"},
+                {"data": {"active_workspace": {"name": "N", "workspace_id": 7}}, "email": "outer@x.y"},
+                {"email": {"email": "nested@x.y"}, "mcp_note_access": ["personal", {"text": "public"}, ""]},
+                {"email": "e@f.g", "mcp_note_access": "personal public"}, [1, 2]]
+    transcripts = [{"transcript": "plain"}, {"text": "t"}, {"content": [{"text": "a"}, "b"]}, "just text", None,
+                   {"transcript": "", "text": "fallback"}, {"other": 1}, ["x", {"markdown": "y"}]]
+    dedents = ["    a\n    b", "  a\n    b\n  c", "\ta\n  b", "    a\n\n    b\n   \n", "no indent", "  x\n\ty",
+               "   \n   ", "  a\r\n  b", ""]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cc = ClientConfig(home=Path(tmp), oauth_callback_port=3334)
+        oauth = GranolaOAuth(cc)
+        oauth._meta = GRANOLA_AUTH_META
+        _write_private(cc.client_path, {"client_id": "client-abc/123 x+y", "redirect_uri": oauth.redirect_uri})
+        client_file = cc.client_path.read_text()
+        url = oauth.build_authorize_url("st4te_-x", "ch4llenge~")
+        cc.oauth_prompt = ""
+        url_bare = oauth.build_authorize_url("s", "c")
+        tokens = {"access_token": "at.é", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "rt",
+                  "scope": "mcp offline_access", "expires_at": 1758812345.123456, "nested": {"a": [1, {}], "b": []}}
+        _write_private(Path(tmp) / "tokens.json", tokens)
+        tokens_file = (Path(tmp) / "tokens.json").read_text()
+
+    return {
+        "xml": [[x, granola.xml_to_data(x)] for x in xml],
+        "loose": [[x, granola._loose_parse(x)] for x in xml],
+        "access_notice": [[x, granola.access_notice(x)] for x in xml[:7]],
+        "tool_result": [[t, granola.parse_tool_result(SimpleNamespace(structuredContent=None,
+                                                                      content=[SimpleNamespace(text=s) for s in t]))]
+                        for t in tool_texts],
+        "extract": [[p, granola.extract_meetings(p)] for p in payloads],
+        "build_args": [[s, w, granola.build_args(s, w)] for s in schemas for w in wants],
+        "list_args": [[s, c, granola.list_args(s, day(c[0]), day(c[1]), c[2], c[3], today=today)]
+                      for s in schemas for c in list_calls],
+        "account": [[a, (lambda i: {k: v for k, v in i.items() if k != "raw"})(granola.normalize_account(a))]
+                    for a in accounts],
+        "account_label": [[i, granola.account_label(i)] for i in [{"email": "a@b.c", "workspace": "W"}, {"email": " a@b.c "},
+                                                                  {"email": ""}, None, {"email": "x", "workspace": " "}]],
+        "transcript_text": [[t, granola.transcript_text(t)] for t in transcripts],
+        "dedent": [[t, textwrap.dedent(t)] for t in dedents],
+        "urlencode": urlencode({"a b": "c/d:e?f=g&h", "é": "~_.-!*()'", "plus": "1+1"}),
+        "parse_qs": [[q, {k: v[0] for k, v in parse_qs(q).items()}]
+                     for q in ["code=abc&state=x%2By+z", "error=access_denied&error_description=", "a=1&a=2&b=%E2%9C%93",
+                               "noval&=x&c=d;e=f"]],
+        "authorize_url": url,
+        "authorize_url_bare": url_bare,
+        "auth_meta": GRANOLA_AUTH_META,
+        "client_file": client_file,
+        "tokens": tokens,
+        "tokens_file": tokens_file,
+    }
+
+
+# Granola's sign-in server metadata as fetched from mcp-auth.granola.ai on 2026-09-25 (public, trimmed).
+GRANOLA_AUTH_META = {
+    "authorization_endpoint": "https://mcp-auth.granola.ai/oauth2/authorize",
+    "code_challenge_methods_supported": ["S256"],
+    "issuer": "https://mcp-auth.granola.ai",
+    "registration_endpoint": "https://mcp-auth.granola.ai/oauth2/register",
+    "scopes_supported": ["email", "offline_access", "openid", "profile"],
+    "token_endpoint": "https://mcp-auth.granola.ai/oauth2/token",
+}
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     configs()
     notes()
     write("cases.json", json.dumps(cases(), indent=1, ensure_ascii=False) + "\n")
+    write("granola.json", json.dumps(granola_cases(), indent=1, ensure_ascii=False) + "\n")
     print(f"wrote {OUT.relative_to(ROOT)}")
 
 

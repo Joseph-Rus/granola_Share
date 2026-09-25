@@ -205,7 +205,8 @@ def _loose_parse(text: str) -> dict | str | None:
     if not m:
         return None
     tag, attr_text, self_closing = m.group(1), m.group(2), m.group(3)
-    attrs = {k: html.unescape(v if v is not None else (v2 or "")) for k, v, v2 in _ATTR.findall(attr_text)}
+    # findall gives "" for the quote style not used, so a single-quoted value is in v2.
+    attrs = {k: html.unescape(v or v2) for k, v, v2 in _ATTR.findall(attr_text)}
     if self_closing:
         return attrs
     close = "</" + tag + ">"
