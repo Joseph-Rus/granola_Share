@@ -1,5 +1,9 @@
 import json
 import sqlite3
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from granola_share.config import UNSORTED, ClassDef, Config
 from granola_share.granola import Meeting
@@ -43,7 +47,7 @@ def test_short_transcript_is_one_call_with_chosen_model(tmp_path):
         calls.append((model, num_ctx, prompt))
         return "## Overview\nDerivatives."
 
-    m = Meeting(id="1", title="Calc lecture 3", date="2026-09-20T09:00", transcript=LINE * 20)
+    m = Meeting(id="1", title="Calc lecture 3", date="2026-09-20T09:00", transcript=LINE * 40)
     out = summarize_transcript(m, cfg, chat=chat, show=lambda c, model: 131072)
     assert out == "## Overview\nDerivatives."
     assert len(calls) == 1 and calls[0][0] == "big:35b" and calls[0][1] == 32768  # capped at max_context
@@ -68,10 +72,10 @@ def test_long_transcript_is_split_then_merged(tmp_path):
 
 def test_wants_summary_needs_transcript_and_ai(tmp_path):
     cfg = cfg_for(tmp_path)
-    assert wants_summary(Meeting(id="1", transcript=LINE * 20), cfg)
+    assert wants_summary(Meeting(id="1", transcript=LINE * 40), cfg)
     assert not wants_summary(Meeting(id="1", transcript="hi"), cfg)
     cfg.summary_enabled = False
-    assert not wants_summary(Meeting(id="1", transcript=LINE * 20), cfg)
+    assert not wants_summary(Meeting(id="1", transcript=LINE * 40), cfg)
 
 
 def test_pipeline_uses_our_summary_and_sorts_on_it(tmp_path):
@@ -87,7 +91,7 @@ def test_pipeline_uses_our_summary_and_sorts_on_it(tmp_path):
     p = Pipeline(cfg, store, chat=sort_chat, summarize=lambda m, cfg: "## Overview\nOur own notes on derivatives.",
                  log=lambda *_: None)
     store.enqueue(Meeting(id="m1", title="Lecture", owner="Sam", notes_markdown="Granola's weaker summary",
-                          transcript=LINE * 20))
+                          transcript=LINE * 40))
     assert p.run_pending() == 1
     row = store.get("m1")
     assert row["summary_md"].startswith("## Overview") and row["summary_model"] == "big:35b"
@@ -110,7 +114,7 @@ def test_pipeline_falls_back_to_granola_when_model_fails(tmp_path):
 
     store = Store(cfg.db_path, cfg.pool_dir)
     p = Pipeline(cfg, store, summarize=boom, log=lambda *_: None)
-    store.enqueue(Meeting(id="m2", title="Lecture", notes_markdown="Granola notes", transcript=LINE * 20))
+    store.enqueue(Meeting(id="m2", title="Lecture", notes_markdown="Granola notes", transcript=LINE * 40))
     p.run_pending()
     row = store.get("m2")
     assert row["status"] == "done" and row["class_name"] == UNSORTED and row["summary_md"] is None
@@ -186,7 +190,7 @@ def _racing_pipeline(tmp_path, during):
         return "## Overview\nnew summary"
 
     sort = lambda cfg, prompt, schema: json.dumps({"class_name": "Calc 1", "confidence": 0.9, "lecture_title": "t", "topics": []})
-    store.enqueue(Meeting(id="r", title="Lecture", notes_markdown="old", transcript=LINE * 20))
+    store.enqueue(Meeting(id="r", title="Lecture", notes_markdown="old", transcript=LINE * 40))
     return store, Pipeline(cfg, store, chat=sort, summarize=summarize, log=lambda *_: None)
 
 
@@ -210,9 +214,43 @@ def test_reshare_while_summarizing_runs_again_with_the_new_copy(tmp_path):
     def reshare(st):
         if not shared:  # the lecture is edited and sent again, mid-summary
             shared.append(1)
-            st.enqueue(Meeting(id="r", title="Lecture (edited)", notes_markdown="newer", transcript=LINE * 20))
+            st.enqueue(Meeting(id="r", title="Lecture (edited)", notes_markdown="newer", transcript=LINE * 40))
 
     store, p = _racing_pipeline(tmp_path, reshare)
     assert p.run_pending() == 2  # the stale result is dropped, the new copy is processed
     row = store.get("r")
     assert row["title"] == "Lecture (edited)" and row["status"] == "done"
+
+
+def test_notes_are_capped_and_a_runaway_model_is_caught(monkeypatch):
+    """A small model once looped for 39,000 tokens on a short transcript (Ollama shifts its context and
+    keeps going). Notes are capped at MAX_NOTES_TOKENS, and hitting the cap or repeating lines fails
+    the summary, so the lecture keeps Granola's notes instead of the loop."""
+    import httpx
+
+    from granola_share import summarize
+
+    sent = {}
+
+    def post(url, json, timeout):
+        sent.update(json)
+        reply = {"message": {"content": "## Overview\nfine"}, "done_reason": sent.get("_reason", "stop")}
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: reply)
+
+    monkeypatch.setattr(httpx, "post", post)
+    cfg = Config(home=Path("."), pool_dir=Path("."))
+    assert summarize.ollama_generate(cfg, "llama3.2:3b", "notes please", 32768) == "## Overview\nfine"
+    assert sent["options"]["num_predict"] == summarize.MAX_NOTES_TOKENS and sent["options"]["repeat_penalty"] > 1
+
+    def runaway(url, json, timeout):
+        return SimpleNamespace(raise_for_status=lambda: None,
+                               json=lambda: {"message": {"content": "x"}, "done_reason": "length"})
+
+    monkeypatch.setattr(httpx, "post", runaway)
+    with pytest.raises(summarize.RunawayOutput, match="kept writing"):
+        summarize.ollama_generate(cfg, "llama3.2:3b", "notes please", 32768)
+    loop = "## Key concepts\n" + "- **Osmosis** is water moving across a membrane.\n" * 8
+    with pytest.raises(summarize.RunawayOutput, match="repeated itself"):
+        summarize.clean_output(loop)
+    assert summarize.clean_output("## Overview\nOne.\n\n## Key concepts\n- **A** is a.\n- **B** is b.").startswith("## Overview")
+    assert not summarize.wants_summary(Meeting(id="1", transcript="Short lecture. " * 50), cfg)  # 750 chars

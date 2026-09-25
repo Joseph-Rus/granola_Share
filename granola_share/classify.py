@@ -94,11 +94,15 @@ def ollama_chat(cfg: Config, prompt: str, schema: dict) -> str:
         "stream": False,
         "format": schema,
         "think": False,
-        "options": {"temperature": 0, "num_ctx": sort_context(cfg)},
+        # The answer is a small JSON object: a cap stops a model that loops from running on for minutes.
+        "options": {"temperature": 0, "num_ctx": sort_context(cfg), "num_predict": 512},
     }
-    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=httpx.Timeout(600, connect=10))
+    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=httpx.Timeout(300, connect=10))
     r.raise_for_status()
-    return r.json()["message"]["content"]
+    data = r.json()
+    if data.get("done_reason") == "length":
+        raise RuntimeError("the sorting answer ran past 512 tokens")  # classify_with_ollama then falls back
+    return data["message"]["content"]
 
 
 def classify_with_ollama(m: Meeting, classes: list[ClassDef], cfg: Config,

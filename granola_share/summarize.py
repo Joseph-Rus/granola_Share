@@ -16,7 +16,12 @@ from .config import Config
 from .granola import Meeting
 
 CHARS_PER_TOKEN = 3.5  # rough, for English speech
-MIN_TRANSCRIPT_CHARS = 400  # below this there is nothing worth summarizing
+# Below this (a couple of minutes of speech) there's too little to fill the notes: small models then
+# pad and loop. Such lectures keep Granola's own summary.
+MIN_TRANSCRIPT_CHARS = 1500
+# Good notes are well under 2,000 tokens. Without a cap, a small model that starts repeating itself
+# never stops: Ollama keeps shifting its context and generating (39,000 tokens seen, from llama3.2:3b).
+MAX_NOTES_TOKENS = 4096
 
 STRUCTURE = """Use exactly this structure, and skip any section the lecture has nothing for:
 
@@ -44,18 +49,40 @@ RULES = """Rules:
 ChatFn = Callable[[Config, str, str, int], str]
 
 
+class RunawayOutput(RuntimeError):
+    """The model didn't finish properly: it ran to the length cap, or repeated itself."""
+
+
 def ollama_generate(cfg: Config, model: str, prompt: str, num_ctx: int) -> str:
     body = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "think": False,
-        "options": {"temperature": 0.2, "num_ctx": num_ctx},
+        # A mild repeat penalty: stronger ones mangle Markdown, whose bullets legitimately repeat.
+        "options": {"temperature": 0.2, "num_ctx": num_ctx, "num_predict": min(MAX_NOTES_TOKENS, num_ctx // 2),
+                    "repeat_penalty": 1.1, "repeat_last_n": 256},
     }
-    # A long lecture on a big model can take minutes; that is fine, this runs in the background.
-    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=httpx.Timeout(1800, connect=10))
+    # A long lecture on a big model, or a slow computer, takes minutes; fine, this runs in the background.
+    # Output is capped, so this only has to cover reading the transcript plus 4,096 tokens.
+    r = httpx.post(f"{cfg.ollama_host.rstrip('/')}/api/chat", json=body, timeout=httpx.Timeout(900, connect=10))
     r.raise_for_status()
-    return r.json()["message"]["content"]
+    data = r.json()
+    if data.get("done_reason") == "length":
+        raise RunawayOutput(f"{model} kept writing past {body['options']['num_predict']} tokens without finishing "
+                            "(small models sometimes loop), so Granola's notes stay")
+    return data["message"]["content"]
+
+
+def repetitive(text: str, times: int = 5) -> bool:
+    """The same line over and over: a model stuck in a loop, not notes."""
+    lines = [ln.strip() for ln in text.splitlines() if len(ln.strip()) >= 12]
+    if not lines:
+        return False
+    counts: dict[str, int] = {}
+    for ln in lines:
+        counts[ln] = counts.get(ln, 0) + 1
+    return max(counts.values()) >= times or (len(lines) >= 20 and len(counts) < len(lines) / 2)
 
 
 def model_context(cfg: Config, model: str) -> int | None:
@@ -90,7 +117,10 @@ def wants_summary(m: Meeting, cfg: Config) -> bool:
 def clean_output(text: str) -> str:
     text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL).strip()
     fence = re.fullmatch(r"```(?:markdown|md)?\s*\n(.*)\n```", text, flags=re.DOTALL)
-    return (fence.group(1) if fence else text).strip()
+    text = (fence.group(1) if fence else text).strip()
+    if repetitive(text):
+        raise RunawayOutput("the model repeated itself instead of writing notes, so Granola's notes stay")
+    return text
 
 
 def _pieces(line: str, max_chars: int) -> list[str]:

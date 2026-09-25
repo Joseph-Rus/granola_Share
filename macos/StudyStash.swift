@@ -355,6 +355,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         place = Place.read()
         waiting?.invalidate()
         guard let url = place.library else {
+            libraryShown = nil
+            if libraryMode && setupPageAnswers() { return }  // reopened part way through setup: back to it
             library.loadHTMLString(libraryMode ? Screen.libraryWelcome : Screen.page(title: "No library yet",
                                                text: "Connect this Mac to your library on the This Mac tab. Its lectures show up here.",
                                                buttons: [("Go to This Mac", "laptop", true)]), baseURL: nil)
@@ -365,32 +367,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         library.load(URLRequest(url: url))
     }
 
-    /// The library's setup asks questions, so it runs in Terminal. This waits for the library to answer,
-    /// then shows it.
+    /// The library's setup, as a page in this window: installs the background helper first if it isn't
+    /// here (quietly, showing its progress), then starts `granola-share setup --page` and shows it. No Terminal.
     func setUpLibrary() {
-        let script = FileManager.default.temporaryDirectory.appendingPathComponent("Set Up Study Stash Library.command")
-        let text = """
-            #!/bin/sh
-            # Opened by Study Stash Library: sets up the library on this Mac.
-            clear
-            if curl -fsSL \(installScript) | sh -s -- server; then
-              echo; echo "Done. Your library opens in Study Stash Library."
-            else
-              echo; echo "Setup didn't finish. Run it again from Study Stash Library."
-            fi
-            printf "Press Return to close this window. "; read _
-            """
-        do {
-            try text.write(to: script, atomically: true, encoding: .utf8)
-            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        } catch {
+        if setupPageAnswers() { return }
+        if fm.isExecutableFile(atPath: engine.path) { return launchSetupPage() }
+        library.loadHTMLString(Screen.page(spinner: true, title: "Installing",
+                                           text: "Getting the library's background helper. This needs the internet and takes about a minute.",
+                                           log: true), baseURL: nil)
+        let cmd = "curl -fsSL \(installScript) | GRANOLA_SHARE_NO_SETUP=1 sh -s -- server"
+        run("/bin/sh", ["-c", cmd], line: { l in
+            self.library.evaluateJavaScript("addLog(\(js(l)))", completionHandler: nil)
+        }) { code, out in
+            if code == 0 && fm.isExecutableFile(atPath: engine.path) {
+                self.launchSetupPage()
+            } else {
+                self.problem(self.library, "The install didn't finish", "Check that this Mac is online, then try again.",
+                             out, retry: "setup-library")
+            }
+        }
+    }
+
+    func setupURL() -> URL? {
+        guard let port = dataFile("setup_port"), Int(port) != nil else { return nil }
+        return URL(string: "http://127.0.0.1:\(port)/?t=\(dataFile("ui_token") ?? "")")
+    }
+
+    /// Already running (the app was closed part way through): show it again.
+    func setupPageAnswers() -> Bool {
+        guard let url = setupURL(), let health = URL(string: "/healthz", relativeTo: url),
+              let data = try? Data(contentsOf: health), String(decoding: data, as: UTF8.self).contains("setup")
+        else { return false }
+        library.load(URLRequest(url: url))
+        return true
+    }
+
+    func launchSetupPage() {
+        library.loadHTMLString(Screen.page(spinner: true, title: "Opening setup", text: "This takes a few seconds."),
+                               baseURL: nil)
+        try? fm.removeItem(at: dataDir.appendingPathComponent("setup_port"))
+        let p = Process()
+        p.executableURL = engine
+        p.arguments = ["--home", dataDir.path, "setup", "--page", "--no-browser"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch {
             return problem(library, "Setup didn't start", error.localizedDescription, retry: "setup-library")
         }
-        NSWorkspace.shared.open(script)
-        library.loadHTMLString(Screen.page(spinner: true, title: "Setting up your library",
-                                           text: "Answer the questions in the Terminal window. When setup is done, your library shows up here.",
-                                           buttons: [("Open Setup Again", "setup-library", false)]), baseURL: nil)
-        waitForLibrary()
+        var tries = 0
+        waiting?.invalidate()
+        waiting = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+            guard let self = self else { return timer.invalidate() }
+            tries += 1
+            if self.setupPageAnswers() {
+                timer.invalidate()
+            } else if tries > 60 || !p.isRunning {
+                timer.invalidate()
+                self.problem(self.library, "Setup didn't start", "Its page didn't open. Try again.", retry: "setup-library")
+            }
+        }
     }
 
     /// Start the library's background service (it also starts when you log in).
@@ -460,6 +495,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTo
         if let lib = place.library, url.host == lib.host, url.port == lib.port {
             show(library)
             libraryShown = lib
+            library.load(URLRequest(url: url))
+        } else if ["127.0.0.1", "localhost"].contains(url.host ?? "") && libraryMode {
+            show(library)
             library.load(URLRequest(url: url))
         } else if ["127.0.0.1", "localhost"].contains(url.host ?? "") {
             showLaptop()

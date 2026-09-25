@@ -456,13 +456,18 @@ def create_app(cfg: Config, store: Store, pipeline: Pipeline | None = None, *, l
                     f'<strong>{label}</strong><button type="button" class="link" data-copy="{cid}">Copy</button></div>'
                     f'<pre class="code" id="{cid}">{esc(text)}</pre></div>')
 
+        dl = "https://github.com/Joseph-Rus/study-stash/releases/latest/download"
         invite = (f'<div class="group-head">Connect your laptop</div>{ts_note}<div class="group">'
-                  + command("Mac or Linux", "inv-mac", cmds["mac"]) + command("Windows", "inv-win", cmds["windows"])
-                  + f'<div class="row"><span class="grow">Address</span><span class="value">{esc(url)}</span></div>'
+                  f'<div class="row"><span class="grow">Address</span><span class="value">{esc(url)}</span></div>'
                   f'<div class="row"><span class="grow">Password</span><span class="value">{esc(cfg.pool_password or "none")}</span></div>'
-                  f'</div><p class="group-foot">On the computer you record lectures on, paste one line into Terminal (Mac) '
-                  f'or PowerShell (Windows). It installs everything with this address and password filled in, then '
-                  f'finishes setup in the browser.</p>')
+                  f'<div class="row"><span class="grow">Study Stash for the laptop</span><span class="value">'
+                  f'<a href="{dl}/Study-Stash-Laptop.dmg">Mac</a> · <a href="{dl}/Study-Stash-Laptop-Setup.exe">Windows</a>'
+                  f'</span></div></div><p class="group-foot">On the computer you record lectures on, install Study Stash, '
+                  f'open it, and enter this address and password.</p>'
+                  f'<details class="help"><summary>Or with one line in a terminal</summary><div class="group">'
+                  + command("Mac or Linux", "inv-mac", cmds["mac"]) + command("Windows", "inv-win", cmds["windows"])
+                  + '</div><p class="group-foot">Paste one into Terminal (Mac) or PowerShell (Windows). It installs '
+                  'everything with this address and password filled in.</p></details>')
 
         rel = latest()
         if update.is_newer(rel):

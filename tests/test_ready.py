@@ -256,3 +256,20 @@ def test_windows_shortcut_has_the_study_stash_icon(tmp_path):
 def test_icon_files_ship_with_the_package():
     for name in ("study-stash.ico", "icon.png", "apple-touch-icon.png"):
         assert (launcher.ASSETS / name).stat().st_size > 1000
+
+
+def test_windows_starts_console_programs_without_a_window(monkeypatch):
+    """Without a console (the background service, the app), each console program started would flash a
+    window: tailscale status every few seconds made the laptop's setup page flicker."""
+    import ctypes
+    import subprocess
+
+    monkeypatch.setattr(cli.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=SimpleNamespace(GetConsoleWindow=lambda: 0)),
+                        raising=False)
+    seen = []
+    monkeypatch.setattr(subprocess.Popen, "__init__", lambda self, *a, **kw: seen.append(kw.get("creationflags")))
+    cli._no_console_flashes()
+    subprocess.Popen(["tailscale", "status"])
+    subprocess.Popen(["cmd"], creationflags=0x00000008)  # already detached: left alone
+    assert seen == [0x08000000, 0x00000008]

@@ -42,6 +42,11 @@ def _start_auto_update(home: Path, enabled, stop: threading.Event) -> None:
 # --- server commands ------------------------------------------------------------
 
 def cmd_setup(args):
+    if args.page:  # the same setup as a page, with no terminal: what the Study Stash Library app shows
+        from .library_setup import serve
+
+        serve(args.home, browser=not args.no_browser)
+        return
     from .wizard import make_prompter, server_setup
 
     server_setup(args.home, make_prompter(args))
@@ -309,6 +314,8 @@ def _server_setup_flags(sp: argparse.ArgumentParser) -> None:
     _bool(g, "firewall", "Windows: let Tailscale and your network reach the library (asks for permission)")
     _bool(g, "keep-awake", "Windows: don't sleep while plugged in")
     sp.add_argument("--yes", "-y", action="store_true", help="accept the default for every question not answered by a flag")
+    sp.add_argument("--page", action="store_true", help="set up in a page (in the browser) instead of this terminal")
+    sp.add_argument("--no-browser", action="store_true", help="with --page: only print the page's address")
 
 
 def _client_setup_flags(sp: argparse.ArgumentParser) -> None:
@@ -331,6 +338,28 @@ def _bool(g, name: str, help: str) -> None:
     dest = "a_" + name.replace("-", "_")
     g.add_argument(f"--{name}", dest=dest, action="store_const", const=True, help=help)
     g.add_argument(f"--no-{name}", dest=dest, action="store_const", const=False)
+
+
+def _no_console_flashes() -> None:
+    """Windows: the background service and the Study Stash app run without a console, and then every
+    console program they start (tailscale, PowerShell, cmd, powercfg) opens a window of its own that
+    flashes and closes. Start them without one. (In a terminal they share its console, so nothing flashes.)"""
+    import ctypes
+    import subprocess
+
+    windll = getattr(ctypes, "windll", None)
+    if platform.system() != "Windows" or windll is None or windll.kernel32.GetConsoleWindow():
+        return
+    original = subprocess.Popen.__init__
+    no_window, detached, new_console = 0x08000000, 0x00000008, 0x00000010
+
+    def init(self, *args, **kw):
+        flags = kw.get("creationflags", 0)
+        if not flags & (detached | new_console):
+            kw["creationflags"] = flags | no_window
+        original(self, *args, **kw)
+
+    subprocess.Popen.__init__ = init  # type: ignore[method-assign]
 
 
 def main(argv=None):
@@ -399,6 +428,7 @@ def main(argv=None):
     if getattr(args, "a_ask_each", None) is not None:
         args.a_ask_each = args.a_ask_each == "ask"
     if platform.system() == "Windows":
+        _no_console_flashes()
         for stream in (sys.stdout, sys.stderr):  # a piped console can't print every character (→, ✓)
             if stream is not None and hasattr(stream, "reconfigure"):
                 stream.reconfigure(errors="replace")

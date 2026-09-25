@@ -102,6 +102,8 @@ code{font:400 .88em var(--mono)}
 .group{background:var(--group);border-radius:12px;overflow:hidden;margin:0}
 .group-head{font:600 .8125rem/1.3 var(--font);color:var(--label-2);margin:1.9rem 1rem .5rem}
 .group-foot{font-size:.8125rem;line-height:1.38;color:var(--label-2);margin:.5rem 1rem 0;max-width:62ch}
+details.help{margin:.2rem 0 1rem}
+details.help summary{cursor:pointer;color:var(--accent);font-size:.8125rem;margin:0 1rem .5rem}
 .row{position:relative;display:flex;align-items:center;gap:.75rem;min-height:2.75rem;padding:.6rem 1rem;color:var(--label)}
 .group>*{position:relative}
 .group>*+*::before{content:"";position:absolute;top:0;left:1rem;right:0;border-top:1px solid var(--sep)}

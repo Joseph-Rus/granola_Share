@@ -643,6 +643,12 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
         void OpenLibrary()
         {
             place = Place.Read();
+            if (place.Library == null && Where.LibraryMode)
+            {
+                libraryShown = null;
+                _ = SetupOrWelcome();  // reopened part way through setup: back to it
+                return;
+            }
             if (place.Library == null)
             {
                 library.CoreWebView2.NavigateToString(Where.LibraryMode ? Pages.LibraryWelcome() : Pages.Page("No library yet",
@@ -655,34 +661,68 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             library.CoreWebView2.Navigate(place.Library.ToString());
         }
 
-        /// <summary>The library's setup, in a PowerShell window of its own (it asks questions). When it's done
-        /// and the window closes, the library shows here.</summary>
+        /// <summary>The library's setup, as a page in this window: installs the background helper first if it
+        /// isn't here (hidden, showing its progress), then starts `granola-share setup --page` and shows it.
+        /// No PowerShell or Command Prompt window.</summary>
         async Task SetUpLibrary()
         {
-            library.CoreWebView2.NavigateToString(Pages.Page("Setting up your library",
-                "Answer the questions in the window that opened. When setup is done, your library shows up here.", spinner: true));
-            var command = $"$env:GRANOLA_SHARE_ROLE='server'; try {{ irm {Where.InstallScript} | iex }} "
-                + "catch { Write-Host $_ -ForegroundColor Red }; Write-Host ''; Read-Host 'Press Enter to close this window'";
+            if (await SetupPageAnswers()) return;
+            if (!Where.HasEngine)
+            {
+                library.CoreWebView2.NavigateToString(Pages.Page("Installing",
+                    "Getting the library's background helper. This needs the internet and takes a minute or two.",
+                    spinner: true, log: true));
+                var command = $"$env:GRANOLA_SHARE_ROLE='server'; $env:GRANOLA_SHARE_NO_SETUP='1'; irm {Where.InstallScript} | iex";
+                var (code, output) = await Run("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"",
+                    line => BeginInvoke((Action)(() => _ = library.CoreWebView2?.ExecuteScriptAsync($"addLog({Where.Js(line)})"))));
+                if (code != 0 || !Where.HasEngine)
+                {
+                    Problem(library, "The install didn't finish", "Check that this PC is online, then try again.", output,
+                            "setup-library");
+                    return;
+                }
+            }
+            library.CoreWebView2.NavigateToString(Pages.Page("Opening setup", "This takes a few seconds.", spinner: true));
+            try { File.Delete(Path.Combine(Where.DataDir, "setup_port")); } catch (Exception) { }
+            Process p;
             try
             {
-                var p = Process.Start(new ProcessStartInfo("powershell.exe",
-                    $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"") { UseShellExecute = true });
-                await Task.Run(() => p.WaitForExit());
+                p = Process.Start(new ProcessStartInfo(Where.Engine,
+                    Where.EngineArgs("--home", Where.DataDir, "setup", "--page", "--no-browser"))
+                    { UseShellExecute = false, CreateNoWindow = true });
             }
             catch (Exception e)
             {
                 Problem(library, "Setup didn't start", Where.Html(e.Message), retry: "setup-library");
                 return;
             }
-            place = Place.Read();
-            if (place.Library == null)
+            for (int i = 0; i < 60; i++)
             {
-                Problem(library, "Your library isn't set up yet", "Setup stopped before the end. Run it again and answer its questions.",
-                        retry: "setup-library");
-                return;
+                await Task.Delay(500);
+                if (await SetupPageAnswers()) return;
+                if (p.HasExited) break;
             }
-            await WaitForLibrary();
-            OpenLibrary();
+            Problem(library, "Setup didn't start", "Its page didn't open. Try again.", retry: "setup-library");
+        }
+
+        async Task SetupOrWelcome()
+        {
+            if (!await SetupPageAnswers()) library.CoreWebView2.NavigateToString(Pages.LibraryWelcome());
+        }
+
+        /// <summary>The setup page, if it's running (say the app was closed part way through): show it.</summary>
+        async Task<bool> SetupPageAnswers()
+        {
+            var port = Where.DataFile("setup_port");
+            if (!int.TryParse(port, out _)) return false;
+            try
+            {
+                var r = await http.GetAsync($"http://127.0.0.1:{port}/healthz");
+                if (!r.IsSuccessStatusCode || !(await r.Content.ReadAsStringAsync()).Contains("setup")) return false;
+            }
+            catch (Exception) { return false; }
+            library.CoreWebView2.Navigate($"http://127.0.0.1:{port}/?t={Where.DataFile("ui_token") ?? ""}");
+            return true;
         }
 
         /// <summary>Start the library's background service (it also starts when you sign in to Windows).</summary>
@@ -753,6 +793,11 @@ document.addEventListener('keydown',function(e){if(e.key==='F5'||(e.ctrlKey&&(e.
             {
                 Show(library);
                 libraryShown = place.Library;
+                library.CoreWebView2.Navigate(u.ToString());
+            }
+            else if (IsLocal(u) && Where.LibraryMode)
+            {
+                Show(library);
                 library.CoreWebView2.Navigate(u.ToString());
             }
             else if (IsLocal(u) && u.AbsolutePath == "/library")

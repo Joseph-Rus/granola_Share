@@ -74,9 +74,10 @@ checks the whole setup at any time, and says what to fix.
 
 **Or with the Library app.** Download [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg)
 (Mac) or [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) (Windows) and
-open **Study Stash Library**. Click **Set Up**: the same six steps run in a Terminal or
-PowerShell window, and when they're done, the app shows your library. After that it's this
-computer's window onto the library.
+open **Study Stash Library**. Click **Set Up**: it installs what it needs, then shows the same six
+steps as a page in the app, with a button for each install and a progress bar for each download.
+No Terminal or PowerShell. When you finish, the app shows your library, and after that it's this
+computer's window onto it. (`granola-share setup --page` opens the same page in a browser.)
 
 **Requirements:** Tailscale on both computers, signed in to the same account, so the laptop
 reaches the library away from home. Without it, the laptop reaches the library only on the same
@@ -141,7 +142,7 @@ computer, on each system.
 | **Windows** | [Study-Stash-Laptop-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop-Setup.exe) | [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) |
 
 The laptop's app installs its background helper with one click the first time you open it, then
-shows the same setup. The library's app runs the library's setup (see above). The install lines
+shows the same setup. The library's app shows the library's setup as a page (see above). The install lines
 skip the security questions below, because they fetch the app themselves.
 
 - **Mac:** open the DMG and drag the app into Applications. macOS asks once before opening an

@@ -90,8 +90,12 @@ keep working.
   app deletes when it next starts.
 - **Four installers, two apps.** Each app also ships as its library computer's copy: "Study Stash
   Library" (Info.plist `StudyStashRole` on a Mac, `study-stash.ini` on Windows). It shows only the
-  library, and before there is one it runs the library's setup in Terminal or PowerShell, since that
-  setup asks questions, then waits for the library to answer.
+  library, and before there is one it shows the library's setup as a page (`library_setup.py`,
+  `granola-share setup --page`): the terminal wizard's six steps as fields and buttons, with background
+  jobs (and progress bars) for installs and downloads. Answers stay in a draft until Finish writes
+  config.toml, which is how the app knows the library exists. Nobody needs a terminal.
+- **No console windows on Windows.** The service and the apps have no console, so every console program
+  they start (tailscale, PowerShell, cmd) would flash a window; the CLI starts them with CREATE_NO_WINDOW.
 - **Windows doesn't use uv.** uv's Python install fails under OneDrive's Files On-Demand (the link it
   makes gets "untrusted mount point", os error 448). So CI builds one ready-made folder instead
   (`windows/bundle.ps1`): python.org's embeddable Python 3.13, signed by the PSF, with every package

@@ -46,7 +46,7 @@ The installers are safe to rerun: they update in place, and setup keeps earlier 
 - Library (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh -s -- server`
 - Library (Windows PowerShell): `$env:GRANOLA_SHARE_ROLE='server'; $env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex`
 - Laptop (Mac/Linux): `curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_NO_SETUP=1 sh`
-- Or the apps, from the releases page: Study-Stash-Laptop.dmg / Study-Stash-Laptop-Setup.exe for the laptop, Study-Stash-Library.dmg / Study-Stash-Library-Setup.exe for the library's computer (its app runs the library's setup in a Terminal or PowerShell window).
+- Or the apps, from the releases page: Study-Stash-Laptop.dmg / Study-Stash-Laptop-Setup.exe for the laptop, Study-Stash-Library.dmg / Study-Stash-Library-Setup.exe for the library's computer. Its app runs the library's setup as a page (`granola-share setup --page`), with no terminal. If the person prefers clicking to answering you, open that page for them: `granola-share setup --page`.
 - Laptop (Windows PowerShell): `$env:GRANOLA_SHARE_NO_SETUP='1'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex`
 
 `GRANOLA_SHARE_NO_SETUP=1` installs without starting setup, because you run setup yourself in Step 3. If the install fails, read `~/.granola-share/install.log`.
