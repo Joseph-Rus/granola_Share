@@ -71,38 +71,53 @@ public sealed class Jobs
 }
 
 /// <summary>
-/// Everything setup asks of this computer, so tests can answer instead. The ones that change the computer
-/// (installing apps, the firewall, sleep, starting at login) come with the platform stage of the C# engine: until then
-/// they say so, or fall back to the Python engine's own "do it by hand" answer.
+/// Everything setup asks of this computer, so tests can answer instead. What only looks (memory, Ollama's models,
+/// Tailscale) looks at this computer. What changes it (installing apps, the firewall, sleep, starting at login, opening
+/// windows) is off unless <see cref="ThisComputer"/> turns it on: a test that forgets one gets an error, not an installer.
 /// </summary>
 public sealed class SetupHost
 {
-    static Exception Later(string what) =>
-        new InvalidOperationException($"{what} isn't in the new engine yet: the Study Stash Library app does it for now.");
+    static Exception Off(string what) => new InvalidOperationException($"{what} is off for this setup.");
 
     public string System { get; init; } = Machine.Platform;
     public Func<string, Task<List<(string Name, double SizeGb)>?>> ListModels { get; init; } = host => Ollama.ListModelsAsync(host);
     public Func<bool> OllamaInstalled { get; init; } = () => Ollama.Installed();
-    public Func<string, Task<bool>> StartOllama { get; init; } = host => Ollama.StartAsync(host);
-    public Func<Action<string>, Action<long, long>, Task<bool>> InstallOllama { get; init; } = (_, _) => Task.FromResult(false);
-    public Func<string, string, Action<long, long>, Task<(bool Ok, string Why)>> PullModel { get; init; } =
-        (model, host, progress) => Ollama.PullAsync(model, host, progress);
+    public Func<string, Task<bool>> StartOllama { get; init; } = _ => throw Off("Starting Ollama");
+    public Func<Action<string>, Action<long, long>, Task<bool>> InstallOllama { get; init; } = (_, _) => throw Off("Installing Ollama");
+    public Func<string, string, Action<long, long>, Task<(bool Ok, string Why)>> PullModel { get; init; } = (_, _, _) => throw Off("Downloading a model");
     public Func<string, string, Task<(double? Seconds, string Why)>> TryModel { get; init; } = (host, model) => Ollama.TryModelAsync(host, model);
     public Func<TailscaleInfo> Tailscale { get; init; } = () => HostInfo.Tailscale();
-    public Func<Action<string>, Action<long, long>, Task<bool>> InstallTailscale { get; init; } = (_, _) => throw Later("Installing Tailscale");
-    public Func<bool> OpenTailscale { get; init; } = () => false;
+    public Func<Action<string>, Action<long, long>, Task<bool>> InstallTailscale { get; init; } = (_, _) => throw Off("Installing Tailscale");
+    public Func<bool> OpenTailscale { get; init; } = () => throw Off("Opening Tailscale");
     public Func<int, bool?> Firewall { get; init; } = port => Machine.FirewallOpen(port);
-    public Func<int, Task<bool>> OpenFirewall { get; init; } = _ => throw Later("Changing Windows Firewall");
+    public Func<int, Task<bool>> OpenFirewall { get; init; } = _ => throw Off("Changing Windows Firewall");
     public Func<int?> SleepMinutes { get; init; } = () => Machine.SleepMinutes();
-    public Func<bool> KeepAwake { get; init; } = () => false;
+    public Func<bool> KeepAwake { get; init; } = () => throw Off("Changing when this computer sleeps");
     public Func<double?> RamGb { get; init; } = Machine.TotalRamGb;
     public Func<double?> DiskFree { get; init; } = () => Machine.DiskFreeGb();
     public Func<int, Task<string>> PortStatus { get; init; } = port => HostInfo.PortStatusAsync(port);
-    public Func<string, string, Task> InstallAutostart { get; init; } = (_, _) => throw Later("Starting the library when this computer starts");
+    public Func<string, string, Task> InstallAutostart { get; init; } = (_, _) => throw Off("Starting the library at login");
     public Func<Config, Task<bool>> WaitHealthy { get; init; } = cfg => HostInfo.WaitForServerAsync(cfg);
     public Func<string?> TailscaleExe { get; init; } = HostInfo.TailscaleExe;
     public Func<string> HostName { get; init; } = Machine.HostName;
-    public Action<string> OpenUrl { get; init; } = AppPage.OpenUrl;
+    public Action<string> OpenUrl { get; init; } = _ => throw Off("Opening a browser");
+    /// <summary>How long `tailscale up` may wait for someone to sign in.</summary>
+    public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>The real thing, for the setup page this computer serves.</summary>
+    public static SetupHost ThisComputer() => new()
+    {
+        StartOllama = host => Ollama.StartAsync(host),
+        InstallOllama = (note, progress) => Ready.InstallOllamaAsync(note, progress, Machine.Platform, Machine.Run, Ready.Download),
+        PullModel = (model, host, progress) => Ollama.PullAsync(model, host, progress),
+        // The page looks again every few seconds, so it doesn't wait for Tailscale's installer.
+        InstallTailscale = (note, progress) => Ready.InstallTailscaleAsync(note, progress, Machine.Platform, Machine.Run, Ready.Download, remote: false),
+        OpenTailscale = () => Ready.OpenTailscale(Machine.Platform, Machine.Run),
+        OpenFirewall = port => Ready.OpenFirewallAsync(port, Machine.Run),
+        KeepAwake = () => Ready.KeepAwake(Machine.Platform, Machine.Run),
+        InstallAutostart = (role, home) => Task.Run(() => Autostart.Install(role, home, ServicePlaces.Default, Machine.Run)),
+        OpenUrl = AppPage.OpenUrl,
+    };
 }
 
 /// <summary>What this computer has, as setup last looked.</summary>
@@ -265,9 +280,18 @@ public sealed partial class LibrarySetup
                     note($"Sign in to Tailscale in the browser tab that opened: {link.Value}");
                 }
             }
-            await Task.WhenAll(Watch(p.StandardOutput), Watch(p.StandardError));
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(600));
-            await p.WaitForExitAsync(cts.Token);
+            // `tailscale up` waits for the sign-in. Nobody signing in mustn't leave the button off for good.
+            using var cts = new CancellationTokenSource(Host.ConnectTimeout);
+            try
+            {
+                await Task.WhenAll(Watch(p.StandardOutput), Watch(p.StandardError)).WaitAsync(cts.Token);
+                await p.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { p.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                return "Tailscale didn't connect.";
+            }
             return p.ExitCode == 0 ? "Tailscale is connected." : "Tailscale didn't connect.";
         }, () => { Forget(); return Task.CompletedTask; });
         return "Connecting Tailscale...";

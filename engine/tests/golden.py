@@ -483,6 +483,179 @@ def setup_pages() -> dict:
     return out
 
 
+# --- stage 5: the platform ---------------------------------------------------------------------------------
+
+# Every doctor scenario: what each check is told, and (in platform_cases) what the Python engine says back. The C#
+# tests build the same fakes from these inputs, so a new scenario needs nothing in C#.
+HEALTHY = {"status": 200, "body": {"ok": True, "version": "{version}"}}
+BOTH_MODELS = [["qwen3:1.7b", 1.4], ["big:35b", 23]]
+SERVER_SCENARIOS = {
+    "all-good": dict(system="Linux", health=HEALTHY, service="running", models=BOTH_MODELS,
+                     tailscale={"running": True, "dns": "mini.ts.net", "ips": ["100.1.1.1"]}),
+    "problems": dict(system="Darwin", health=None, service="stopped", models=[["qwen3:1.7b", 1.4]],
+                     tailscale={"installed": False}, sleep=10, cfg={"classes": []},
+                     log="started\n\nOSError: [Errno 48] address already in use\n"),
+    "old-version": dict(system="Linux", health={"status": 200, "body": {"ok": True}}, service="running", models=None,
+                        ollama_installed=True, tailscale={"running": False, "installed": True}),
+    "no-ollama-mac": dict(system="Darwin", health=HEALTHY, service="running", models=None, ollama_installed=False,
+                          tailscale={"installed": True, "running": False, "state": "NeedsLogin"}, sleep=0),
+    "closed-ollama-mac": dict(system="Darwin", health=HEALTHY, service="running", models=None, ollama_installed=True,
+                              tailscale={"installed": True, "state": "Stopped"}, sleep=0),
+    "closed-ollama-windows": dict(system="Windows", health=HEALTHY, service="missing", models=None, ollama_installed=True,
+                                  tailscale={"installed": True, "running": True, "dns": "pc.ts.net"}, firewall=None,
+                                  sleep=0),
+    "windows-blocked": dict(system="Windows", health=HEALTHY, service="running", models=BOTH_MODELS,
+                            tailscale={"installed": True, "running": True, "dns": "pc.ts.net", "ips": []},
+                            firewall=False, sleep=30),
+    "windows-fine": dict(system="Windows", health=HEALTHY, service="running", models=BOTH_MODELS,
+                         tailscale={"installed": True, "running": True, "ips": ["100.9.9.9"]}, firewall=True, sleep=0),
+    "port-taken": dict(system="Linux", health={"status": 404, "body": {}}, service="missing", models=BOTH_MODELS,
+                       tailscale={"installed": True, "state": "NeedsMachineAuth"}, latest="v9.9.9",
+                       cfg={"pool_password": "", "server_sync": True}),
+    "down-not-installed": dict(system="Linux", health=None, service="missing", models=BOTH_MODELS,
+                               tailscale={"running": True, "ips": ["100.1.1.1"]}, log="something\n",
+                               cfg={"ollama_enabled": False}, latest="v0.0.1"),
+    "no-summaries": dict(system="Linux", health={"status": 200, "body": {"version": "0.0.9"}}, service="stopped",
+                         models=[["big:35b", 23]], tailscale={}, cfg={"summary_enabled": False}),
+}
+CLIENT_SCENARIOS = {
+    "not-signed-in": dict(system="Linux", server={"ok": {}}, service="running", tokens=False),
+    "free-plan": dict(system="Linux", server={"ok": {"pool_name": "Fall"}}, probe={"ok": [4, False]}, service="running"),
+    "unreachable": dict(system="Linux", server={"error": "could not reach http://mini:8787/api/health"}, probe={"ok": [0, True]},
+                        service="missing"),
+    "mac-copying": dict(system="Darwin", server={"ok": {"pool_name": "Fall"}}, probe={"ok": [1, False]}, service="stopped",
+                        laptop={"granola": "/Applications/Granola.app", "granola_here": True,
+                                "tailscale": {"installed": True, "running": True, "dns": "air.ts.net"}},
+                        cfg={"copy_transcripts": True, "mode": "ask"},
+                        status={"trusted": True, "last_copy": {"title": "Cells", "chars": 5210, "at": "10:02"}},
+                        log="line one\nline two\n"),
+    "mac-untrusted": dict(system="Darwin", server={"ok": {}}, probe={"ok": [2, None]}, service="running",
+                          laptop={"granola": None, "granola_here": True, "tailscale": {"installed": False}},
+                          cfg={"copy_transcripts": True}, status={"trusted": False}),
+    "mac-watcher-new": dict(system="Darwin", server={"ok": {"pool_name": "Fall"}}, probe={"error": "401 Unauthorized " + "x" * 300},
+                            service="running", laptop={"granola": None, "granola_here": True,
+                                                       "tailscale": {"installed": True, "state": "NeedsLogin"}},
+                            cfg={"copy_transcripts": True}),
+    "mac-copy-off": dict(system="Darwin", server={"ok": {"pool_name": "Fall"}}, probe={"ok": [3, False]}, service="running",
+                         latest="v9.9.9", status={"trusted": True}),
+    "mac-allowed": dict(system="Darwin", server={"ok": {"pool_name": "Fall"}}, probe={"ok": [1, True]}, service="running",
+                        cfg={"copy_transcripts": True}, status={"trusted": True}),
+    "no-config": dict(system="Linux", server={"ok": {}}, service="running", cfg={"server_url": ""}),
+}
+
+
+def platform_cases() -> dict:
+    """Stage 5: the service files, the firewall rule, and doctor's checks and how it prints them."""
+    import tempfile
+    from types import SimpleNamespace
+
+    from granola_share import __version__, autostart, doctor, ready
+    from granola_share.config import save_client_config, save_config
+    from granola_share.update import Release
+
+    args = ["/opt/Study Stash/studystash", "--home", "/home/student/.granola-share", "run"]
+    odd = ["/opt/a&b <c>/studystash", "--home", "/home/student/x & y", "client", "run"]
+    log = Path("/home/student/.granola-share/logs/server.log")
+    programs = [r"C:\Program Files\Study Stash\studystash.exe", r"C:\Users\it's me\studystash.exe"]
+    real_pythons = ready._pythons
+    ready._pythons = lambda: programs
+    try:
+        seen = []
+        ready.open_firewall(8790, run=lambda a, **k: seen.append(a) or SimpleNamespace(returncode=0, stdout="8790"))
+        firewall = {"script": ready.firewall_script(8790), "elevate": seen[0][-1], "programs": programs}
+    finally:
+        ready._pythons = real_pythons
+
+    def release(tag):
+        return Release(tag, tuple(int(n) for n in tag[1:].split(".")), "u", "p") if tag else None
+
+    def fill(value):
+        return json.loads(json.dumps(value).replace("{version}", __version__))
+
+    def scrub(value, root):
+        return json.loads(json.dumps(value).replace(json.dumps(str(root))[1:-1], "{root}"))
+
+    def shown(checks, root):
+        encodings = {}
+        for name, enc in (("unicode", "utf-8"), ("ascii", "ascii")):
+            real = sys.stdout
+            sys.stdout = SimpleNamespace(encoding=enc)
+            try:
+                encodings[name] = doctor.format_checks("title", checks)
+            finally:
+                sys.stdout = real
+        return scrub({"checks": [[c.name, c.state, c.detail, c.fix] for c in checks], **encodings}, root)
+
+    def raises(message):
+        def fail(*a, **k):
+            raise RuntimeError(message)
+        return fail
+
+    # The plist names the home folder's .local/bin: a made-up home, never this computer's.
+    real_home = Path.home
+    Path.home = classmethod(lambda cls: Path("/home/student"))
+    try:
+        services = {"plist": autostart.render_plist("com.granola-share.server", args, log),
+                    "plist_odd": autostart.render_plist("com.granola-share.client", odd, log),
+                    "systemd": autostart.render_systemd("granola-share server", args),
+                    "systemd_odd": autostart.render_systemd("granola-share client", odd),
+                    "args": args, "odd": odd, "log": str(log), "user_home": "/home/student"}
+    finally:
+        Path.home = real_home
+    out = {"services": services, "firewall": firewall, "server": {}, "client": {}}
+    for name, sc in SERVER_SCENARIOS.items():
+        sc = fill(sc)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cfg = Config(home=root / "home", pool_dir=root / "pool", pool_password="pw", ollama_model="qwen3:1.7b",
+                         summary_model="big:35b", classes=[ClassDef("CS 101")])
+            for k, v in sc.get("cfg", {}).items():
+                setattr(cfg, k, [ClassDef(**c) for c in v] if k == "classes" else v)
+            save_config(cfg)
+            if sc.get("log") is not None:
+                cfg.log_dir.mkdir(parents=True, exist_ok=True)
+                (cfg.log_dir / "server.log").write_text(sc["log"])
+            health = sc["health"]
+            get = raises("refused") if health is None else \
+                (lambda url, headers, timeout, h=health: SimpleNamespace(status_code=h["status"], json=lambda: h["body"]))
+            checks = doctor.server_checks(
+                cfg, http_get=get, service_status=lambda r, v=sc["service"]: v,
+                list_models=lambda h, m=sc["models"]: None if m is None else [{"name": n, "size_gb": g} for n, g in m],
+                ollama_installed=lambda v=sc.get("ollama_installed", False): v, tailscale=lambda t=sc["tailscale"]: t,
+                sleep_minutes=lambda v=sc.get("sleep"): v, firewall=lambda port, v=sc.get("firewall"): v,
+                latest=lambda t=sc.get("latest"): release(t), system=sc["system"])
+            out["server"][name] = {"given": sc, **shown(checks, root)}
+    for name, sc in CLIENT_SCENARIOS.items():
+        sc = fill(sc)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cc = ClientConfig(home=root / "home", server_url="http://mini:8787", pool_key="pw", pool_name="Fall")
+            for k, v in sc.get("cfg", {}).items():
+                setattr(cc, k, v)
+            save_client_config(cc)
+            if sc.get("tokens", True):
+                cc.tokens_path.write_text("{}")
+            if "status" in sc:
+                (cc.home / "transcripts").mkdir(parents=True)
+                (cc.home / "transcripts" / "status.json").write_text(json.dumps(sc["status"]))
+            if sc.get("log") is not None:
+                cc.log_dir.mkdir(parents=True, exist_ok=True)
+                (cc.log_dir / "client.log").write_text(sc["log"])
+            server, probe = sc["server"], sc.get("probe", {"ok": [0, None]})
+            laptop = sc.get("laptop", {"granola": None, "granola_here": False, "tailscale": {"running": True}})
+            checks = doctor.client_checks(
+                cc, check_server=raises(server["error"]) if "error" in server else (lambda u, k, v=server["ok"]: v),
+                probe=raises(probe["error"]) if "error" in probe else (lambda c, v=probe["ok"]: tuple(v)),
+                service_status=lambda r, v=sc["service"]: v, latest=lambda t=sc.get("latest"): release(t),
+                system=sc["system"], laptop=lambda v=laptop: v)
+            out["client"][name] = {"given": sc, **shown(checks, root)}
+    with tempfile.TemporaryDirectory() as tmp:
+        said = []
+        doctor.run(Path(tmp), print_fn=said.append)
+        out["nothing"] = scrub(said, Path(tmp))
+    return out
+
+
 # Granola's sign-in server metadata as fetched from mcp-auth.granola.ai on 2026-09-25 (public, trimmed).
 GRANOLA_AUTH_META = {
     "authorization_endpoint": "https://mcp-auth.granola.ai/oauth2/authorize",
@@ -506,6 +679,7 @@ def main() -> None:
     write("granola.json", json.dumps(granola_cases(), indent=1, ensure_ascii=False) + "\n")
     write("library.json", json.dumps(library_cases(), indent=1, ensure_ascii=False) + "\n")
     write("pages.json", json.dumps({"library": library_pages(), "setup": setup_pages()}, indent=1, ensure_ascii=False) + "\n")
+    write("platform.json", json.dumps(platform_cases(), indent=1, ensure_ascii=False) + "\n")
     page_text()
     print(f"wrote {OUT.relative_to(ROOT)}")
 

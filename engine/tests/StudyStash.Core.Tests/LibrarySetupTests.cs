@@ -240,21 +240,50 @@ public class LibrarySetupTests
     }
 
     [Fact]
-    public async Task What_this_engine_cant_do_yet_says_so()
+    public async Task A_failed_install_says_where_to_get_it_and_nothing_installs_by_default()
     {
-        // Installing apps, the firewall and starting at login come with a later stage: until then the page says so.
         using var dir = new TempDir();
-        var s = new LibrarySetup(dir["home"], new SetupHost
-        {
-            ListModels = _ => Task.FromResult<List<(string, double)>?>(null), OllamaInstalled = () => false,
-            Tailscale = () => new TailscaleInfo(), RamGb = () => 8, DiskFree = () => 100, SleepMinutes = () => 0, OpenUrl = _ => { },
-        });
+        var s = new LibrarySetup(dir["home"], Fakes(listModels: _ => Task.FromResult<List<(string, double)>?>(null), ollamaInstalled: () => false,
+            installOllama: (_, _) => Task.FromResult(false), tailscale: () => new TailscaleInfo()));
         await s.FixOllamaAsync();
         Assert.Equal("Ollama didn't install. Get it from https://ollama.com, then come back.", (await Settle(s, "ollama")).Note);
-        await s.FixTailscaleAsync();
-        var ts = await Settle(s, "tailscale");
-        Assert.True(ts.Error);
-        Assert.Contains("isn't in the new engine yet", ts.Note);
+
+        // A setup that isn't this computer's own page changes nothing on it: each of these fails instead.
+        var bare = new LibrarySetup(dir["other"], new SetupHost
+        {
+            ListModels = _ => Task.FromResult<List<(string, double)>?>(null), OllamaInstalled = () => false,
+            Tailscale = () => new TailscaleInfo(), RamGb = () => 8, DiskFree = () => 100, SleepMinutes = () => 0,
+        });
+        await bare.FixOllamaAsync();
+        var ollama = await Settle(bare, "ollama");
+        Assert.True(ollama.Error);
+        Assert.Equal("Installing Ollama is off for this setup.", ollama.Note);
+        await bare.FixTailscaleAsync();
+        Assert.Equal("Installing Tailscale is off for this setup.", (await Settle(bare, "tailscale")).Note);
+        bare.FixFirewall();
+        Assert.Equal("Changing Windows Firewall is off for this setup.", (await Settle(bare, "firewall")).Note);
+        Assert.Throws<InvalidOperationException>(() => bare.StayAwake());
+    }
+
+    [Fact]
+    public async Task Connecting_tailscale_opens_its_sign_in_and_gives_up_when_nobody_signs_in()
+    {
+        if (OperatingSystem.IsWindows()) return; // a shell script stands in for `tailscale up`
+        using var dir = new TempDir();
+        string exe = dir["tailscale"];
+        File.WriteAllText(exe, "#!/bin/sh\necho 'To authenticate, visit: https://login.tailscale.com/a/abc123'\nsleep 30\n");
+        File.SetUnixFileMode(exe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var opened = new List<string>();
+        var s = new LibrarySetup(dir["home"], new SetupHost
+        {
+            ListModels = _ => Task.FromResult<List<(string, double)>?>(Models), OllamaInstalled = () => true, RamGb = () => 8, DiskFree = () => 100,
+            Tailscale = () => new TailscaleInfo(true, false, "NeedsLogin", Exe: exe), OpenTailscale = () => false, // no app to open: Linux
+            OpenUrl = opened.Add, ConnectTimeout = TimeSpan.FromSeconds(1),
+        });
+        Assert.Equal("Connecting Tailscale...", await s.FixTailscaleAsync());
+        var job = await Settle(s, "tailscale");
+        Assert.Equal(("Tailscale didn't connect.", false), (job.Note, job.Running));
+        Assert.Equal(["https://login.tailscale.com/a/abc123"], opened);
     }
 
     [Fact]

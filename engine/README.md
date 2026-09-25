@@ -21,7 +21,7 @@ That way a computer can switch engines and keep its library as it is.
 | 2 | Granola sign-in, reading lectures from its MCP server, and the library's own sync | done |
 | 3 | The library: its web pages, the laptop's API, and the setup page (ASP.NET Core) | done |
 | 4 | The laptop: watching Granola and its local page | |
-| 5 | Installing Ollama and Tailscale, start at login, updates, `doctor`, Windows firewall and sleep | |
+| 5 | Installing Ollama and Tailscale, start at login, updates, `doctor`, Windows firewall and sleep | done |
 | 6 | Mac transcript copying moves into the Swift app | |
 | 7 | The installers and apps switch to this engine; Python retires | |
 
@@ -31,13 +31,39 @@ The code:
 - `src/StudyStash.Engine` is the command. The Study Stash apps still start the Python engine; these are for trying
   this one:
   - `studystash run` serves the library, as `granola-share run` does;
-  - `studystash setup --page` serves the setup page;
+  - `studystash setup --page` serves the setup page, with every button working: installing Ollama and Tailscale,
+    the Windows firewall rule, keeping a PC awake, and starting the library at login;
+  - `studystash doctor` checks every piece of a setup and says how to fix what's broken, word for word as the Python
+    engine does;
+  - `studystash autostart install|uninstall|status --role server` runs the library in the background. It uses the
+    Python engine's service names and files (`com.granola-share.server` on a Mac, `granola-share-server.cmd` in the
+    Windows Startup folder, `granola-share-server.service` on Linux), so installing either engine's service replaces
+    the other's. The laptop's watcher waits for stage 4;
+  - `studystash update [--check]` installs a new release, and `run` checks for one every six hours when
+    `auto_update` is on;
   - `studystash config-check` checks it would leave this computer's config files as they are. It prints line
     numbers, never contents.
 
-The setup page's buttons that change the computer come with stage 5. That covers installing Ollama or Tailscale, the
-Windows firewall rule, keeping a PC awake, starting at login, and installing updates. Until then they give Python's own
-"do it by hand" answer, or say they aren't in this engine yet.
+Messages still name the `granola-share` command: that's what people type today, and stage 7 decides what it runs.
+
+### Updates
+
+The engine is one folder. Each release is meant to carry a zip of it for each computer, named
+`Study-Stash-engine-<mac|windows|linux>-<arm64|x64>.zip`, with `study-stash-engine.txt` (its version) beside the
+program. CI starts attaching those in stage 7; until then an update finds nothing to install and says so.
+
+An update downloads the zip, unpacks it next to the folder in use, and runs the new copy's `version` to check it works
+on this computer. Only then does it swap the folders. On a Mac or Linux it swaps them at once. Windows won't replace a
+running program, so there a helper waits for the engine to stop, swaps the folders, and starts the services again.
+The Study Stash apps update along with it, as with the Python engine. A build folder (no `study-stash-engine.txt`) is
+never updated.
+
+### What changes the computer is off unless asked for
+
+Tests replace everything that installs, starts or changes something, and nothing does so by default. Setup's
+installers are off unless the real setup page turns them on (`SetupHost.ThisComputer()`). Installing a service,
+running an installer, or changing the firewall or sleep takes its runner and folders explicitly. A test that forgets
+one fails instead of installing something.
 
 ## Tests
 
@@ -59,6 +85,14 @@ dotnet test engine/StudyStash.slnx
 - **The laptop** (`CrossEngineTests`, `tests/laptop_check.py`): the Python engine's own laptop code talks to a C#
   library over HTTP. It checks health, a wrong password, sending a lecture, asking if it's filed, and setup's checks
   that the library is running.
+- **The platform** (`AutostartTests`, `ReadyTests`, `UpdaterTests`, `DoctorTests`): the Python engine writes the
+  launchd and systemd files and the firewall rule, and runs `doctor` in 20 scenarios (the library's and the
+  laptop's). The C# engine must write and say the same bytes; `golden.py` keeps the scenarios, so a new one needs
+  no C#. Updates are tested for real, with a stand-in engine in a scratch folder: download, unpack, check, swap.
+- **The background service, live**, only when asked: `STUDYSTASH_LIVE_SERVICE=1 dotnet test engine/StudyStash.slnx`
+  on a Mac or Windows. It installs the library as the real service from a scratch folder on a spare port, checks it
+  answers, restarts, and goes away. It won't run where a library service is already installed or running. CI runs it
+  on Windows, where the Startup file hands over to a copy with no window.
 - **Signing in** (`OAuthTests`): checked against the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
   and the RFCs it builds on:
   - RFC 7636's own PKCE example;
@@ -93,5 +127,15 @@ Only where Python lost data, could not read its own files, or skipped part of a 
 - Note text goes through Markdig instead of Python-Markdown, with the same rules: no raw HTML, only http, https and
   mailto links, and math left for KaTeX. Markdown's own attribute syntax is off, so a note can't add an HTML attribute.
 - A class with "/" in its name opens. Python's web framework decoded "%2F" before routing, so it couldn't.
+- Windows' Startup file runs the engine itself, which hands over to a copy of itself with no window and restarts it
+  when it stops. Python used pythonw with `start /min`, but this engine is a console program, and its window would
+  have stayed in the taskbar.
+- A batch file whose paths aren't plain ASCII (a home folder named José) switches cmd to UTF-8 first. Python's
+  Startup file broke there.
+- The firewall script unblocks this engine's program, where Python's unblocked Python.
+- Connecting Tailscale from the setup page gives up after 10 minutes when nobody signs in. Python's waited forever,
+  and its button stayed off until the page restarted.
+- An update checks that the new engine runs on this computer before replacing the old one. It restarts only the
+  services that run this engine, and leaves the Python engine's alone.
 - An Ollama error reads as Ollama's own words ("Ollama answered 404: model 'x' not found"). Odd answers from the
   sorting model send the note to Unsorted instead of failing it.
