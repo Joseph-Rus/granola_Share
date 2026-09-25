@@ -81,6 +81,10 @@ public sealed partial class SetupModel : ObservableObject
     public ObservableCollection<SetupClass> Classes { get; } = [];
     [ObservableProperty] public partial string NewClass { get; set; } = "";
     [ObservableProperty] public partial string NewWhen { get; set; } = "";
+    /// <summary>The times typed couldn't be read: how to write them.</summary>
+    [ObservableProperty] public partial string? ClassProblem { get; set; }
+    public bool HasClassProblem => !string.IsNullOrEmpty(ClassProblem);
+    partial void OnClassProblemChanged(string? value) => OnPropertyChanged(nameof(HasClassProblem));
 
     public string DeviceWord => Skin.Current == SkinKind.Mac ? "Mac" : "PC";
     public int Count => Steps.Count;

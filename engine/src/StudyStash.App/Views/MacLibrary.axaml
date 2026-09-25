@@ -217,6 +217,38 @@
             <TextBlock IsVisible="{Binding NoNote}" Text="Choose a lecture to read its notes." FontSize="13" Foreground="{DynamicResource Fg3}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" />
 
+            <!-- The answer to what you asked, over the page -->
+            <Border IsVisible="{Binding HasAnswer}" Width="540" MaxHeight="360" CornerRadius="16" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,80" Padding="18,14,10,14">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Theme="{StaticResource Surface}" Width="24" Height="24" CornerRadius="12" VerticalAlignment="Top"
+                        HorizontalContentAlignment="Center" Command="{Binding CloseAnswerCommand}" ToolTip.Tip="Close">
+                  <c:Icon Glyph="close" Size="14" Foreground="{DynamicResource Fg3}" />
+                </Button>
+                <StackPanel Spacing="8" Margin="0,0,8,0">
+                  <TextBlock Text="{Binding AskedQuestion}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" />
+                  <c:Spinner IsVisible="{Binding Thinking}" Width="16" Height="16" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
+                  <SelectableTextBlock Text="{Binding Answer}" FontFamily="{DynamicResource SerifFont}" FontSize="16" LineHeight="24.8" TextWrapping="Wrap"
+                                       SelectionBrush="{DynamicResource Hl}" />
+                  <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SourceChip">
+                        <Button Theme="{StaticResource Surface}" Height="24" CornerRadius="6" Background="{DynamicResource Fill2}" Padding="8,0" Margin="0,0,6,6"
+                                Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).OpenSourceCommand}" CommandParameter="{Binding}">
+                          <StackPanel Orientation="Horizontal" Spacing="3">
+                            <c:Icon Glyph="play_arrow" Filled="True" Size="15" Foreground="{DynamicResource AccentText}" />
+                            <TextBlock Classes="num" Text="{Binding Label}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DockPanel>
+            </Border>
             <!-- The page fades out under the ask bar -->
             <Border Height="120" VerticalAlignment="Bottom" IsHitTestVisible="False" Name="Fade" />
             <Border Width="540" Height="44" CornerRadius="22" Background="{DynamicResource Mat}" BoxShadow="{DynamicResource Shadow}"

@@ -83,6 +83,32 @@ public sealed partial class LibraryModel : ObservableObject
     /// <summary>The class has no lectures yet, or nothing is chosen: what the middle column says.</summary>
     [ObservableProperty] public partial string? Empty { get; set; }
 
+    /// <summary>The answer to what was asked in the ask bar, shown above it; null hides it.</summary>
+    [ObservableProperty] public partial string? Answer { get; set; }
+    [ObservableProperty] public partial bool Thinking { get; set; }
+    [ObservableProperty] public partial string AskedQuestion { get; set; } = "";
+    public ObservableCollection<SourceChip> Sources { get; } = [];
+
+    public bool HasAnswer => Answer is not null || Thinking;
+    public bool HasSources => Sources.Count > 0;
+
+    public LibraryModel() => Sources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSources));
+
+    partial void OnAnswerChanged(string? value) => OnPropertyChanged(nameof(HasAnswer));
+    partial void OnThinkingChanged(bool value) => OnPropertyChanged(nameof(HasAnswer));
+
+    public Action<SourceChip>? OnSource { get; set; }
+
+    [RelayCommand] void OpenSource(SourceChip chip) => OnSource?.Invoke(chip);
+
+    [RelayCommand]
+    void CloseAnswer()
+    {
+        Answer = null;
+        Thinking = false;
+        Sources.Clear();
+    }
+
     public bool HasNote => Note is not null;
     public bool NoNote => Note is null;
     public bool HasEmpty => !string.IsNullOrEmpty(Empty);

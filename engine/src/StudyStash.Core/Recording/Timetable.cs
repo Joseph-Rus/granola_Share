@@ -11,6 +11,67 @@ public sealed record ClassTime(DayOfWeek Day, TimeOnly Start, TimeOnly End)
 
     /// <summary>"Tue 10:00–11:15".</summary>
     public string Describe() => $"{Days[(int)Day]} {Start.ToString("H:mm", CultureInfo.InvariantCulture)}–{End.ToString("H:mm", CultureInfo.InvariantCulture)}";
+
+    /// <summary>"Tue Thu 10:00–11:15" as a class's weekly times ("Mon Wed Fri 9–9:50", "tuesday 2pm-3:15pm",
+    /// "MWF 9:00-9:50"). Null when it isn't one.</summary>
+    public static List<ClassTime>? ParseMany(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text.Trim(),
+            @"^(?<days>[A-Za-z ,/&]+?)\s*(?<from>\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|–|—|to)\s*(?<to>\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+        var days = ParseDays(m.Groups["days"].Value);
+        if (days.Count == 0 || ParseTime(m.Groups["to"].Value, null) is not { } end) return null;
+        bool endPm = m.Groups["to"].Value.Contains("pm", StringComparison.OrdinalIgnoreCase);
+        if (ParseTime(m.Groups["from"].Value, endPm ? "pm" : null) is not { } start) return null;
+        if (start >= end && ParseTime(m.Groups["from"].Value, null) is { } plain && plain < end) start = plain;
+        if (start >= end) return null;
+        return days.Select(d => new ClassTime(d, start, end)).ToList();
+    }
+
+    static TimeOnly? ParseTime(string text, string? assume)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text.Trim().ToLowerInvariant(), @"^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$");
+        if (!m.Success) return null;
+        int h = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), min = m.Groups[2].Success ? int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture) : 0;
+        string half = m.Groups[3].Success ? m.Groups[3].Value : assume ?? "";
+        if (half == "pm" && h < 12) h += 12;
+        if (half == "am" && h == 12) h = 0;
+        // No am/pm: 1 to 7 o'clock is afternoon at a school.
+        if (half.Length == 0 && h is >= 1 and <= 7) h += 12;
+        return h is >= 0 and < 24 && min is >= 0 and < 60 ? new TimeOnly(h, min) : null;
+    }
+
+    static List<DayOfWeek> ParseDays(string text)
+    {
+        var result = new List<DayOfWeek>();
+        string t = text.Trim().ToLowerInvariant();
+        string[] names = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        var words = System.Text.RegularExpressions.Regex.Split(t, @"[\s,/&]+").Where(w => w.Length > 0).ToList();
+        foreach (string w in words)
+        {
+            int i = Array.FindIndex(names, n => w.StartsWith(n, StringComparison.Ordinal) || (w.Length >= 2 && n.StartsWith(w, StringComparison.Ordinal)));
+            if (i >= 0)
+            {
+                if (!result.Contains((DayOfWeek)i)) result.Add((DayOfWeek)i);
+                continue;
+            }
+            // "MWF", "TTh", "MTWRF": the letters schools use.
+            for (int k = 0; k < w.Length; k++)
+            {
+                DayOfWeek? d = w[k] switch
+                {
+                    'm' => DayOfWeek.Monday, 't' when k + 1 < w.Length && w[k + 1] == 'h' => DayOfWeek.Thursday, 't' => DayOfWeek.Tuesday,
+                    'w' => DayOfWeek.Wednesday, 'r' => DayOfWeek.Thursday, 'f' => DayOfWeek.Friday, 's' => DayOfWeek.Saturday, 'u' => DayOfWeek.Sunday,
+                    _ => null,
+                };
+                if (d is null) return [];
+                if (w[k] == 't' && d == DayOfWeek.Thursday) k++;
+                if (!result.Contains(d.Value)) result.Add(d.Value);
+            }
+        }
+        return result;
+    }
 }
 
 /// <summary>A class in your timetable, and when it meets.</summary>

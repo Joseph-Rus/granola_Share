@@ -246,6 +246,7 @@
               <Border Grid.Column="2" Classes="field"><TextBox Classes="bare" Text="{Binding NewWhen}" PlaceholderText="Tue Thu 10:00–11:15" FontSize="13" /></Border>
               <Button Grid.Column="4" Classes="push" Command="{Binding AddClassCommand}"><TextBlock Text="Add" FontSize="13" /></Button>
             </Grid>
+            <TextBlock IsVisible="{Binding HasClassProblem}" Text="{Binding ClassProblem}" FontSize="12" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left" Margin="0,8,0,0" />
           </StackPanel>
         </StackPanel>
       </DockPanel>

@@ -79,6 +79,9 @@ public static class Skin
             // The design reads notes in New York. Where it isn't installed, Charter (on every Mac) reads as well.
             d["SerifFont"] = new FontFamily("New York, Charter, Georgia, avares://StudyStash/Assets/Fonts#Inter");
             d["RadiusPanel"] = new CornerRadius(14);
+            d["RadiusControl"] = new CornerRadius(6);
+            light["Page"] = B("#FFFFFF"); light["Nav"] = B("#F0EFEE"); light["Control"] = B("#FFFFFF");
+            dark["Page"] = B("#1E1E1E"); dark["Nav"] = B("#29292B"); dark["Control"] = B("#48484A");
         }
         else
         {
@@ -103,6 +106,9 @@ public static class Skin
             d["DisplayFont"] = new FontFamily("Segoe UI Variable Display, Segoe UI, avares://StudyStash/Assets/Fonts#Inter Display");
             d["SerifFont"] = new FontFamily("Segoe UI Variable Text, Segoe UI, avares://StudyStash/Assets/Fonts#Inter");
             d["RadiusPanel"] = new CornerRadius(8);
+            d["RadiusControl"] = new CornerRadius(4);
+            light["Page"] = B("#F9F9F9"); light["Nav"] = B("#F3F3F3"); light["Control"] = B("#FDFDFD");
+            dark["Page"] = B("#272727"); dark["Nav"] = B("#202020"); dark["Control"] = B("#2D2D2D");
         }
         if (kind == SkinKind.Win)
         {
