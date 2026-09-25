@@ -34,6 +34,8 @@ public sealed class LibraryWebOptions
     public StudyStash.Core.Ai.AiJobs? Ai { get; init; }
     /// <summary>Canvas through the Chrome extension. Null: made here, with the library's class folders.</summary>
     public StudyStash.Core.Canvas.CanvasSync? Canvas { get; init; }
+    /// <summary>The course scout. Null: exploring isn't offered (tests, and `serve` without an AI).</summary>
+    public StudyStash.Core.Canvas.Scout? Scout { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>

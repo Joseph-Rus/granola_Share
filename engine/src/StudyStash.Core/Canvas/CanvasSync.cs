@@ -21,6 +21,8 @@ public sealed partial class CanvasSync
     public AgentQueue Agents { get; } = new();
     /// <summary>A sync finished: what changed, for a notification.</summary>
     public event Action<List<string>>? Finished;
+    /// <summary>A sync finished: the classes it read (the course scout explores new ones).</summary>
+    public event Action<List<string>>? Synced;
 
     public CanvasSync(string home, Func<string, string> classDir, Action<string>? log = null)
     {
@@ -93,6 +95,7 @@ public sealed partial class CanvasSync
         });
         log($"[canvas] sync done: {items.Count} assignments, {changes.Count} changes, {files} files" + (done.Errors.Count > 0 ? $", {done.Errors.Count} errors" : ""));
         if (before.Count > 0 && changes.Count > 0) Finished?.Invoke(changes);
+        Synced?.Invoke(done.Assignments.Keys.Concat(done.Changed.Keys).Distinct().ToList());
     }
 
     // --- for AIs: reading Canvas through the extension ---------------------------------------------------------

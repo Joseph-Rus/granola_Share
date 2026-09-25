@@ -71,6 +71,7 @@ public class AiTests
         var tool = codex.Parse("""{"type":"item.started","item":{"type":"command_execution","command":"rg recursion"}}""").Single();
         Assert.Equal("rg recursion", tool.Path);
         codex.Parse("""{"type":"item.completed","item":{"type":"agent_message","text":"Recursion is a function calling itself."}}""").ToList();
+        Assert.Empty(codex.Parse("""{"type":"error","message":"Reconnecting... 2/5 (stream disconnected)"}"""));
         var final = codex.Parse("""{"type":"turn.completed"}""").Single();
         Assert.Equal(("final", "Recursion is a function calling itself."), (final.Kind, final.Text));
     }

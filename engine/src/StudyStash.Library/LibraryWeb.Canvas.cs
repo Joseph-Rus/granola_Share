@@ -109,6 +109,21 @@ public sealed partial class LibraryWeb
             return Http.Json(new JsonObject { ["text"] = File.ReadAllText(full) });
         }));
 
+        app.MapPost("/api/v2/canvas/scout", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            string cls = S((await Http.JsonBodyAsync(ctx.Request))?["class"]);
+            if (!Canvas.Settings.Courses.ContainsKey(cls)) return Http.Detail(400, "Link that class to Canvas first.");
+            if (options.Scout is not { } scout) return Http.Detail(503, "Exploring needs the library's service.");
+            scout.Queue(cls);
+            return Http.Json(CanvasJson());
+        })));
+        app.MapPost("/settings/canvas/scout", Http.Handle(ctx => WithMemberAsync(ctx, async _ =>
+        {
+            string cls = (await Http.FormAsync(ctx.Request)).Get("class");
+            if (Canvas.Settings.Courses.ContainsKey(cls)) options.Scout?.Queue(cls);
+            return Http.SeeOther("/settings?canvas=scout#canvas");
+        })));
+
         // The pages.
         app.MapGet("/due", (HttpContext ctx) => WithMember(ctx, DuePage));
         app.MapGet("/files/{cls}/{**path}", (HttpContext ctx, string cls, string path) => WithMember(ctx, role => FilePage(role, RouteName(cls), path)));
@@ -161,7 +176,11 @@ public sealed partial class LibraryWeb
         {
             ["url"] = s.Url, ["courses"] = courses, ["available"] = available, ["last_sync"] = s.LastSync, ["error"] = s.Error,
             ["needs_login"] = s.NeedsLogin, ["extension_seen"] = s.ExtensionSeen, ["extension_version"] = s.ExtensionVersion,
-            ["syncing"] = Canvas.Crawl.Active, ["left"] = waiting + inflight, ["changes"] = new JsonArray(s.Changes.Select(c => (JsonNode)c).ToArray()),
+            ["syncing"] = Canvas.Crawl.Active, ["left"] = waiting + inflight,
+            ["exploring"] = options.Scout?.Running, ["scouts"] = new JsonObject(s.Scouts.Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)new JsonObject
+            {
+                ["ok"] = kv.Value.Ok, ["report"] = kv.Value.Report, ["when"] = kv.Value.When, ["files"] = kv.Value.Files,
+            }))), ["changes"] = new JsonArray(s.Changes.Select(c => (JsonNode)c).ToArray()),
         };
     }
 
@@ -278,6 +297,7 @@ public sealed partial class LibraryWeb
             "unreachable" => "<div class=\"notice\"><div>Chrome didn't answer. Set up the extension below, keep Chrome open and signed in to Canvas, then try again.</div></div>",
             "extension" => "<div class=\"notice good\"><div>The extension's folder is ready. Load it in Chrome as below.</div></div>",
             "saved" => "<div class=\"notice good\"><div>Saved. Canvas syncs within a minute while Chrome is open.</div></div>",
+            "scout" => "<div class=\"notice good\"><div>Exploring. It takes a few minutes; what it finds lands in the class's Canvas folder.</div></div>",
             _ => "",
         };
         if (s.Error.Length > 0) say += $"<div class=\"notice\"><div>{Ui.Esc(s.Error)}</div></div>";
@@ -292,6 +312,23 @@ public sealed partial class LibraryWeb
             return $"<select name=\"canvas_{Ui.Esc(cls)}\">{opts}</select>";
         }
         string rows = string.Concat(cfg.ClassNames().Select(cls => $"<div class=\"row\"><span class=\"grow\">{Ui.Esc(cls)}</span>{CourseSelect(cls)}</div>"));
+        // The course scout: what it found per class, and a way to explore again.
+        string scouts = "";
+        if (options.Scout is { } scout && s.Courses.Count > 0)
+        {
+            var items = s.Courses.Keys.Select(cls =>
+            {
+                string state = scout.Running == cls ? "Exploring now…" : scout.Waiting.Contains(cls) ? "Waiting its turn"
+                    : s.Scouts.TryGetValue(cls, out var r) ? (r.Ok ? $"Explored {Ui.Esc(DateTimeOffset.TryParse(r.When, out var w) ? w.LocalDateTime.ToString("d MMM", CultureInfo.InvariantCulture) : "")}, {r.Files} file(s)" : "Didn't finish: " + Ui.Esc(Py.Head(r.Report, 140)))
+                    : "Not explored yet";
+                string report = s.Scouts.TryGetValue(cls, out var rr) && rr.Ok && rr.Report.Length > 0 ? $"<div class=\"subtitle\">{Ui.Esc(Py.Head(rr.Report, 300))}</div>" : "";
+                return $"<form class=\"row\" method=\"post\" action=\"/settings/canvas/scout\"><input type=\"hidden\" name=\"class\" value=\"{Ui.Esc(cls)}\">"
+                    + $"<div class=\"grow\"><div class=\"title\">{Ui.Esc(cls)}</div><div class=\"subtitle\">{state}</div>{report}</div><button>Explore</button></form>";
+            });
+            scouts = "<div class=\"group-head\">Explore each class with AI</div><div class=\"group\">" + string.Concat(items) + "</div>"
+                + "<p class=\"group-foot\">Every instructor lays Canvas out differently. The AI looks through a class's Canvas (the syllabus, files "
+                + "outside modules, links to Box or Google Drive), saves what the sync misses, and writes a short guide to where things are.</p>";
+        }
         string synced = DateTimeOffset.TryParse(s.LastSync, out var t) ? t.LocalDateTime.ToString("ddd d MMM, h:mm tt", CultureInfo.InvariantCulture) : "Never";
         string seen = DateTimeOffset.TryParse(s.ExtensionSeen, out var e) && DateTimeOffset.Now - e < TimeSpan.FromMinutes(5) ? "Connected" : s.ExtensionSeen.Length > 0 ? "Not lately (is Chrome open?)" : "Not set up";
         string folder = Extension.Folder(cfg.Home);
@@ -304,6 +341,7 @@ public sealed partial class LibraryWeb
             + "<button formaction=\"/settings/canvas/find\">Find my courses</button></div></form>"
             + "<p class=\"group-foot\">Canvas is read through Chrome with your own sign-in, so no Canvas token is needed. It only reads: "
             + "assignments and instructions, your submissions and feedback, modules, files and announcements, into each class's Canvas folder.</p>"
+            + scouts
             + "<details class=\"help\"><summary>Set up the Chrome extension on this computer</summary><div class=\"group\">"
             + "<form class=\"row\" method=\"post\" action=\"/settings/canvas/extension\"><span class=\"grow\">1. Make the extension's folder</span><button>Make it</button></form>"
             + "<div class=\"row\"><span class=\"grow\">2. In Chrome, open chrome://extensions and turn on Developer mode</span></div>"

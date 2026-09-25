@@ -334,6 +334,7 @@ public class CodexProvider : AiProvider
         else if (type is "error" or "turn.failed")
         {
             string msg = S(e["message"]) is { Length: > 0 } m ? m : S(e["error"]?["message"]);
+            if (type == "error" && msg.StartsWith("Reconnecting", StringComparison.Ordinal)) yield break; // it retries on its own
             yield return AiEvent.Error(msg.Length > 0 ? msg : "ChatGPT stopped with an error.");
         }
         else if (type == "turn.completed")

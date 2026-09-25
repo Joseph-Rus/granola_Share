@@ -162,10 +162,18 @@ public static class Cli
             var access = new ClaudeAccess(home);
             // Canvas, through the Chrome extension: one queue for the sync and for AIs' reads.
             var canvas = new StudyStash.Core.Canvas.CanvasSync(home, c => store.ClassDir(c)) { KnownClass = c => cfg.ClassNames().Contains(c) };
+            // After a sync, an AI explores each class it hasn't explored yet (Settings can ask again).
+            var scout = new StudyStash.Core.Canvas.Scout(home, c => store.ClassDir(c), ai);
+            canvas.Synced += classes =>
+            {
+                var s = StudyStash.Core.Canvas.CanvasSettings.Load(home);
+                if (ai.AgentReady().Ok)
+                    scout.Queue(classes.Where(c => !s.Scouts.ContainsKey(c) && !File.Exists(Path.Combine(store.ClassDir(c), "Canvas", "canvas-recipe.md"))).ToArray());
+            };
             var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions
             {
                 Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
-                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas,
+                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas, Scout = scout,
             });
             await app.StartAsync(stop.Token);
             // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.
@@ -231,10 +239,10 @@ public static class Cli
             }
             else if (sub == "ask" && words.Count > 2)
             {
-                var choice = settings.For(Option("--job") ?? "agent");
-                var provider = AiProviders.Get(choice.Provider);
+                // As an agent, with the library's tools (Canvas too), reading this folder.
+                var jobs = new AiJobs(home, () => Configs.Load(home).OllamaHost);
                 bool wrote = false;
-                await foreach (var e in provider.RunAsync(new AiRequest(string.Join(" ", words.Skip(2)), Directory.GetCurrentDirectory()) { Model = choice.Model }, ct: stop.Token))
+                await foreach (var e in jobs.AgentAsync(string.Join(" ", words.Skip(2)), Directory.GetCurrentDirectory(), write: false, job: Option("--job") ?? "agent", ct: stop.Token))
                 {
                     if (e.Kind == "text") { Console.Write(e.Text); wrote = true; }
                     else if (e.Kind == "final" && !wrote) Console.Write(e.Text);
