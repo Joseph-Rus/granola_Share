@@ -32,11 +32,14 @@ public static partial class Summarize
     public static readonly string Structure = """
         Use exactly this structure, and skip any section the lecture has nothing for:
 
-        ## Overview
+        ## Summary
         Two to four sentences: what the lecture covered and how it fits the course.
 
-        ## Key concepts
-        Bullets. Bold the term, then explain it in one or two sentences the way the lecturer did.
+        ## Key points
+        Bullets: the ideas to remember, each in one or two sentences, the way the lecturer explained them.
+
+        ## Definitions
+        Bullets: the bold term, a colon, then what it means in one sentence.
 
         ## Details and examples
         Worked examples, derivations, formulas (LaTeX in $...$), code, and demonstrations, in the order they were taught.
@@ -44,8 +47,8 @@ public static partial class Summarize
         ## Announcements
         Deadlines, exams, assignments, and readings, with dates exactly as said.
 
-        ## Review questions
-        Three to five questions a student should be able to answer after this lecture.
+        ## Questions to review
+        Three to five numbered questions a student should be able to answer after this lecture.
         """.ReplaceLineEndings("\n");
 
     public static readonly string Rules = """
@@ -241,7 +244,7 @@ public static partial class Summarize
         string model = cfg.EffectiveSummaryModel;
         int ctx = await ContextSizeAsync(cfg, model, show);
         int budget = TranscriptBudget(ctx);
-        string text = Py.Strip(m.Transcript);
+        string text = Py.Strip(TimedText.Plain(m.Transcript)); // a recording's times would only distract the model
         if (text.Length <= budget) return CleanOutput(await chat(cfg, model, WholePrompt(m, text), ctx));
         var parts = SplitTranscript(text, budget);
         var notes = new List<string>();

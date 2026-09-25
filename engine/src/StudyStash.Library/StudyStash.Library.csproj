@@ -4,6 +4,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\StudyStash.Core\StudyStash.Core.csproj" />
     <PackageReference Include="Markdig" Version="1.4.0" />
+    <!-- The library's MCP server, so Claude (Claude Code, Claude Desktop, claude.ai) can read your lectures. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

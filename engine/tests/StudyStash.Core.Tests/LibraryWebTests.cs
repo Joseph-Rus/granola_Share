@@ -340,7 +340,7 @@ public class LibraryWebTests
         Assert.Equal(("done", "CS 101", "Sam"), (row.Status, row.ClassName, row.Owner));
         Assert.Single(store.ListNotes());
         var status = await c.Client.SendAsync(Req(HttpMethod.Get, "/api/notes/not_abc/status", "pw"));
-        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"id": "not_abc", "status": "done", "class_name": "CS 101", "summary_model": null, "has_transcript": false, "path": "/note/not_abc"}"""),
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"id": "not_abc", "status": "done", "class_name": "CS 101", "summary_model": null, "has_transcript": false, "path": "/note/not_abc", "lecture_title": "CS101 lecture 2"}"""),
             JsonNode.Parse(await status.Content.ReadAsStringAsync())));
         Assert.Equal(HttpStatusCode.NotFound, (await c.Client.SendAsync(Req(HttpMethod.Get, "/api/notes/nope/status", "pw"))).StatusCode);
 

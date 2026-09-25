@@ -201,6 +201,7 @@ public sealed class Store : IDisposable
         conn.Open();
         Exec(Schema);
         Migrate();
+        HasPassages = CreatePassages();
     }
 
     public void Dispose() => conn.Dispose();
@@ -471,6 +472,7 @@ public sealed class Store : IDisposable
                 Py.Strip(m.Transcript).Length > 0 ? 1L : 0L, Py.Head(PyJson.Dumps(m.Raw), 200_000), Granola.MeetingJson(m),
                 summaryMd.Length > 0 ? summaryMd : null, summaryModel.Length > 0 ? summaryModel : null, Done,
                 error.Length > 0 ? error : null, known ? firstSeen : now, now);
+            Index(m.Id, summaryMd.Length > 0 ? summaryMd : m.NotesMarkdown, m.Transcript, now);
             return path;
         }
     }
@@ -506,6 +508,119 @@ public sealed class Store : IDisposable
                 if (m.Transcript.Length == 0) m.Transcript = Notes.Section(text, "Transcript");
             }
             return m;
+        }
+    }
+
+    // --- passages: search and Ask ---------------------------------------------------------------------------------
+
+    /// <summary>False when this SQLite has no full-text search (FTS5): search then goes by title and notes only.</summary>
+    public bool HasPassages { get; }
+
+    bool CreatePassages()
+    {
+        try
+        {
+            Exec("CREATE VIRTUAL TABLE IF NOT EXISTS passages USING fts5(note_id UNINDEXED, kind UNINDEXED, section UNINDEXED, "
+                + "start UNINDEXED, text, tokenize='porter unicode61')");
+            Exec("CREATE TABLE IF NOT EXISTS passage_notes (note_id TEXT PRIMARY KEY, updated_at TEXT)");
+            return true;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    void Index(string noteId, string notes, string transcript, string updatedAt)
+    {
+        if (!HasPassages) return;
+        Unindex(noteId);
+        foreach (var p in Passages.FromNotes(noteId, notes).Concat(Passages.FromTranscript(noteId, transcript)))
+            Exec("INSERT INTO passages(note_id, kind, section, start, text) VALUES(?,?,?,?,?)", p.NoteId, p.Kind, p.Section, p.Start, p.Text);
+        Exec("INSERT INTO passage_notes(note_id, updated_at) VALUES(?,?) ON CONFLICT(note_id) DO UPDATE SET updated_at=excluded.updated_at", noteId, updatedAt);
+    }
+
+    void Unindex(string noteId)
+    {
+        if (!HasPassages) return;
+        Exec("DELETE FROM passages WHERE note_id=?", noteId);
+        Exec("DELETE FROM passage_notes WHERE note_id=?", noteId);
+    }
+
+    /// <summary>Index the filed lectures the index hasn't seen, or has seen an older version of (lectures filed by the
+    /// Python engine, or before this version). Returns how many.</summary>
+    public int IndexMissing()
+    {
+        if (!HasPassages) return 0;
+        lock (gate)
+        {
+            var stale = Rows($"SELECT n.* FROM notes n LEFT JOIN passage_notes p ON p.note_id = n.id WHERE {Filed} "
+                + "AND (p.updated_at IS NULL OR p.updated_at != n.updated_at)");
+            foreach (var row in stale)
+            {
+                var m = Meeting(row);
+                Index(row.Id, string.IsNullOrEmpty(row.SummaryMd) ? m.NotesMarkdown : row.SummaryMd, m.Transcript, row.UpdatedAt ?? "");
+            }
+            return stale.Count;
+        }
+    }
+
+    /// <summary>The best passages for an FTS5 query (see <see cref="Passages"/>), filed lectures only.</summary>
+    public List<PassageHit> SearchPassages(string match, string? className = null, string? noteId = null, int limit = 20)
+    {
+        if (!HasPassages) return [];
+        lock (gate)
+        {
+            string sql = "SELECT passages.note_id, passages.kind, passages.section, passages.start, passages.text, bm25(passages) AS rank "
+                + $"FROM passages JOIN notes ON notes.id = passages.note_id WHERE passages MATCH ? AND {Filed}";
+            var args = new List<object?> { match };
+            if (className is not null)
+            {
+                sql += " AND notes.class_name=?";
+                args.Add(className);
+            }
+            if (noteId is not null)
+            {
+                sql += " AND passages.note_id=?";
+                args.Add(noteId);
+            }
+            sql += $" ORDER BY rank LIMIT {Math.Clamp(limit, 1, 200)}";
+            var found = new List<(Passage, double)>();
+            try
+            {
+                using var cmd = Command(sql, [.. args]);
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                    found.Add((new Passage(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? "" : r.GetString(2),
+                        r.IsDBNull(3) ? null : r.GetDouble(3), r.GetString(4)), r.GetDouble(5)));
+            }
+            catch (SqliteException)
+            {
+                return []; // a query FTS5 can't read
+            }
+            var notes = new Dictionary<string, NoteRow?>();
+            var hits = new List<PassageHit>();
+            foreach (var (p, rank) in found)
+            {
+                if (!notes.TryGetValue(p.NoteId, out var n)) notes[p.NoteId] = n = Get(p.NoteId);
+                if (n is not null) hits.Add(new PassageHit(n, p, rank));
+            }
+            return hits;
+        }
+    }
+
+    /// <summary>A lecture's own passages, in order: what Ask reads for a question about one lecture.</summary>
+    public List<Passage> PassagesOf(string noteId)
+    {
+        if (!HasPassages) return [];
+        lock (gate)
+        {
+            var result = new List<Passage>();
+            using var cmd = Command("SELECT note_id, kind, section, start, text FROM passages WHERE note_id=? ORDER BY rowid", noteId);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                result.Add(new Passage(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? "" : r.GetString(2), r.IsDBNull(3) ? null : r.GetDouble(3), r.GetString(4)));
+            return result;
         }
     }
 
@@ -585,6 +700,7 @@ public sealed class Store : IDisposable
             string? path = string.IsNullOrEmpty(row.MdPath) ? null : row.MdPath;
             if (path is not null && File.Exists(path)) File.Delete(path);
             Exec("DELETE FROM notes WHERE id=?", noteId);
+            Unindex(noteId);
             DropEmptyDir(path, null);
             return true;
         }
