@@ -28,7 +28,8 @@ public static partial class Summarize
     // stops: Ollama keeps shifting its context and generating (39,000 tokens seen, from llama3.2:3b).
     public const int MaxNotesTokens = 4096;
 
-    public const string Structure = """
+    // .ReplaceLineEndings: on Windows, git checks this file out with "\r\n", which would change the prompts.
+    public static readonly string Structure = """
         Use exactly this structure, and skip any section the lecture has nothing for:
 
         ## Overview
@@ -45,14 +46,14 @@ public static partial class Summarize
 
         ## Review questions
         Three to five questions a student should be able to answer after this lecture.
-        """;
+        """.ReplaceLineEndings("\n");
 
-    public const string Rules = """
+    public static readonly string Rules = """
         Rules:
         - Use only what is in the transcript. Never invent facts, dates, or examples.
         - The transcript comes from speech recognition: fix obvious mis-hearings of technical terms, and skip filler, small talk, and audio problems.
         - Write in the language of the lecture. Output Markdown only, with no preamble.
-        """;
+        """.ReplaceLineEndings("\n");
 
     public static async Task<string> OllamaGenerateAsync(Config cfg, string model, string prompt, int numCtx,
         HttpClient? http = null)

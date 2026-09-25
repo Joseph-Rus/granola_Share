@@ -2,3 +2,4 @@
 * text=auto
 # The Python engine writes these; the C# tests compare against them byte for byte.
 engine/tests/StudyStash.Core.Tests/Golden/** -text
+engine/**/*.cs text eol=lf
