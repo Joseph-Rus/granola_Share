@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Study Stash app: the menu bar (or tray) panel, the recorder, the quick panel, the library, and setup. One
+       codebase draws the Mac look and the Windows look, each in light and dark. Given a command (serve, mcp, ...) it
+       runs the engine instead, so the app bundle has one program. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>StudyStash</AssemblyName>
+    <RootNamespace>StudyStash.App</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\..\granola_share\assets\study-stash.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Markdig" Version="1.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StudyStash.Core\StudyStash.Core.csproj" />
+    <ProjectReference Include="..\StudyStash.Audio\StudyStash.Audio.csproj" />
+    <ProjectReference Include="..\StudyStash.Library\StudyStash.Library.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StudyStash.App.Tests" />
+  </ItemGroup>
+
+</Project>

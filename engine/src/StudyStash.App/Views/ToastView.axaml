@@ -1,0 +1,27 @@
+<!-- A notification in the design's look: "Filed in CS 101", with a button to open what it's about. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.ToastView"
+             x:Name="Root"
+             Width="340" ClipToBounds="False">
+  <Border Name="Card" Padding="14,12" ClipToBounds="False">
+    <Grid ColumnDefinitions="Auto,12,*,Auto">
+      <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource Accent}" VerticalAlignment="Top">
+        <c:Icon Glyph="graphic_eq" Size="20" Foreground="{DynamicResource OnAccent}" />
+      </Border>
+      <StackPanel Grid.Column="2" Spacing="2">
+        <TextBlock Name="TitleText" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBlock Name="BodyText" FontSize="12" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" LineHeight="17" />
+        <Button Name="ActionButton" Theme="{StaticResource Surface}" HorizontalAlignment="Left" Margin="0,6,0,0" Padding="10,0" Height="26" CornerRadius="6"
+                Background="{DynamicResource Fill2}">
+          <TextBlock Name="ActionText" FontSize="12" FontWeight="Medium" VerticalAlignment="Center" />
+        </Button>
+      </StackPanel>
+      <Button Name="CloseButton" Grid.Column="3" Theme="{StaticResource Surface}" Width="22" Height="22" CornerRadius="11" VerticalAlignment="Top"
+              HorizontalContentAlignment="Center" ToolTip.Tip="Dismiss">
+        <c:Icon Glyph="close" Size="14" Foreground="{DynamicResource Fg3}" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

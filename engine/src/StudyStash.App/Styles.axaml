@@ -1,0 +1,81 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <!-- A button that is only its background: the design's buttons, rows and chips. Hover and press lay a faint
+         wash over it, the way both systems do. -->
+    <ControlTheme x:Key="Surface" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel>
+            <Border Name="PART_Bg" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" />
+            <Border Name="PART_Wash" CornerRadius="{TemplateBinding CornerRadius}" Background="Transparent" />
+            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Padding="{TemplateBinding Padding}" Foreground="{TemplateBinding Foreground}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#PART_Wash">
+        <Setter Property="Background" Value="{DynamicResource Hover}" />
+      </Style>
+      <Style Selector="^:pressed /template/ Border#PART_Wash">
+        <Setter Property="Background" Value="{DynamicResource Press}" />
+      </Style>
+      <Style Selector="^:focus-visible /template/ Border#PART_Wash">
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+        <Setter Property="BorderThickness" Value="2" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+      </Style>
+    </ControlTheme>
+  </Styles.Resources>
+
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource TextFont}" />
+  </Style>
+  <!-- A text field that's only its text: the design draws the field around it (the ask bars, the quick panel). -->
+  <Style Selector="TextBox.bare">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource Fg3}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource Hl}" />
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource Fg}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontFamily" Value="{DynamicResource TextFont}" />
+  </Style>
+  <Style Selector="TextBox.bare /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.bare:pointerover /template/ TextBlock#PART_Placeholder, TextBox.bare:focus /template/ TextBlock#PART_Placeholder">
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}" />
+  </Style>
+  <Style Selector="TextBox.bare:pointerover, TextBox.bare:focus">
+    <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+  </Style>
+
+  <Style Selector="TextBlock.num">
+    <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+</Styles>

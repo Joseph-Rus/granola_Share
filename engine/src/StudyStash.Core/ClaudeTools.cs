@@ -56,7 +56,9 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
 
     static string Q(string? s) => Uri.EscapeDataString(s ?? "");
 
-    public async Task<JsonObject> OverviewAsync() => (JsonObject)(await SendAsync(HttpMethod.Get, "/library"))!;
+    /// <summary>The library's name and classes. A library from before /api/v2 (the Python engine) answers 404.</summary>
+    public async Task<JsonObject> OverviewAsync() =>
+        await SendAsync(HttpMethod.Get, "/library") as JsonObject ?? throw new LibraryRefusedException(404, "This library is older than the app: update it to browse it here.");
 
     public async Task<JsonArray> LecturesAsync(string? className, int limit, string? before) =>
         (JsonArray)(await SendAsync(HttpMethod.Get, $"/lectures?limit={limit}" + (className is null ? "" : $"&class={Q(className)}")

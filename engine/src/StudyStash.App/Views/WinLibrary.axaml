@@ -1,0 +1,322 @@
+<!-- The full app (Surfaces, Windows 11 04): a custom title bar over Mica with the search box in it; a NavigationView of
+     classes; the content on a layer with an 8 px top-left corner; a CommandBar for Move and Export. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinLibrary"
+             x:DataType="vm:LibraryModel">
+  <UserControl.Styles>
+    <Style Selector="Button.nav">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Margin" Value="4,0" />
+      <Setter Property="Padding" Value="16,0" />
+    </Style>
+    <Style Selector="Button.nav.selected">
+      <Setter Property="Background" Value="{DynamicResource Subtle}" />
+    </Style>
+    <Style Selector="Border.pill">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Button.selected Border.pill">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.nav TextBlock.count">
+      <Setter Property="Foreground" Value="{DynamicResource Fg3}" />
+    </Style>
+    <Style Selector="Button.nav.selected TextBlock.count">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Button.card">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Margin" Value="8,2" />
+    </Style>
+    <Style Selector="Button.card.selected">
+      <Setter Property="Background" Value="{DynamicResource Subtle2}" />
+    </Style>
+    <Style Selector="TextBlock.group">
+      <Setter Property="Margin" Value="20,14,20,4" />
+    </Style>
+    <Style Selector="TextBlock.group.first">
+      <Setter Property="Margin" Value="20,8,20,4" />
+    </Style>
+    <Style Selector="Button.command">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <Style Selector="Border.seg">
+      <Setter Property="Padding" Value="18,4" />
+      <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <Style Selector="Border.seg.on">
+      <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlStroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.seg TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    </Style>
+    <Style Selector="Border.seg.on TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+    </Style>
+    <Style Selector="Border.underline">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.seg.on Border.underline">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.caption">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Width" Value="46" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource Mica}" BorderBrush="{DynamicResource FlyStroke}" BorderThickness="1" CornerRadius="8" BoxShadow="{DynamicResource ShadowLg}"
+          ClipToBounds="True" Name="Frame">
+    <DockPanel>
+      <!-- Title bar -->
+      <Grid DockPanel.Dock="Top" Height="48" ColumnDefinitions="*,400,*" Name="TitleBar">
+        <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,0,0,0" VerticalAlignment="Center">
+          <Border Width="16" Height="16" CornerRadius="4" Background="{DynamicResource Accent}">
+            <c:Icon Glyph="graphic_eq" Size="12" Foreground="{DynamicResource OnAccent}" />
+          </Border>
+          <TextBlock Text="Study Stash" FontSize="12" VerticalAlignment="Center" />
+        </StackPanel>
+        <Border Grid.Column="1" Height="32" CornerRadius="4" Background="{DynamicResource Ctrl}" BorderBrush="{DynamicResource CtrlBorder}" BorderThickness="1"
+                Padding="11,0,8,0">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Classes="bare" Text="{Binding SearchText}" PlaceholderText="Search notes and lectures" FontSize="14" Name="Search" />
+            <c:Icon Grid.Column="1" Glyph="search" Size="16" Foreground="{DynamicResource Fg2}" />
+          </Grid>
+        </Border>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" IsVisible="{Binding DrawChrome}">
+          <Button Classes="caption" Height="48"><c:Icon Glyph="remove" Size="16" Foreground="{DynamicResource Fg}" /></Button>
+          <Button Classes="caption" Height="48"><c:Icon Glyph="crop_square" Size="14" Foreground="{DynamicResource Fg}" /></Button>
+          <Button Classes="caption" Height="48"><c:Icon Glyph="close" Size="16" Foreground="{DynamicResource Fg}" /></Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- Navigation: classes -->
+      <DockPanel DockPanel.Dock="Left" Width="280" Margin="4,4,4,8">
+        <Button DockPanel.Dock="Bottom" Classes="nav" Padding="12,0" Command="{Binding SettingsCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <c:Icon Glyph="settings" Size="16" Foreground="{DynamicResource Fg2}" />
+            <TextBlock Text="Settings" FontSize="14" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,0,16,8">
+          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+        </StackPanel>
+        <StackPanel Spacing="4">
+          <TextBlock Text="Classes" FontSize="14" FontWeight="SemiBold" Margin="16,8" />
+          <ItemsControl ItemsSource="{Binding Classes}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="4" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ClassItem">
+                <Button Classes="nav" Classes.selected="{Binding Selected}"
+                        Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).PickClassCommand}" CommandParameter="{Binding}">
+                  <Panel>
+                    <Border Classes="pill" Width="3" Height="16" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Margin="-16,0,0,0" />
+                    <Grid ColumnDefinitions="Auto,14,*,Auto">
+                      <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="3" Classes="count" Text="{Binding Count}" FontSize="12" VerticalAlignment="Center" />
+                    </Grid>
+                  </Panel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Height="1" Background="{DynamicResource Sep}" Margin="16,4" />
+          <Button Classes="nav" Classes.selected="{Binding Unsorted.Selected, FallbackValue=False}" Padding="12,0" IsVisible="{Binding Unsorted, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  Command="{Binding PickClassCommand}" CommandParameter="{Binding Unsorted}">
+            <Grid ColumnDefinitions="Auto,10,*,Auto">
+              <c:Icon Glyph="inbox" Size="16" Foreground="{DynamicResource Fg2}" />
+              <TextBlock Grid.Column="2" Text="Unsorted" FontSize="14" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Classes="count" Text="{Binding Unsorted.Count, FallbackValue=0}" FontSize="12" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+        </StackPanel>
+      </DockPanel>
+
+      <!-- The content layer -->
+      <Border Background="{DynamicResource Layer}" BorderBrush="{DynamicResource LayerStroke}" BorderThickness="1,1,0,0" CornerRadius="8,0,0,0">
+        <Grid ColumnDefinitions="320,*">
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Width="1" Background="{DynamicResource Sep}" />
+            <StackPanel DockPanel.Dock="Top" Margin="20,20,20,12">
+              <TextBlock Text="{Binding ClassTitle}" FontFamily="{DynamicResource DisplayFont}" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding ClassCount}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+            </StackPanel>
+            <Panel>
+              <TextBlock IsVisible="{Binding HasEmpty}" Text="{Binding Empty}" FontSize="14" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" Margin="20,8" />
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Groups}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LectureGroup">
+                      <StackPanel>
+                        <TextBlock Classes="group" Classes.first="{Binding First}" Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Fg2}" />
+                        <ItemsControl ItemsSource="{Binding Items}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LectureCard">
+                              <Button Classes="card" Classes.selected="{Binding Selected}"
+                                      Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).PickLectureCommand}" CommandParameter="{Binding}">
+                                <Panel>
+                                  <Border Classes="pill" Width="3" Height="16" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left"
+                                          VerticalAlignment="Top" Margin="0,18,0,0" />
+                                  <StackPanel Margin="12,10">
+                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+                                    <TextBlock Text="{Binding Summary}" IsVisible="{Binding HasSummary}" FontSize="12" LineHeight="16.8" Foreground="{DynamicResource Fg2}"
+                                               Margin="0,4,0,0" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                  </StackPanel>
+                                </Panel>
+                              </Button>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Panel>
+          </DockPanel>
+
+          <DockPanel Grid.Column="1">
+            <!-- CommandBar -->
+            <StackPanel DockPanel.Dock="Top" Height="48" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4" Margin="0,0,16,0">
+              <Button Classes="command" Command="{Binding MoveCommand}" IsEnabled="{Binding HasNote}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="drive_file_move" Size="16" Foreground="{DynamicResource Fg}" />
+                  <TextBlock Text="Move to…" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="command" Command="{Binding ExportCommand}" IsEnabled="{Binding HasNote}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="save_alt" Size="16" Foreground="{DynamicResource Fg}" />
+                  <TextBlock Text="Export" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="command" Width="32" Padding="0" HorizontalContentAlignment="Center" Command="{Binding MoreCommand}" ToolTip.Tip="More">
+                <c:Icon Glyph="more_horiz" Size="18" Foreground="{DynamicResource Fg}" />
+              </Button>
+            </StackPanel>
+            <Panel>
+              <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasNote}">
+                <StackPanel MaxWidth="640" HorizontalAlignment="Left" Margin="56,8,56,140" Spacing="12" DataContext="{Binding Note}" x:DataType="vm:NoteModel">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Meta}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Title}" FontFamily="{DynamicResource DisplayFont}" FontSize="28" FontWeight="SemiBold" LineHeight="35" TextWrapping="Wrap" />
+                  <Border HorizontalAlignment="Left" Padding="2" CornerRadius="4" Background="{DynamicResource Subtle}" BorderBrush="{DynamicResource CtrlStroke}"
+                          BorderThickness="1" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal">
+                      <Border Classes="seg" Classes.on="{Binding ShowNotes}" PointerPressed="OnNotesTab">
+                        <Panel>
+                          <TextBlock Text="Notes" FontSize="14" />
+                          <Border Classes="underline" Width="16" Height="3" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Bottom" Margin="0,0,0,-4" />
+                        </Panel>
+                      </Border>
+                      <Border Classes="seg" Classes.on="{Binding ShowTranscript}" PointerPressed="OnTranscriptTab">
+                        <Panel>
+                          <TextBlock Text="Transcript" FontSize="14" />
+                          <Border Classes="underline" Width="16" Height="3" CornerRadius="2" Background="{DynamicResource Accent}" VerticalAlignment="Bottom" Margin="0,0,0,-4" />
+                        </Panel>
+                      </Border>
+                    </StackPanel>
+                  </Border>
+                  <TextBlock IsVisible="{Binding HasPending}" Text="{Binding Pending}" FontSize="14" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                  <c:NoteView IsVisible="{Binding ShowNotes}" Markdown="{Binding Markdown}" />
+                  <StackPanel IsVisible="{Binding ShowTranscript}" Margin="0,16,0,0">
+                    <TextBlock IsVisible="{Binding NoTranscript}" Text="This lecture has no transcript." FontSize="14" Foreground="{DynamicResource Fg2}" />
+                    <ItemsControl ItemsSource="{Binding Transcript}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:HeardLine">
+                          <Grid ColumnDefinitions="52,12,*">
+                            <TextBlock Classes="num" Text="{Binding Time}" FontSize="12" Foreground="{DynamicResource Fg3}" Margin="0,3,0,0" />
+                            <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" FontSize="15" LineHeight="24" TextWrapping="Wrap" SelectionBrush="{DynamicResource Hl}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </ScrollViewer>
+              <TextBlock IsVisible="{Binding NoNote}" Text="Choose a lecture to read its notes." FontSize="14" Foreground="{DynamicResource Fg3}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+            <!-- The answer to what you asked, over the page -->
+              <Border IsVisible="{Binding HasAnswer}" Width="560" MaxHeight="360" CornerRadius="8" Background="{DynamicResource Acrylic}" BorderBrush="{DynamicResource FlyStroke}" BorderThickness="1" BoxShadow="{DynamicResource ShadowLg}"
+                      VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,88" Padding="16,14,8,14">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Theme="{StaticResource Surface}" Width="24" Height="24" CornerRadius="12" VerticalAlignment="Top"
+                          HorizontalContentAlignment="Center" Command="{Binding CloseAnswerCommand}" ToolTip.Tip="Close">
+                    <c:Icon Glyph="close" Size="14" Foreground="{DynamicResource Fg3}" />
+                  </Button>
+                  <StackPanel Spacing="8" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding AskedQuestion}" FontSize="12" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" />
+                    <c:Spinner IsVisible="{Binding Thinking}" Width="16" Height="16" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
+                    <SelectableTextBlock Text="{Binding Answer}" FontSize="15" LineHeight="23.25" TextWrapping="Wrap"
+                                         SelectionBrush="{DynamicResource Hl}" />
+                    <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SourceChip">
+                          <Button Theme="{StaticResource Surface}" Height="32" CornerRadius="4" Padding="8,0" Margin="-8,0,4,0"
+                                  Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).OpenSourceCommand}" CommandParameter="{Binding}">
+                            <StackPanel Orientation="Horizontal" Spacing="3">
+                              <c:Icon Glyph="play_arrow" Filled="True" Size="16" Foreground="{DynamicResource AccentText}" />
+                              <TextBlock Classes="num" Text="{Binding Label}" FontSize="14" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+              <Border Height="120" VerticalAlignment="Bottom" IsHitTestVisible="False" Name="Fade" />
+              <Border Width="560" Height="52" CornerRadius="8" Background="{DynamicResource Acrylic}" BorderBrush="{DynamicResource FlyStroke}" BorderThickness="1"
+                      BoxShadow="{DynamicResource ShadowLg}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24" Padding="16,0,8,0">
+                <Grid ColumnDefinitions="*,Auto,8,Auto">
+                  <TextBox Classes="bare" Text="{Binding Question}" PlaceholderText="Ask about this lecture" FontSize="14">
+                    <TextBox.KeyBindings>
+                      <KeyBinding Gesture="Enter" Command="{Binding AskCommand}" />
+                    </TextBox.KeyBindings>
+                  </TextBox>
+                  <Button Grid.Column="1" Theme="{StaticResource Surface}" Height="32" CornerRadius="4" Background="{DynamicResource Ctrl}" BorderBrush="{DynamicResource CtrlBorder}"
+                          BorderThickness="1" Padding="11,0,8,0" Command="{Binding PickScopeCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding Scope}" FontSize="14" VerticalAlignment="Center" />
+                      <c:Icon Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="3" Theme="{StaticResource Surface}" Width="36" Height="32" CornerRadius="4" HorizontalContentAlignment="Center"
+                          Command="{Binding AskCommand}" ToolTip.Tip="Ask">
+                    <c:Icon Glyph="send" Size="18" Foreground="{DynamicResource Fg3}" />
+                  </Button>
+                </Grid>
+              </Border>
+            </Panel>
+          </DockPanel>
+        </Grid>
+      </Border>
+    </DockPanel>
+  </Border>
+</UserControl>

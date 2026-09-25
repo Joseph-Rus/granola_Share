@@ -1,0 +1,150 @@
+<!-- The tray flyout (Surfaces, Windows 11 01): 360 px, Acrylic, a footer band like Quick Settings. Record is a split
+     button: the chevron switches class. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinPanel"
+             x:DataType="vm:PanelModel"
+             Width="360" ClipToBounds="False">
+  <UserControl.Styles>
+    <Style Selector="Button.row">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="MinHeight" Value="52" />
+    </Style>
+    <Style Selector="Button.row.selected">
+      <Setter Property="Background" Value="{DynamicResource Subtle}" />
+    </Style>
+    <Style Selector="Button.control">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource Acrylic}" BorderBrush="{DynamicResource FlyStroke}" BorderThickness="1" CornerRadius="8"
+          BoxShadow="{DynamicResource ShadowLg}" ClipToBounds="True">
+    <DockPanel>
+      <!-- Footer band -->
+      <Border DockPanel.Dock="Bottom" Height="48" Background="{DynamicResource Footer}" BorderBrush="{DynamicResource Sep}" BorderThickness="0,1,0,0"
+              Padding="16,0,6,0">
+        <Grid ColumnDefinitions="Auto,8,*,Auto">
+          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <Button Grid.Column="3" Theme="{StaticResource Surface}" Height="32" CornerRadius="4" Padding="10,0" Command="{Binding OpenAppCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Open Study Stash" FontSize="14" VerticalAlignment="Center" />
+              <c:Icon Glyph="open_in_new" Size="16" Foreground="{DynamicResource Fg}" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </Border>
+
+      <StackPanel Spacing="12" Margin="16">
+        <!-- Idle: Record as a split button -->
+        <StackPanel Spacing="8" IsVisible="{Binding IsIdle}">
+          <Border Height="48" CornerRadius="4" Background="{DynamicResource Accent}" ClipToBounds="True">
+            <Grid ColumnDefinitions="*,1,48">
+              <Button Theme="{StaticResource Surface}" Foreground="{DynamicResource OnAccent}" Padding="16,0" Command="{Binding RecordCommand}"
+                      IsEnabled="{Binding CanRecord}" ToolTip.Tip="Start recording">
+                <Grid ColumnDefinitions="Auto,12,*,Auto">
+                  <c:Icon Glyph="fiber_manual_record" Filled="True" Size="18" Foreground="{DynamicResource OnAccent}" />
+                  <TextBlock Grid.Column="2" Text="{Binding RecordLabel}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="3" Text="{Binding RecordShortcut}" FontSize="12" Opacity="0.8" VerticalAlignment="Center" />
+                </Grid>
+              </Button>
+              <Border Grid.Column="1" Background="{DynamicResource OnAccent}" Opacity="0.25" />
+              <Button Grid.Column="2" Theme="{StaticResource Surface}" HorizontalContentAlignment="Center" Command="{Binding SwitchClassCommand}" ToolTip.Tip="Switch class">
+                <c:Icon Glyph="expand_more" Size="20" Foreground="{DynamicResource OnAccent}" />
+              </Button>
+            </Grid>
+          </Border>
+          <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}" FontSize="12" Foreground="{DynamicResource Fg2}" Margin="0,-4,0,0" />
+        </StackPanel>
+
+        <!-- Recording, in a card -->
+        <Border IsVisible="{Binding IsRecording}" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1"
+                CornerRadius="8" Padding="16">
+          <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="Auto,8,*,Auto">
+              <Ellipse Width="8" Height="8" Fill="{DynamicResource Accent}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="{Binding RecordingLabel}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Grid.Column="3" Theme="{StaticResource Surface}" CornerRadius="4" Padding="4,1" Margin="0,-1,-4,-1" Command="{Binding ShowRecorderCommand}">
+                <TextBlock Text="Show recorder" FontSize="14" Foreground="{DynamicResource AccentText}" />
+              </Button>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,16,*">
+              <TextBlock Classes="num" Text="{Binding Elapsed}" FontFamily="{DynamicResource DisplayFont}" FontSize="36" FontWeight="Light" VerticalAlignment="Center" />
+              <c:Waveform Grid.Column="2" Height="28" Bars="20" Levels="{Binding Levels}" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="{Binding LastLine}" IsVisible="{Binding HasLastLine}" FontSize="14" LineHeight="20.3" TextWrapping="Wrap" Foreground="{DynamicResource Fg2}" />
+            <Grid ColumnDefinitions="*,8,*">
+              <Button Classes="control" Height="40" Command="{Binding PauseCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="{Binding PauseGlyph}" Filled="True" Size="18" Foreground="{DynamicResource Fg}" />
+                  <TextBlock Text="{Binding PauseLabel}" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Grid.Column="2" Theme="{StaticResource Surface}" Height="40" CornerRadius="4" Background="{DynamicResource Accent}"
+                      Foreground="{DynamicResource OnAccent}" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="stop" Filled="True" Size="18" Foreground="{DynamicResource OnAccent}" />
+                  <TextBlock Text="Stop" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Recent -->
+        <StackPanel IsVisible="{Binding HasRecent}" Spacing="8">
+          <TextBlock Text="Recent" FontSize="14" FontWeight="SemiBold" Margin="0,4,0,0" />
+          <ItemsControl ItemsSource="{Binding Recent}" Margin="-8,0,-8,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:LectureItem">
+                <Button Classes="row" Classes.selected="{Binding Selected}"
+                        Command="{Binding $parent[UserControl].((vm:PanelModel)DataContext).OpenLectureCommand}" CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="8,12,*,12,Auto">
+                    <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <c:Spinner IsVisible="{Binding Busy}" Width="12" Height="12" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Detail}" FontSize="12" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <!-- Fluent's ProgressBar: the accent over a hairline -->
+                      <Grid IsVisible="{Binding HasProgress}" Width="160" Height="3" HorizontalAlignment="Left" Margin="0,5,0,0" ColumnDefinitions="Auto,*">
+                        <Border Width="{Binding ProgressWidthWin}" Height="3" CornerRadius="2" Background="{DynamicResource Accent}" />
+                        <Border Grid.Column="1" Height="1" Background="{DynamicResource Fg3}" VerticalAlignment="Center" />
+                      </Grid>
+                    </StackPanel>
+                    <TextBlock Grid.Column="4" Classes="num" Text="{Binding Time}" FontSize="12" Foreground="{DynamicResource Fg3}" VerticalAlignment="Center" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Search: a Fluent text box look -->
+        <Button Classes="control" Height="32" Padding="11,0,8,0" HorizontalContentAlignment="Stretch" Command="{Binding SearchCommand}">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Text="Search notes and lectures" FontSize="14" Foreground="{DynamicResource Fg3}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding SearchShortcut}" FontSize="12" Foreground="{DynamicResource Fg3}" Margin="8,0,0,0" VerticalAlignment="Center" />
+            <c:Icon Grid.Column="2" Glyph="search" Size="16" Foreground="{DynamicResource Fg2}" Margin="8,0,0,0" />
+          </Grid>
+        </Button>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+</UserControl>

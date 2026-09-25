@@ -1,0 +1,262 @@
+<!-- Settings: the design's calm list look, in either system's colors. Sections on the left, one at a time on the right. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:StudyStash.App.Services"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.SettingsView"
+             x:DataType="s:SettingsModel">
+  <UserControl.Styles>
+    <Style Selector="Button.nav">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusControl}" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <Style Selector="Button.nav.on">
+      <Setter Property="Background" Value="{DynamicResource Fill2}" />
+    </Style>
+    <Style Selector="Button.nav.on TextBlock">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.push">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusControl}" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Background" Value="{DynamicResource Control}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Sep}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.default">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.field">
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusControl}" />
+      <Setter Property="Background" Value="{DynamicResource Control}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Sep}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="9,0" />
+    </Style>
+    <Style Selector="Border.field.bad">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="TextBlock.h">
+      <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="TextBlock.sub">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,18,0,6" />
+    </Style>
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="LineHeight" Value="19.5" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MaxWidth" Value="480" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="TextBlock.say">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,8,0,0" />
+      <Setter Property="MaxWidth" Value="480" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="{DynamicResource RadiusPanel}" />
+      <Setter Property="Background" Value="{DynamicResource Fill}" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+    <Style Selector="Border.card.on">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="200,*" Background="{DynamicResource Page}">
+    <Border Background="{DynamicResource Nav}" Padding="10,16">
+    <StackPanel Spacing="2">
+      <TextBlock Text="Settings" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Fg3}" Margin="10,0,0,8" />
+      <Button Classes="nav" Classes.on="{Binding OnLibrary}" Command="{Binding GoCommand}" CommandParameter="Library">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="dns" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Library" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+      <Button Classes="nav" Classes.on="{Binding OnRecording}" Command="{Binding GoCommand}" CommandParameter="Recording">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="mic" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Recording" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+      <Button Classes="nav" Classes.on="{Binding OnClasses}" Command="{Binding GoCommand}" CommandParameter="Classes">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="schedule" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Classes" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+      <Button Classes="nav" Classes.on="{Binding OnClaude}" Command="{Binding GoCommand}" CommandParameter="Claude">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="auto_awesome" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Claude" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+      <Button Classes="nav" Classes.on="{Binding OnGeneral}" Command="{Binding GoCommand}" CommandParameter="General">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="settings" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="General" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+    </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="36,28,36,28">
+        <!-- Library -->
+        <StackPanel IsVisible="{Binding OnLibrary}">
+          <TextBlock Classes="h" Text="Library" />
+          <TextBlock Classes="body" Text="{Binding LibraryLine}" />
+          <TextBlock Classes="sub" Text="Connect to a library" />
+          <Grid ColumnDefinitions="*,10,160" MaxWidth="480" HorizontalAlignment="Left">
+            <Border Classes="field"><TextBox Classes="bare" Text="{Binding Address}" PlaceholderText="http://mac-mini:8787" FontSize="13" /></Border>
+            <Border Grid.Column="2" Classes="field"><TextBox Classes="bare" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontSize="13" /></Border>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
+            <Button Classes="push default" Command="{Binding ConnectCommand}"><TextBlock Text="Connect" FontSize="13" FontWeight="Medium" /></Button>
+            <Button Classes="push" Command="{Binding OpenLibraryPageCommand}"><TextBlock Text="Open the library's page" FontSize="13" /></Button>
+          </StackPanel>
+          <TextBlock Classes="say" Text="{Binding LibrarySay}" IsVisible="{Binding LibrarySay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="sub" Text="Your name in the library" />
+          <Border Classes="field" Width="240" HorizontalAlignment="Left"><TextBox Classes="bare" Text="{Binding DisplayName}" FontSize="13" /></Border>
+          <TextBlock Classes="say" IsVisible="{Binding LibraryHere}" Text="This computer is a library too: its service starts when you log in, and the page above has its own settings (the notes model, classes, the password)." />
+        </StackPanel>
+
+        <!-- Recording -->
+        <StackPanel IsVisible="{Binding OnRecording}">
+          <TextBlock Classes="h" Text="Recording" />
+          <TextBlock Classes="body" Text="Whisper writes down each lecture on this computer. The recording never leaves it; the library gets the transcript." />
+          <TextBlock Classes="sub" Text="Transcription model" />
+          <ItemsControl ItemsSource="{Binding Models}" MaxWidth="480" HorizontalAlignment="Left">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="s:ModelChoice">
+                <Button Theme="{StaticResource Surface}" CornerRadius="{DynamicResource RadiusPanel}" Margin="0,0,0,8" Padding="0"
+                        Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).PickModelCommand}" CommandParameter="{Binding}">
+                  <Border Classes="card" Classes.on="{Binding Chosen}" Margin="0">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding About}" FontSize="12" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <c:Icon Grid.Column="1" IsVisible="{Binding Here}" Glyph="check_circle" Filled="True" Size="18" Foreground="{DynamicResource Accent}" Margin="10,0,0,0" />
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Classes="say" Text="{Binding ModelLine}" />
+          <TextBlock Classes="sub" Text="Language" />
+          <Border Classes="field" Width="240" HorizontalAlignment="Left"><TextBox Classes="bare" Text="{Binding Language}" PlaceholderText="Found for each lecture (or en, es, fr…)" FontSize="13" /></Border>
+          <CheckBox IsVisible="{Binding CanRecordComputerAudio}" IsChecked="{Binding ComputerAudio}" Margin="0,16,0,0">
+            <TextBlock Text="Also record what this computer plays (a lecture on Zoom or Teams)" FontSize="13" />
+          </CheckBox>
+          <TextBlock Classes="sub" Text="Keep recordings" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Border Classes="field" Width="64"><TextBox Classes="bare" Text="{Binding KeepAudio}" FontSize="13" /></Border>
+            <TextBlock Text="days after they're filed (0 keeps them). The notes and transcript stay." FontSize="12" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+          </StackPanel>
+          <CheckBox IsChecked="{Binding Shortcuts}" Margin="0,16,0,0">
+            <TextBlock Text="Shortcuts that work from any app (search, and Record)" FontSize="13" />
+          </CheckBox>
+        </StackPanel>
+
+        <!-- Classes -->
+        <StackPanel IsVisible="{Binding OnClasses}">
+          <TextBlock Classes="h" Text="Classes" />
+          <TextBlock Classes="body" Text="When your classes meet: Record picks the one that's on. Write the days and times like “Tue Thu 10:00–11:15”." />
+          <ItemsControl ItemsSource="{Binding Rows}" Margin="0,16,0,0" MaxWidth="520" HorizontalAlignment="Left">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="s:TimetableRow">
+                <Grid ColumnDefinitions="Auto,10,140,10,*,6,Auto" Margin="0,0,0,8">
+                  <Ellipse Width="8" Height="8" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <Border Grid.Column="4" Classes="field" Classes.bad="{Binding Bad}">
+                    <TextBox Classes="bare" Text="{Binding Times}" PlaceholderText="Not in the timetable" FontSize="13" LostFocus="OnTimesLostFocus" />
+                  </Border>
+                  <Button Grid.Column="6" Theme="{StaticResource Surface}" Width="28" Height="28" CornerRadius="{DynamicResource RadiusControl}" HorizontalContentAlignment="Center"
+                          Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).RemoveClassCommand}" CommandParameter="{Binding}" ToolTip.Tip="Take it off the timetable">
+                    <c:Icon Glyph="close" Size="15" Foreground="{DynamicResource Fg3}" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid ColumnDefinitions="158,10,*,10,Auto" MaxWidth="520" HorizontalAlignment="Left" Margin="0,4,0,0">
+            <Border Classes="field"><TextBox Classes="bare" Text="{Binding NewClass}" PlaceholderText="A new class" FontSize="13" /></Border>
+            <Border Grid.Column="2" Classes="field"><TextBox Classes="bare" Text="{Binding NewTimes}" PlaceholderText="Tue Thu 10:00–11:15" FontSize="13" /></Border>
+            <Button Grid.Column="4" Classes="push" Command="{Binding AddClassCommand}"><TextBlock Text="Add" FontSize="13" /></Button>
+          </Grid>
+          <TextBlock Classes="say" Text="{Binding ClassesSay}" IsVisible="{Binding ClassesSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <!-- Claude -->
+        <StackPanel IsVisible="{Binding OnClaude}">
+          <TextBlock Classes="h" Text="Claude" />
+          <TextBlock Classes="body" Text="Let Claude read your lectures: it can search your notes and transcripts, read a lecture, and quiz you. It can't change anything." />
+
+          <TextBlock Classes="sub" Text="Claude Code and Claude Desktop, on this computer" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Classes="push default" Command="{Binding AddToClaudeCodeCommand}"><TextBlock Text="Add to Claude Code" FontSize="13" FontWeight="Medium" /></Button>
+            <Button Classes="push" Command="{Binding AddToClaudeDesktopCommand}"><TextBlock Text="Add to Claude Desktop" FontSize="13" /></Button>
+          </StackPanel>
+          <TextBlock Classes="say" Text="{Binding ClaudeSay}" IsVisible="{Binding ClaudeSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="say" Text="Or add it by hand:" />
+          <Border CornerRadius="{DynamicResource RadiusControl}" Background="{DynamicResource Fill}" Padding="10,8" Margin="0,6,0,0" MaxWidth="520" HorizontalAlignment="Left">
+            <SelectableTextBlock Text="{Binding ClaudeCommand}" FontFamily="SF Mono, Menlo, Cascadia Mono, Consolas, monospace" FontSize="12" TextWrapping="Wrap" />
+          </Border>
+
+          <TextBlock Classes="sub" Text="Claude on the web and the Claude apps" />
+          <TextBlock Classes="body" IsVisible="{Binding ClaudeNeedsNewLibrary}" Text="Your library runs an older Study Stash. Update it to connect Claude on the web." />
+          <StackPanel IsVisible="{Binding !ClaudeNeedsNewLibrary}">
+            <TextBlock Classes="body" Text="Your library can open a web address for Claude with Tailscale Funnel. Claude signs in with your library password; nothing else of the library is on the internet." />
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
+              <ToggleSwitch IsChecked="{Binding WebOn, Mode=OneWay}" Command="{Binding ToggleWebCommand}" IsEnabled="{Binding !WebBusy}" OnContent="On" OffContent="Off" />
+              <c:Spinner IsVisible="{Binding WebBusy}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Classes="say" Text="{Binding WebSay}" IsVisible="{Binding WebSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <StackPanel IsVisible="{Binding HasWebUrl}" Margin="0,10,0,0">
+              <TextBlock Classes="body" Text="In claude.ai, open Settings → Connectors → Add custom connector, and paste:" />
+              <Border CornerRadius="{DynamicResource RadiusControl}" Background="{DynamicResource Fill}" Padding="10,8" Margin="0,6,0,0" HorizontalAlignment="Left">
+                <SelectableTextBlock Text="{Binding WebUrl}" FontFamily="SF Mono, Menlo, Cascadia Mono, Consolas, monospace" FontSize="12" />
+              </Border>
+            </StackPanel>
+            <TextBlock Classes="sub" Text="Connected" IsVisible="{Binding HasConnections}" />
+            <ItemsControl ItemsSource="{Binding Connections}" MaxWidth="480" HorizontalAlignment="Left">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="s:ClaudeConnection">
+                  <Border Classes="card">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Detail}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="push" VerticalAlignment="Center"
+                              Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).DisconnectCommand}" CommandParameter="{Binding}">
+                        <TextBlock Text="Disconnect" FontSize="13" />
+                      </Button>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- General -->
+        <StackPanel IsVisible="{Binding OnGeneral}">
+          <TextBlock Classes="h" Text="General" />
+          <CheckBox IsChecked="{Binding StartAtLogin}" Margin="0,8,0,0">
+            <TextBlock Text="Open Study Stash when you log in (to the menu bar or tray)" FontSize="13" />
+          </CheckBox>
+          <TextBlock Classes="say" Text="{Binding Version, StringFormat='Study Stash {0}'}" Margin="0,24,0,0" />
+          <Button Classes="push" Margin="0,12,0,0" Command="{Binding QuitCommand}"><TextBlock Text="Quit Study Stash" FontSize="13" /></Button>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

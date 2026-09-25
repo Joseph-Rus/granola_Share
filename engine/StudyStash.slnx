@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/StudyStash.App/StudyStash.App.csproj" />
     <Project Path="src/StudyStash.Audio/StudyStash.Audio.csproj" />
     <Project Path="src/StudyStash.Core/StudyStash.Core.csproj" />
     <Project Path="src/StudyStash.Engine/StudyStash.Engine.csproj" />
     <Project Path="src/StudyStash.Library/StudyStash.Library.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/StudyStash.App.Tests/StudyStash.App.Tests.csproj" />
     <Project Path="tests/StudyStash.Core.Tests/StudyStash.Core.Tests.csproj" />
   </Folder>
 </Solution>

@@ -206,6 +206,21 @@ public class RecordingTests
         Assert.Equal(new DateTime(2026, 9, 29, 10, 0, 0), t.Next(new DateTime(2026, 9, 24, 10, 30, 0))?.Starts);
     }
 
+    [Theory]
+    [InlineData("Tue Thu 10:00–11:15", "Tue 10:00–11:15|Thu 10:00–11:15")]
+    [InlineData("Mon Wed Fri 9-9:50", "Mon 9:00–9:50|Wed 9:00–9:50|Fri 9:00–9:50")]
+    [InlineData("MWF 9:00-9:50", "Mon 9:00–9:50|Wed 9:00–9:50|Fri 9:00–9:50")]
+    [InlineData("TTh 2-3:15", "Tue 14:00–15:15|Thu 14:00–15:15")]
+    [InlineData("tuesday 2pm to 3:15pm", "Tue 14:00–15:15")]
+    [InlineData("Wed 11:30-1pm", "Wed 11:30–13:00")]
+    [InlineData("sometime", "")]
+    [InlineData("Mon 10-9", "")]
+    public void Class_times_are_read_as_people_write_them(string text, string expected)
+    {
+        var times = ClassTime.ParseMany(text);
+        Assert.Equal(expected, times is null ? "" : string.Join("|", times.Select(t => t.Describe())));
+    }
+
     [Fact]
     public void Timetable_saves_and_follows_the_librarys_classes()
     {
