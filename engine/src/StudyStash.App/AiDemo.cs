@@ -17,6 +17,16 @@ public static class AiDemo
         ],
         Notes: "ollama", Ask: "claude", Fallback: true, Problems: []);
 
+    /// <summary>The design's connected tools: Claude Code on this computer, and Claude signed in from the web.</summary>
+    public static ToolAccessInfo Access() => new(
+        On: true, Reading: new ReadingScopes(),
+        Connections:
+        [
+            new ToolConnection("this-computer", "Claude Code", "local") { Created = 1_726_000_000 },
+            new ToolConnection("sam-web", "Claude", "signin") { Created = 1_726_000_000, LastUsed = 1_726_600_000 },
+        ])
+    { PublicUrl = "https://sams-mini.tailnet.ts.net", HasPassword = true };
+
     /// <summary>Answers <see cref="Overview"/> and nothing else: enough to draw the panes, never a real library.</summary>
     sealed class Library : IAiLibrary
     {
@@ -34,6 +44,8 @@ public static class AiDemo
         public Task<RewriteInfo?> RewriteCancelAsync(string lecture) => Task.FromResult<RewriteInfo?>(null);
         public Task<RewriteInfo?> RewriteKeepAsync(string lecture) => Task.FromResult<RewriteInfo?>(null);
         public Task<RewriteInfo?> RewriteUseAsync(string lecture) => Task.FromResult<RewriteInfo?>(null);
+        public Task<ToolAccessInfo?> AccessAsync() => Task.FromResult<ToolAccessInfo?>(Access());
+        public Task<ToolAccessInfo?> SetAccessAsync(bool? on = null, ReadingScopes? reading = null) => Task.FromResult<ToolAccessInfo?>(Access());
     }
 
     /// <summary>The AI engines pane, loaded: notes on Ollama, questions on Claude Code, the fallback on.</summary>

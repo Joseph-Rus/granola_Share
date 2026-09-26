@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.Core;
 
@@ -57,6 +58,10 @@ public sealed class ClaudeAccess
         public string PublicUrl { get; set; } = "";
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? TailnetUrl { get; set; }
+        /// <summary>Off stops every connected tool at once, without disconnecting them.</summary>
+        public bool ToolsOn { get; set; } = true;
+        /// <summary>What Claude and other MCP tools may read, while tool access is on.</summary>
+        public ReadingScopes Reading { get; set; } = new();
     }
 
     readonly string path;
@@ -148,6 +153,51 @@ public sealed class ClaudeAccess
             {
                 Fresh();
                 state.TailnetUrl = value?.TrimEnd('/');
+                Save();
+            }
+        }
+    }
+
+    /// <summary>Off stops every connected tool at once (<see cref="Check"/> answers null while it's off), without
+    /// forgetting who's connected.</summary>
+    public bool ToolsOn
+    {
+        get
+        {
+            lock (gate)
+            {
+                Fresh();
+                return state.ToolsOn;
+            }
+        }
+        set
+        {
+            lock (gate)
+            {
+                Fresh();
+                state.ToolsOn = value;
+                Save();
+            }
+        }
+    }
+
+    /// <summary>What Claude and other MCP tools may read right now.</summary>
+    public ReadingScopes Reading
+    {
+        get
+        {
+            lock (gate)
+            {
+                Fresh();
+                return state.Reading;
+            }
+        }
+        set
+        {
+            lock (gate)
+            {
+                Fresh();
+                state.Reading = value;
                 Save();
             }
         }
@@ -278,7 +328,8 @@ public sealed class ClaudeAccess
         return (token, g);
     }
 
-    /// <summary>The connection a bearer token belongs to, if it may read now.</summary>
+    /// <summary>The connection a bearer token belongs to, if it may read now. Null while tool access is off, even
+    /// for a token that would otherwise still work: that's what turns every connected tool off at once.</summary>
     public ClaudeGrant? Check(string bearer)
     {
         if (bearer.Length == 0) return null;
@@ -286,6 +337,7 @@ public sealed class ClaudeAccess
         lock (gate)
         {
             Fresh();
+            if (!state.ToolsOn) return null;
             var g = state.Grants.FirstOrDefault(x => CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(x.AccessHash), Encoding.ASCII.GetBytes(h)));
             if (g is null || g.AccessExpires < Now) return null;
             if (Now - g.LastUsed > 60)

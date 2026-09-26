@@ -108,6 +108,8 @@ public interface IAiLibrary
     Task<RewriteInfo?> RewriteCancelAsync(string lecture);
     Task<RewriteInfo?> RewriteKeepAsync(string lecture);
     Task<RewriteInfo?> RewriteUseAsync(string lecture);
+    Task<ToolAccessInfo?> AccessAsync();
+    Task<ToolAccessInfo?> SetAccessAsync(bool? on = null, ReadingScopes? reading = null);
 }
 
 /// <summary>The library's AI over its API (/api/v2/ai), the way the Study Stash app reads it. Like
@@ -188,4 +190,14 @@ public sealed class AiRemote(string serverUrl, string key, HttpClient? http = nu
 
     public async Task<RewriteInfo?> RewriteUseAsync(string lecture) =>
         As<RewriteInfo>(await SendAsync(HttpMethod.Post, $"/rewrite/{Seg(lecture)}/use"));
+
+    public async Task<ToolAccessInfo?> AccessAsync() => As<ToolAccessInfo>(await SendAsync(HttpMethod.Get, "/access"));
+
+    public async Task<ToolAccessInfo?> SetAccessAsync(bool? on = null, ReadingScopes? reading = null)
+    {
+        var body = new JsonObject();
+        if (on is not null) body["on"] = on.Value;
+        if (reading is not null) body["reading"] = JsonSerializer.SerializeToNode(reading, Options);
+        return As<ToolAccessInfo>(await SendAsync(HttpMethod.Post, "/access", body));
+    }
 }

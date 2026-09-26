@@ -12,6 +12,7 @@ namespace StudyStash.App.Tests;
 public sealed class FakeAiLibrary : IAiLibrary
 {
     public AiOverview? Overview { get; set; }
+    public ToolAccessInfo? Access { get; set; }
     public List<string> Calls { get; } = [];
     public List<(string? Notes, string? Ask, bool? Fallback)> DefaultsCalls { get; } = [];
     public List<AskRequest> AskRequests { get; } = [];
@@ -24,6 +25,8 @@ public sealed class FakeAiLibrary : IAiLibrary
     public Func<string?, string?, bool?, AiOverview?>? OnDefaults { get; set; }
     public Func<AskRequest, AskReply?>? OnAsk { get; set; }
     public Func<string, RewriteInfo?>? OnRewrite { get; set; }
+    public Func<ToolAccessInfo?>? OnAccess { get; set; }
+    public Func<bool?, ReadingScopes?, ToolAccessInfo?>? OnSetAccess { get; set; }
 
     static EngineInfo Row(AiOverview o, string id) => o.Engines.First(e => e.Id == id);
 
@@ -130,6 +133,21 @@ public sealed class FakeAiLibrary : IAiLibrary
     {
         Calls.Add($"rewrite-use:{lecture}");
         return Task.FromResult<RewriteInfo?>(new RewriteInfo(lecture, "none"));
+    }
+
+    public Task<ToolAccessInfo?> AccessAsync()
+    {
+        Calls.Add("access");
+        return Task.FromResult(OnAccess is not null ? OnAccess() : Access);
+    }
+
+    public Task<ToolAccessInfo?> SetAccessAsync(bool? on = null, ReadingScopes? reading = null)
+    {
+        Calls.Add("set-access");
+        if (OnSetAccess is not null) return Task.FromResult(OnSetAccess(on, reading));
+        if (Access is null) return Task.FromResult<ToolAccessInfo?>(null);
+        Access = Access with { On = on ?? Access.On, Reading = reading ?? Access.Reading };
+        return Task.FromResult<ToolAccessInfo?>(Access);
     }
 }
 
