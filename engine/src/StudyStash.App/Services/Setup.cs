@@ -38,10 +38,10 @@ public static class Setup
 
         m.OnAllowMic = () => Task.Run(() =>
         {
-            Microphones.Ask();
+            host.AskMic();
             Avalonia.Threading.Dispatcher.UIThread.Post(() => Refresh(m, host));
         });
-        m.OnMicSettings = () => Dialogs.OpenUrl(Microphones.SettingsUrl);
+        m.OnMicSettings = () => Dialogs.OpenUrl(host.MicSettingsUrl);
         m.OnTaskbarSettings = () => Dialogs.OpenUrl("ms-settings:taskbar");
         m.OnRetryModel = () => _ = host.DownloadModelAsync();
         m.OnConnect = () => ConnectAsync(m, host);
@@ -67,7 +67,7 @@ public static class Setup
 
     public static void Refresh(SetupModel m, AppHost host)
     {
-        var mic = Microphones.Access();
+        var mic = host.MicAccess();
         m.MicAllowed = mic == MicAccess.Allowed;
         m.MicDenied = mic is MicAccess.Denied or MicAccess.Restricted;
         m.ModelReady = host.ModelReady;

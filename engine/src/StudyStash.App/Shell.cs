@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
@@ -38,6 +39,12 @@ public static partial class Shell
     static Floating? panelWindow, recorderWindow, quickWindow;
     static Window? mainWindow, setupWindow, settingsWindow;
     static DispatcherTimer? ticker;
+    /// <summary>Quitting has begun: windows close for real, and nothing refreshes.</summary>
+    static bool quitting;
+    static DateTime lastOops;
+    /// <summary>Kept for the app's life: a registration nobody refers to is collected, and stops listening.</summary>
+    static PosixSignalRegistration? terminate;
+    static int terminations;
 
     /// <summary>The class Record will use, picked by hand; null follows the timetable.</summary>
     static string? chosenClass;
@@ -49,25 +56,43 @@ public static partial class Shell
     {
         app = application;
         life = desktop;
-        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         string home = Program.Home;
-        Func<IAudioSource>? mic = Environment.GetEnvironmentVariable("STUDYSTASH_MIC_FILE") is { Length: > 0 } wav && File.Exists(wav)
-            ? () => new FileMicrophone(wav) : null;
-        host = new AppHost(home, mic, laptop: new LaptopHost(), log: Program.Log);
+        // First, so a copy started a moment after this one finds it listening (what it says waits for the UI thread).
+        Desktop.Listen(home, OnHandOff, stop.Token);
+        Dispatcher.UIThread.UnhandledException += OnUnhandled;
+        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        // The system quitting the app (logging out, the Dock's Quit): tidy up and let it go on.
+        desktop.ShutdownRequested += (_, _) => CleanUp();
+        // Told to stop (kill, launchd): quit properly, so a lecture being recorded is saved. Told twice, just stop.
+        if (!OperatingSystem.IsWindows())
+            terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, c =>
+            {
+                if (Interlocked.Increment(ref terminations) > 1) return;
+                c.Cancel = true;
+                Dispatcher.UIThread.Post(() => Quit());
+            });
+        // A Mac: opening the app again (Finder, Spotlight, the Dock) while it runs.
+        if (application.TryGetFeature<IActivatableLifetime>() is { } activatable)
+            activatable.Activated += (_, e) =>
+            {
+                if (e.Kind == ActivationKind.Reopen) OnHandOff("show");
+            };
+        else if (OperatingSystem.IsMacOS())
+            Program.Log("[app] this Mac doesn't say when the app is opened again; a second copy still hands off");
+        host = new AppHost(home, laptop: new LaptopHost(), log: Program.Log);
         host.Changed += () => Dispatcher.UIThread.Post(Refresh);
         host.Heard += (l, lines) => Dispatcher.UIThread.Post(() => AddHeard(l, lines));
         host.Filed += l => Dispatcher.UIThread.Post(() => Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",
             l.FiledTitle.Length > 0 ? l.FiledTitle : "The notes are written.", "Open note", () => OpenLecture(l.Id)));
-        host.Problem += why => Dispatcher.UIThread.Post(() => Toast("Recording paused", why, null, null));
+        host.Problem += (title, why) => Dispatcher.UIThread.Post(() => Toast(title, why, null, null));
+        if (host.PretendMic) Program.Log("[app] recording from a pretend microphone (STUDYSTASH_MIC_FILE)");
         Wire();
         host.Start();
         MakeTray();
         if (host.Settings.Shortcuts && !Hotkeys.Register(OnShortcut)) Program.Log("[app] the shortcuts are taken by another app");
-        Desktop.Listen(home, OnHandOff, stop.Token);
         ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => Tick());
         ticker.Start();
         Refresh();
-        desktop.ShutdownRequested += (_, _) => Quit();
         if (!host.Settings.SetupDone) ShowSetup();
         else if (!Program.Background) ShowLibrary();
         if (SelfTest.Dir is not null) SelfTest.Run();
@@ -91,9 +116,29 @@ public static partial class Shell
 
     static void OnHandOff(string message)
     {
-        if (message == "record") ToggleRecording();
+        if (quitting) return;
+        Program.Log($"[app] another copy said \"{message}\"");
+        if (message == "record" && host.Settings.SetupDone) ToggleRecording();
         else if (!host.Settings.SetupDone) ShowSetup();
         else ShowLibrary();
+    }
+
+    /// <summary>Something the app didn't expect, on the UI thread: it's written down and said, and the app carries on.</summary>
+    static void OnUnhandled(object? sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Program.Log($"[error] {e.Exception}");
+        e.Handled = true;
+        if (quitting || DateTime.UtcNow - lastOops < TimeSpan.FromSeconds(10)) return;
+        lastOops = DateTime.UtcNow;
+        try
+        {
+            string first = e.Exception.Message.Split('\n', 2)[0].Trim();
+            Toast("Something went wrong", first.Length > 0 ? first : e.Exception.GetType().Name, null, null);
+        }
+        catch (Exception again)
+        {
+            Program.Log($"[error] couldn't say so: {again.Message}");
+        }
     }
 
     static void OnShortcut(Shortcut s)
@@ -102,12 +147,35 @@ public static partial class Shell
         else ToggleRecording();
     }
 
-    public static void Quit()
+    /// <summary>Quit Study Stash, with an exit code (the self-test's pass or fail). Only the first call counts.</summary>
+    public static void Quit(int code = 0)
     {
+        if (quitting) return;
+        CleanUp();
+        life.Shutdown(code);
+    }
+
+    /// <summary>Everything quitting does before the app goes, once: the recording is saved, Whisper and the sender stop,
+    /// the icon goes, and the settings are written.</summary>
+    static void CleanUp()
+    {
+        if (quitting) return;
+        quitting = true;
+        ticker?.Stop();
         stop.Cancel();
-        host.Dispose();
+        try
+        {
+            host.Dispose();
+        }
+        catch (Exception e)
+        {
+            Program.Log($"[error] stopping: {e}");
+        }
         tray?.Dispose();
-        life.Shutdown();
+        tray = null;
+        Player.Stop();
+        host.Save(_ => { });
+        Program.Log("[app] quitting");
     }
 
     // --- the tray ---------------------------------------------------------------------------------------------------
@@ -150,7 +218,7 @@ public static partial class Shell
         Item("Open Study Stash", ShowLibrary);
         Item("Settings…", ShowSettings);
         menu.Add(new NativeMenuItemSeparator());
-        Item("Quit Study Stash", Quit);
+        Item("Quit Study Stash", () => Quit());
         if (OperatingSystem.IsWindows()) tray.Menu = menu;
         TrayIcon.SetIcons(app, new TrayIcons { tray });
     }
@@ -252,7 +320,8 @@ public static partial class Shell
         var l = host.StopRecording();
         chosenClass = null;
         recorderWindow?.Hide();
-        if (l is not null) Toast("Recording saved", "Study Stash is writing it down; the library files it and writes your notes.", null, null);
+        if (l is { State: LectureState.Failed }) Toast(l.Error, "Its sound file is damaged, so it can't be written down.", null, null);
+        else if (l is not null) Toast("Recording saved", "Study Stash is writing it down; the library files it and writes your notes.", null, null);
         Refresh();
     }
 
@@ -394,6 +463,7 @@ public static partial class Shell
         };
         w.Closing += (_, e) =>
         {
+            if (quitting) return;
             e.Cancel = true;
             w.Hide();
         };
@@ -463,9 +533,10 @@ public static partial class Shell
         }
         w.Closing += (_, e) =>
         {
+            if (quitting) return;
             e.Cancel = true;
             w.Hide();
-            Desktop.ShowInDock(false);
+            UpdateDock();
         };
         return mainWindow = w;
     }
@@ -485,8 +556,8 @@ public static partial class Shell
         }
         var w = MainWindow();
         library.DrawChrome = false;
-        Desktop.ShowInDock(true);
         w.Show();
+        UpdateDock();
         w.Activate();
         Desktop.Activate();
         _ = LoadLibraryAsync();
@@ -513,21 +584,34 @@ public static partial class Shell
             w.Background = Brushes.Transparent;
             w.Opened += (_, _) => MicaIfAvailable(w);
         }
+        var model = setup;
         setup.OnFinish = () =>
         {
             host.Save(s => s.SetupDone = true);
             w.Close();
-            if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) Desktop.StartAtLogin(true, host.Home);
+            // Only when the student ticked it: starting at login changes this computer.
+            if (model.StartAtLogin)
+            {
+                try
+                {
+                    host.LoginItems.StartAtLogin(true, host.Home);
+                }
+                catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    Program.Log($"[app] start at login: {e.Message}");
+                }
+            }
             ShowLibrary();
         };
         w.Closed += (_, _) =>
         {
             setupWindow = null;
-            Desktop.ShowInDock(mainWindow?.IsVisible == true);
+            if (setup == model) setup = null;
+            UpdateDock();
         };
         setupWindow = w;
-        Desktop.ShowInDock(true);
         w.Show();
+        UpdateDock();
         w.Activate();
         Desktop.Activate();
     }
@@ -550,14 +634,19 @@ public static partial class Shell
         {
             settingsWindow = null;
             model.Dispose();
-            Desktop.ShowInDock(mainWindow?.IsVisible == true);
+            UpdateDock();
         };
         settingsWindow = w;
-        Desktop.ShowInDock(true);
         w.Show();
+        UpdateDock();
         w.Activate();
         Desktop.Activate();
     }
+
+    /// <summary>A Mac shows the app in the Dock (and ⌘Tab) while the library, setup or Settings is open, and keeps it
+    /// to the menu bar otherwise.</summary>
+    static void UpdateDock() =>
+        Desktop.ShowInDock(!quitting && (mainWindow?.IsVisible == true || setupWindow?.IsVisible == true || settingsWindow?.IsVisible == true));
 
     /// <summary>A notification in the design's look: top right on a Mac, above the tray on Windows. It goes by itself.</summary>
     public static void Toast(string title, string text, string? action, Action? run)
@@ -597,6 +686,7 @@ public static partial class Shell
 
     static void Refresh()
     {
+        if (quitting) return;
         var live = host.Recorder.Current;
         liveId = live?.Id;
         bool recording = live is not null;
