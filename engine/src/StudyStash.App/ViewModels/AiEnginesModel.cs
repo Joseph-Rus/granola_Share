@@ -44,7 +44,10 @@ public sealed partial class AiEngineRow : ObservableObject
     public string Model { get; init; } = "";
     public List<ModelOption> Models { get; init; } = [];
     public List<AiModelChoice> ModelChoices { get; internal set; } = [];
+    public bool HasModels => ModelChoices.Count > 0;
     public string Site { get; init; } = "";
+    /// <summary>The first row in its group shows no separator above it.</summary>
+    public bool First { get; internal set; }
 
     /// <summary>Ready to shown rows: Sign in / Start / Download / Check / Get it, whichever this row's state needs.</summary>
     public IAsyncRelayCommand ActCommand { get; internal set; } = null!;
@@ -151,7 +154,7 @@ public sealed partial class AiEnginesModel : ObservableObject
             foreach (var e in overview.Engines)
             {
                 var row = BuildRow(e);
-                if (e.Id == "ollama" || e.Installed) Engines.Add(row);
+                if (e.Id == "ollama" || e.Installed) { row.First = Engines.Count == 0; Engines.Add(row); }
                 else AddChoices.Add(row);
             }
             OnPropertyChanged(nameof(HasAddChoices));

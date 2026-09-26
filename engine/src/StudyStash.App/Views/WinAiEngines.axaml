@@ -1,0 +1,165 @@
+<!-- Settings → AI engines (design 13, Windows): who writes the notes and who answers questions, every engine's state
+     and what to do about it, and the Ollama fallback. The pane's own padding and scrolling; the settings window is
+     the host's. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinAiEngines"
+             x:DataType="vm:AiEnginesModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="36,28,36,20" Spacing="4" MaxWidth="680">
+
+      <TextBlock Classes="ai-title" Text="AI engines" />
+      <TextBlock Classes="ai-sub" MaxWidth="560" Margin="0,4,0,0"
+                 Text="Notes are written after each lecture. Answers come while you ask. Engines run on your library, and you can set them up there or from this laptop." />
+
+      <!-- Who does what -->
+      <TextBlock Classes="ai-section" Text="Who does what" Margin="0,18,0,8" />
+      <Border Classes="ai-card">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="edit_note" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Writes your notes" />
+            <TextBlock Classes="ai-row-sub" Text="After each lecture, on your library" />
+          </StackPanel>
+          <Button Grid.Column="3" Classes="ai-select-btn" VerticalAlignment="Center">
+            <Border Classes="ai-select">
+              <Grid ColumnDefinitions="*,8,Auto">
+                <TextBlock Text="{Binding SelectedNotesName}" TextTrimming="CharacterEllipsis" />
+                <c:Icon Grid.Column="2" Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" />
+              </Grid>
+            </Border>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}" ItemsSource="{Binding NotesChoices}">
+                <MenuFlyout.ItemTemplate>
+                  <DataTemplate x:DataType="vm:EngineChoice">
+                    <MenuItem Classes="ai-item" Header="{Binding Name}" Command="{Binding Pick}" />
+                  </DataTemplate>
+                </MenuFlyout.ItemTemplate>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+      <Border Classes="ai-card" Margin="0,8,0,0">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="forum" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Answers your questions" />
+            <TextBlock Classes="ai-row-sub" Text="Ask bar, recorder chat and quick panel" />
+          </StackPanel>
+          <Button Grid.Column="3" Classes="ai-select-btn" VerticalAlignment="Center">
+            <Border Classes="ai-select">
+              <Grid ColumnDefinitions="*,8,Auto">
+                <TextBlock Text="{Binding SelectedAskName}" TextTrimming="CharacterEllipsis" />
+                <c:Icon Grid.Column="2" Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" />
+              </Grid>
+            </Border>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}" ItemsSource="{Binding AskChoices}">
+                <MenuFlyout.ItemTemplate>
+                  <DataTemplate x:DataType="vm:EngineChoice">
+                    <MenuItem Classes="ai-item" Header="{Binding Name}" Command="{Binding Pick}" />
+                  </DataTemplate>
+                </MenuFlyout.ItemTemplate>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- Engines -->
+      <Grid ColumnDefinitions="*,Auto" Margin="0,18,0,8">
+        <TextBlock Classes="ai-section" Text="Engines" />
+        <Button Grid.Column="1" Classes="ai-textbtn" IsVisible="{Binding HasAddChoices}">
+          <TextBlock Classes="ai-link" Text="Add an engine" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}" ItemsSource="{Binding AddChoices}">
+              <MenuFlyout.ItemTemplate>
+                <DataTemplate x:DataType="vm:AiEngineRow">
+                  <MenuItem Classes="ai-item" Command="{Binding AddCommand}">
+                    <MenuItem.Header>
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name, StringFormat='Get {0}'}" FontSize="14" />
+                        <TextBlock Text="{Binding About}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+                      </StackPanel>
+                    </MenuItem.Header>
+                  </MenuItem>
+                </DataTemplate>
+              </MenuFlyout.ItemTemplate>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Engines}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AiEngineRow">
+            <Border Classes="ai-card" Margin="{Binding First, Converter={x:Static c:Converters.FirstCardMargin}}">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+                <c:Icon Glyph="{Binding Icon}" Size="20" />
+                <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Classes="ai-row-title" Text="{Binding Name}" />
+                  <TextBlock Classes="ai-row-sub" Text="{Binding About}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Ellipse Classes="ai-dot" Classes.good="{Binding Good}" Classes.warn="{Binding Warn}" />
+                    <TextBlock Classes="ai-state" Classes.warn="{Binding Warn}" Text="{Binding StateWords}" />
+                  </StackPanel>
+                  <Button Classes="ai-pillbtn" Command="{Binding ActCommand}" IsVisible="{Binding !NeedsOptions}">
+                    <Border Classes="ai-pill" Classes.primary="{Binding IsPrimary}">
+                      <TextBlock Text="{Binding ActionWords}" />
+                    </Border>
+                  </Button>
+                  <Button Classes="ai-pillbtn" IsVisible="{Binding NeedsOptions}">
+                    <Border Classes="ai-pill">
+                      <TextBlock Text="{Binding ActionWords}" />
+                    </Border>
+                    <Button.Flyout>
+                      <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}">
+                        <MenuItem Classes="ai-item" Header="Check it works" Command="{Binding CheckCommand}" />
+                        <MenuItem Classes="ai-item" Header="Models" ItemsSource="{Binding ModelChoices}" IsVisible="{Binding HasModels}">
+                          <MenuItem.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiModelChoice">
+                              <MenuItem Classes="ai-item" Header="{Binding Label}" Command="{Binding Pick}">
+                                <MenuItem.Icon>
+                                  <c:Icon Glyph="check" Size="14" IsVisible="{Binding Current}" />
+                                </MenuItem.Icon>
+                              </MenuItem>
+                            </DataTemplate>
+                          </MenuItem.ItemTemplate>
+                        </MenuItem>
+                      </MenuFlyout>
+                    </Button.Flyout>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- If an engine isn't available -->
+      <TextBlock Classes="ai-section" Text="If an engine isn't available" Margin="0,18,0,8" />
+      <Border Classes="ai-card">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="swap_horiz" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Use Ollama instead" />
+            <TextBlock Classes="ai-row-sub" Text="So notes and answers never stall" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Fallback, Converter={x:Static c:Converters.OnOff}}" FontSize="14" />
+            <ToggleButton Theme="{StaticResource AiToggle}" IsChecked="{Binding Fallback}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,164 @@
+<!-- Shared looks for Windows' AI screens (13–18): the settings pane's title and cards, the pill buttons, selects, the
+     state dot, a toggle switch and a radio, all Windows 11 Fluent. Included from each AI UserControl, never from
+     Styles.axaml (WS2's). -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="TextBlock.ai-title">
+    <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.ai-sub">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="21" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.ai-section">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.ai-link">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+  </Style>
+
+  <Style Selector="Border.ai-card">
+    <Setter Property="MinHeight" Value="64" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="16,10" />
+  </Style>
+  <Style Selector="StackPanel.ai-row-text">
+    <Setter Property="Spacing" Value="1" />
+  </Style>
+  <Style Selector="TextBlock.ai-row-title">
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="TextBlock.ai-row-sub">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+
+  <Style Selector="Ellipse.ai-dot">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="6" />
+    <Setter Property="Fill" Value="{DynamicResource Fg3}" />
+  </Style>
+  <Style Selector="Ellipse.ai-dot.good">
+    <Setter Property="Fill" Value="{DynamicResource Good}" />
+  </Style>
+  <Style Selector="Ellipse.ai-dot.warn">
+    <Setter Property="Fill" Value="{DynamicResource Warn}" />
+  </Style>
+  <Style Selector="TextBlock.ai-state">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="TextBlock.ai-state.warn">
+    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+  </Style>
+
+  <!-- The design's control pill: plain (Ctrl) or primary (Accent), 32 tall, r4. -->
+  <Style Selector="Border.ai-pill">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.ai-pill > TextBlock">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.ai-pill.primary">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Border.ai-pill.primary > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.ai-pillbtn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+  <Style Selector="Button.ai-textbtn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+  </Style>
+
+  <!-- The design's select: a control with a name and expand_more, opening a Flyout. -->
+  <Style Selector="Border.ai-select">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Width" Value="180" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="11,0,10,0" />
+  </Style>
+  <Style Selector="Border.ai-select TextBlock">
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="Button.ai-select-btn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="MenuItem.ai-item">
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+
+  <Styles.Resources>
+    <ControlTheme x:Key="AiMenuFlyout" TargetType="MenuFlyoutPresenter">
+      <Setter Property="Background" Value="{DynamicResource Acrylic}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource FlyStroke}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="MinWidth" Value="180" />
+    </ControlTheme>
+
+    <!-- A toggle switch: 40×20, r10, the knob 12, OnAccent. -->
+    <ControlTheme x:Key="AiToggle" TargetType="ToggleButton">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="Track" CornerRadius="10" Background="{DynamicResource Ctrl}" BorderBrush="{DynamicResource CtrlBorder}" BorderThickness="1">
+            <Border Name="Knob" Width="12" Height="12" CornerRadius="6" Background="{DynamicResource Fg2}" HorizontalAlignment="Left" Margin="4,0,0,0" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Track">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="BorderThickness" Value="0" />
+      </Style>
+      <Style Selector="^:checked /template/ Border#Knob">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Background" Value="{DynamicResource OnAccent}" />
+      </Style>
+    </ControlTheme>
+  </Styles.Resources>
+
+  <!-- A radio: 20, on = Accent fill with a 10px OnAccent dot; off = a 1px Fg2 ring. -->
+  <Style Selector="Border.ai-radio">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Fg2}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.ai-radio.on">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+</Styles>
