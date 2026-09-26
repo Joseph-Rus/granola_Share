@@ -1,7 +1,7 @@
 <!-- Settings, in the design's settings language: Mac a glass sidebar over grouped rows (mac-13-ai-engines,
      mac-06-canvas-settings); Windows a nav with an accent indicator over card rows on a Layer page (win-13-*,
      win-06-*). The code-behind adds "mac" or "win" to the root, and every look-specific value below is a style
-     scoped by it (UserControl.mac X / UserControl.win X), so the classes read the same either way:
+     scoped by it (.mac X / .win X), so the classes read the same either way:
        group   a card of rows: Mac one Border (radius 16, Group), Windows each row its own Card (see "choice")
        row     one line in a group: title + sub on the left, a control on the right
        row-title / row-sub   its two lines of text
@@ -20,7 +20,6 @@
              xmlns:c="using:StudyStash.App.Controls"
              x:Class="StudyStash.App.Views.SettingsView"
              x:DataType="s:SettingsModel"
-             Classes="mac"
              ClipToBounds="False">
   <UserControl.Styles>
     <!-- The window's own frame: Mac a rounded, shadowed slab of Win, drawn only for a screenshot (a real macOS
@@ -29,14 +28,14 @@
     <Style Selector="Border#Chrome">
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
-    <Style Selector="UserControl.mac Border#Chrome">
+    <Style Selector=".mac Border#Chrome">
       <Setter Property="Background" Value="{DynamicResource Win}" />
     </Style>
-    <Style Selector="UserControl.mac Border#Chrome.chrome">
+    <Style Selector=".mac Border#Chrome.chrome">
       <Setter Property="CornerRadius" Value="26" />
       <Setter Property="BoxShadow" Value="{DynamicResource WindowShadow}" />
     </Style>
-    <Style Selector="UserControl.win Border#Chrome">
+    <Style Selector=".win Border#Chrome">
       <Setter Property="Background" Value="{DynamicResource Mica}" />
       <Setter Property="BorderBrush" Value="{DynamicResource FlyStroke}" />
       <Setter Property="BorderThickness" Value="1" />
@@ -48,7 +47,7 @@
     <Style Selector="Grid.titlebar">
       <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="UserControl.win Grid.titlebar">
+    <Style Selector=".win Grid.titlebar">
       <Setter Property="IsVisible" Value="True" />
     </Style>
     <Style Selector="Border.appmark">
@@ -68,13 +67,13 @@
     <Style Selector="c|Glass.side">
       <Setter Property="ClipToBounds" Value="False" />
     </Style>
-    <Style Selector="UserControl.mac c|Glass.side">
+    <Style Selector=".mac c|Glass.side">
       <Setter Property="CornerRadius" Value="18" />
       <Setter Property="BoxShadow" Value="{DynamicResource SideGlassShadow}" />
       <Setter Property="Margin" Value="8,8,0,8" />
       <Setter Property="Padding" Value="10,0,10,14" />
     </Style>
-    <Style Selector="UserControl.win c|Glass.side">
+    <Style Selector=".win c|Glass.side">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BoxShadow" Value="0 0 0 0 Transparent" />
       <Setter Property="CornerRadius" Value="0" />
@@ -93,52 +92,52 @@
     <Style Selector="Border.indicator">
       <Setter Property="IsVisible" Value="False" />
     </Style>
-    <Style Selector="UserControl.mac Button.nav">
+    <Style Selector=".mac Button.nav">
       <Setter Property="Height" Value="32" />
       <Setter Property="CornerRadius" Value="10" />
       <Setter Property="Padding" Value="10,0" />
       <Setter Property="FontSize" Value="13" />
     </Style>
-    <Style Selector="UserControl.mac Button.nav.on">
+    <Style Selector=".mac Button.nav.on">
       <Setter Property="Background" Value="{DynamicResource Fill2}" />
     </Style>
-    <Style Selector="UserControl.mac Button.nav.on /template/ Border#PART_Bg">
+    <Style Selector=".mac Button.nav.on /template/ Border#PART_Bg">
       <Setter Property="BoxShadow" Value="{DynamicResource EdgeSoft}" />
     </Style>
-    <Style Selector="UserControl.mac Button.nav.on TextBlock.navlabel">
+    <Style Selector=".mac Button.nav.on TextBlock.navlabel">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="UserControl.mac Button.nav.on c|Icon.navicon">
+    <Style Selector=".mac Button.nav.on c|Icon.navicon">
       <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
     </Style>
-    <Style Selector="UserControl.win Button.nav">
+    <Style Selector=".win Button.nav">
       <Setter Property="Height" Value="40" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Padding" Value="12,0" />
       <Setter Property="FontSize" Value="14" />
     </Style>
-    <Style Selector="UserControl.win c|Icon.navicon">
+    <Style Selector=".win c|Icon.navicon">
       <Setter Property="Foreground" Value="{DynamicResource Fg}" />
     </Style>
-    <Style Selector="UserControl.win Button.nav.on">
+    <Style Selector=".win Button.nav.on">
       <Setter Property="Background" Value="{DynamicResource Subtle}" />
     </Style>
-    <Style Selector="UserControl.win Button.nav.on Border.indicator">
+    <Style Selector=".win Button.nav.on Border.indicator">
       <Setter Property="IsVisible" Value="True" />
     </Style>
 
     <!-- The content page: Mac sits right on the window's Win colour; Windows is an inset Layer with its own corner. -->
-    <Style Selector="UserControl.win Border.page">
+    <Style Selector=".win Border.page">
       <Setter Property="Background" Value="{DynamicResource Layer}" />
       <Setter Property="BorderBrush" Value="{DynamicResource LayerStroke}" />
       <Setter Property="BorderThickness" Value="1,1,0,0" />
       <Setter Property="CornerRadius" Value="8,0,0,0" />
     </Style>
-    <Style Selector="UserControl.mac StackPanel.pagebody">
+    <Style Selector=".mac StackPanel.pagebody">
       <Setter Property="Margin" Value="40,40,40,32" />
       <Setter Property="Spacing" Value="24" />
     </Style>
-    <Style Selector="UserControl.win StackPanel.pagebody">
+    <Style Selector=".win StackPanel.pagebody">
       <Setter Property="Margin" Value="36,28,36,28" />
       <Setter Property="Spacing" Value="16" />
     </Style>
@@ -146,13 +145,13 @@
     <Style Selector="TextBlock.h">
       <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.h">
+    <Style Selector=".mac TextBlock.h">
       <Setter Property="FontSize" Value="26" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="Margin" Value="0,0,0,6" />
       <Setter Property="c:Typography.Extra" Value="-0.39" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.h">
+    <Style Selector=".win TextBlock.h">
       <Setter Property="FontSize" Value="28" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Margin" Value="0,4,0,4" />
@@ -162,12 +161,12 @@
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.body">
+    <Style Selector=".mac TextBlock.body">
       <Setter Property="FontSize" Value="13" />
       <Setter Property="LineHeight" Value="19.5" />
       <Setter Property="MaxWidth" Value="540" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.body">
+    <Style Selector=".win TextBlock.body">
       <Setter Property="FontSize" Value="14" />
       <Setter Property="LineHeight" Value="21" />
       <Setter Property="MaxWidth" Value="560" />
@@ -183,10 +182,10 @@
     <Style Selector="TextBlock.link">
       <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.link">
+    <Style Selector=".mac TextBlock.link">
       <Setter Property="FontSize" Value="12" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.link">
+    <Style Selector=".win TextBlock.link">
       <Setter Property="FontSize" Value="14" />
     </Style>
 
@@ -197,11 +196,11 @@
     <Style Selector="TextBlock.section">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.section">
+    <Style Selector=".mac TextBlock.section">
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Margin" Value="4,0" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.section">
+    <Style Selector=".win TextBlock.section">
       <Setter Property="FontSize" Value="14" />
     </Style>
 
@@ -209,11 +208,11 @@
     <Style Selector="Border.group">
       <Setter Property="Margin" Value="0,8,0,0" />
     </Style>
-    <Style Selector="UserControl.mac Border.group">
+    <Style Selector=".mac Border.group">
       <Setter Property="CornerRadius" Value="16" />
       <Setter Property="Background" Value="{DynamicResource Group}" />
     </Style>
-    <Style Selector="UserControl.win Border.group">
+    <Style Selector=".win Border.group">
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Background" Value="{DynamicResource Card}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
@@ -224,30 +223,30 @@
     <Style Selector="Border.row">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
-    <Style Selector="UserControl.mac Border.row">
+    <Style Selector=".mac Border.row">
       <Setter Property="MinHeight" Value="56" />
       <Setter Property="Padding" Value="16,8" />
     </Style>
-    <Style Selector="UserControl.win Border.row">
+    <Style Selector=".win Border.row">
       <Setter Property="MinHeight" Value="64" />
       <Setter Property="Padding" Value="16,10" />
     </Style>
     <Style Selector="TextBlock.row-title">
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.row-title">
+    <Style Selector=".mac TextBlock.row-title">
       <Setter Property="FontSize" Value="13" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.row-title">
+    <Style Selector=".win TextBlock.row-title">
       <Setter Property="FontSize" Value="14" />
     </Style>
     <Style Selector="TextBlock.row-sub">
       <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
     </Style>
-    <Style Selector="UserControl.mac TextBlock.row-sub">
+    <Style Selector=".mac TextBlock.row-sub">
       <Setter Property="FontSize" Value="11" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.row-sub">
+    <Style Selector=".win TextBlock.row-sub">
       <Setter Property="FontSize" Value="12" />
     </Style>
 
@@ -257,23 +256,23 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
-    <Style Selector="UserControl.mac Button.pill">
+    <Style Selector=".mac Button.pill">
       <Setter Property="Height" Value="30" />
       <Setter Property="CornerRadius" Value="15" />
       <Setter Property="Padding" Value="14,0" />
       <Setter Property="Background" Value="{DynamicResource Raised}" />
     </Style>
-    <Style Selector="UserControl.mac Button.pill /template/ Border#PART_Bg">
+    <Style Selector=".mac Button.pill /template/ Border#PART_Bg">
       <Setter Property="BoxShadow" Value="{DynamicResource RaisedShadow}" />
     </Style>
-    <Style Selector="UserControl.mac Button.pill.primary">
+    <Style Selector=".mac Button.pill.primary">
       <Setter Property="Background" Value="{DynamicResource Tint}" />
       <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
     </Style>
-    <Style Selector="UserControl.mac Button.pill.primary /template/ Border#PART_Bg">
+    <Style Selector=".mac Button.pill.primary /template/ Border#PART_Bg">
       <Setter Property="BoxShadow" Value="{DynamicResource EdgeTint}" />
     </Style>
-    <Style Selector="UserControl.win Button.pill">
+    <Style Selector=".win Button.pill">
       <Setter Property="Height" Value="32" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Padding" Value="12,0" />
@@ -281,12 +280,12 @@
       <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <Style Selector="UserControl.win Button.pill.primary">
+    <Style Selector=".win Button.pill.primary">
       <Setter Property="Background" Value="{DynamicResource Accent}" />
       <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
-    <Style Selector="UserControl.win Button.pill.primary TextBlock">
+    <Style Selector=".win Button.pill.primary TextBlock">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -295,16 +294,16 @@
       <Setter Property="Theme" Value="{StaticResource Surface}" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
-    <Style Selector="UserControl.mac Button.select">
+    <Style Selector=".mac Button.select">
       <Setter Property="Height" Value="28" />
       <Setter Property="CornerRadius" Value="14" />
       <Setter Property="Padding" Value="12,0,8,0" />
       <Setter Property="Background" Value="{DynamicResource Raised}" />
     </Style>
-    <Style Selector="UserControl.mac Button.select /template/ Border#PART_Bg">
+    <Style Selector=".mac Button.select /template/ Border#PART_Bg">
       <Setter Property="BoxShadow" Value="{DynamicResource RaisedShadow}" />
     </Style>
-    <Style Selector="UserControl.win Button.select">
+    <Style Selector=".win Button.select">
       <Setter Property="Height" Value="32" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Padding" Value="11,0,10,0" />
@@ -322,19 +321,19 @@
     <Style Selector="Border.choice.on">
       <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     </Style>
-    <Style Selector="UserControl.mac Border.choice">
+    <Style Selector=".mac Border.choice">
       <Setter Property="CornerRadius" Value="16" />
       <Setter Property="Background" Value="{DynamicResource Group}" />
       <Setter Property="Padding" Value="14,12" />
       <Setter Property="BoxShadow" Value="{DynamicResource EdgeSoft}" />
     </Style>
-    <Style Selector="UserControl.win Border.choice">
+    <Style Selector=".win Border.choice">
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Background" Value="{DynamicResource Card}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
       <Setter Property="Padding" Value="14,12" />
     </Style>
-    <Style Selector="UserControl.win Border.choice.on">
+    <Style Selector=".win Border.choice.on">
       <Setter Property="BorderThickness" Value="2" />
     </Style>
 
@@ -382,13 +381,13 @@
     <Style Selector="Border.swatchring">
       <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="UserControl.mac Border.swatchring.on">
+    <Style Selector=".mac Border.swatchring.on">
       <Setter Property="Background" Value="{DynamicResource Accent}" />
     </Style>
     <Style Selector="Border.swatchborder">
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
-    <Style Selector="UserControl.win Border.swatchborder.on">
+    <Style Selector=".win Border.swatchborder.on">
       <Setter Property="BorderBrush" Value="{DynamicResource Fg}" />
     </Style>
     <Style Selector="TextBlock.swatchname">
@@ -396,7 +395,7 @@
       <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
       <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
-    <Style Selector="UserControl.win TextBlock.swatchname">
+    <Style Selector=".win TextBlock.swatchname">
       <Setter Property="FontSize" Value="12" />
     </Style>
   </UserControl.Styles>
