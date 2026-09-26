@@ -81,12 +81,10 @@ public static class Setup
         else if (host.Downloading is { } d)
         {
             m.ModelProgress = d.Fraction;
-            m.ModelDone = $"{Gb(d.Done)} of {Gb(d.Total)}";
+            m.ModelDone = d.Amount;
             m.ModelLeft = d.Left() ?? "";
         }
     }
-
-    static string Gb(long bytes) => bytes >= 1_000_000_000 ? $"{bytes / 1e9:0.0} GB" : $"{bytes / 1e6:0} MB";
 
     static async Task ConnectAsync(SetupModel m, AppHost host)
     {

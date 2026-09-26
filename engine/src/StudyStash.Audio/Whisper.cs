@@ -1,4 +1,5 @@
-using System.Runtime.InteropServices;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using StudyStash.Core;
 using Whisper.net;
@@ -10,8 +11,15 @@ public sealed record WhisperModel(string Id, string Name, string File, long Byte
 {
     public string Url => $"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{File}";
 
+    /// <summary>Where it downloads from: Hugging Face, or <c>{mirror}/{file}</c> when a mirror is given (the
+    /// self-test's own).</summary>
+    public string UrlFrom(string? mirror) => mirror is { Length: > 0 } m ? $"{m.TrimEnd('/')}/{File}" : Url;
+
     /// <summary>"3.1 GB", "550 MB".</summary>
-    public string Size => Bytes >= 1_000_000_000 ? $"{Bytes / 1e9:0.0} GB" : $"{Bytes / 1e6:0} MB";
+    public string Size => SizeOf(Bytes);
+
+    /// <summary>An amount of bytes the way Study Stash says it: "1.9 GB", "550 MB".</summary>
+    public static string SizeOf(long bytes) => bytes >= 1_000_000_000 ? $"{bytes / 1e9:0.0} GB" : $"{bytes / 1e6:0} MB";
 }
 
 public static class WhisperModels
@@ -30,14 +38,9 @@ public static class WhisperModels
 
     public static WhisperModel? Find(string id) => All.FirstOrDefault(m => m.Id == id);
 
-    /// <summary>What to download on this computer: large-v3 where there's a GPU for it (a Mac with Apple silicon), large-v3
-    /// turbo elsewhere, and the compact turbo on a computer with little memory.</summary>
-    public static WhisperModel Recommended(string system, Architecture arch, double? ramGb)
-    {
-        if (ramGb is < 7) return LargeV3TurboSmall;
-        if (system == "Darwin" && arch == Architecture.Arm64) return LargeV3;
-        return LargeV3Turbo;
-    }
+    /// <summary>What to download on this computer: large-v3, the most accurate, unless it has too little memory to
+    /// hold it (under 7 GB): then the compact turbo.</summary>
+    public static WhisperModel Recommended(double? ramGb) => ramGb is < 7 ? LargeV3TurboSmall : LargeV3;
 
     public static string Dir(string home) => Path.Combine(home, "models");
 
@@ -55,6 +58,9 @@ public sealed record DownloadProgress(long Done, long Total, double BytesPerSeco
 {
     public double Fraction => Total <= 0 ? 0 : Math.Clamp(Done / (double)Total, 0, 1);
 
+    /// <summary>"1.9 GB of 3.1 GB".</summary>
+    public string Amount => $"{WhisperModel.SizeOf(Done)} of {WhisperModel.SizeOf(Total)}";
+
     /// <summary>"About 4 minutes left", once there's a rate to go on.</summary>
     public string? Left()
     {
@@ -64,72 +70,129 @@ public sealed record DownloadProgress(long Done, long Total, double BytesPerSeco
     }
 }
 
+/// <summary>The disk hasn't room for a model. Only the student can fix that, so nothing tries again by itself.</summary>
+public sealed class NotEnoughSpaceException(WhisperModel model, long needed)
+    : IOException($"Not enough space for {model.Name}: it needs {WhisperModel.SizeOf(needed)} free.");
+
 /// <summary>
 /// Downloads a model into the models folder: to a .part file that a later try picks up from (a laptop closes
-/// mid-download), checked against its SHA-256 before it's used.
+/// mid-download, the connection drops), checked against its SHA-256 before it's used.
 /// </summary>
 public static class ModelDownload
 {
     static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
+    /// <summary>Room kept free beyond the model, so a download never fills the disk a recording needs.</summary>
+    public const long Spare = 200_000_000;
+
+    /// <summary>
+    /// Download <paramref name="m"/> (from <paramref name="url"/>, or Hugging Face), picking up from its .part file.
+    /// Progress is reported at once and then about once a second. Throws <see cref="NotEnoughSpaceException"/> when the
+    /// disk can't hold it, <see cref="InvalidDataException"/> (and forgets the .part) when what arrived isn't the model,
+    /// and HttpRequestException or IOException when the connection fails (the .part stays for next time).
+    /// </summary>
     public static async Task<string> RunAsync(string home, WhisperModel m, IProgress<DownloadProgress>? progress = null,
-        CancellationToken stop = default, HttpClient? http = null, string? url = null)
+        CancellationToken stop = default, HttpClient? http = null, string? url = null, Func<string, long?>? freeBytes = null)
     {
-        string path = WhisperModels.PathFor(home, m), part = path + ".part";
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string path = WhisperModels.PathFor(home, m), part = path + ".part", dir = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(dir);
         if (WhisperModels.IsDownloaded(home, m)) return path;
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         long have = System.IO.File.Exists(part) ? new FileInfo(part).Length : 0;
         if (have > m.Bytes) have = 0;
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        if (have > 0)
+        if (have > 0) await HashAsync(part, sha, stop);
+        progress?.Report(new DownloadProgress(have, m.Bytes, 0));
+        if (have == m.Bytes)
         {
-            await using var existing = System.IO.File.OpenRead(part);
-            var buf = new byte[1 << 20];
-            int n;
-            while ((n = await existing.ReadAsync(buf, stop)) > 0) sha.AppendData(buf, 0, n);
+            // All of it came before, and the app stopped before moving it into place: nothing to ask for.
+            if (Convert.ToHexStringLower(sha.GetHashAndReset()) == m.Sha256)
+            {
+                System.IO.File.Move(part, path, overwrite: true);
+                return path;
+            }
+            System.IO.File.Delete(part);
+            have = 0;
         }
-        using var request = new HttpRequestMessage(HttpMethod.Get, url ?? m.Url);
-        if (have > 0) request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(have, null);
-        using var response = await (http ?? Http).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop);
-        if (have > 0 && response.StatusCode != System.Net.HttpStatusCode.PartialContent)
+        long needed = m.Bytes - have + Spare;
+        if ((freeBytes ?? Disk.FreeBytes)(dir) is { } free && free < needed) throw new NotEnoughSpaceException(m, needed);
+
+        var response = await SendAsync(http ?? Http, url ?? m.Url, have, stop);
+        if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && have > 0)
         {
-            // The server sent the whole file again: start over.
+            // The server won't send from where the .part stops (its file changed?): start over, once.
+            response.Dispose();
+            System.IO.File.Delete(part);
             have = 0;
             sha.GetHashAndReset();
+            progress?.Report(new DownloadProgress(0, m.Bytes, 0));
+            response = await SendAsync(http ?? Http, url ?? m.Url, 0, stop);
         }
-        response.EnsureSuccessStatusCode();
-        await using (var body = await response.Content.ReadAsStreamAsync(stop))
-        await using (var file = new FileStream(part, have > 0 ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20))
+        using (response)
         {
-            var buf = new byte[1 << 20];
-            long done = have, windowStart = have;
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            double rate = 0;
-            int n;
-            while ((n = await body.ReadAsync(buf, stop)) > 0)
+            if (have > 0 && response.StatusCode != HttpStatusCode.PartialContent)
             {
-                await file.WriteAsync(buf.AsMemory(0, n), stop);
-                sha.AppendData(buf, 0, n);
-                done += n;
-                if (clock.Elapsed.TotalSeconds >= 1)
-                {
-                    double now = (done - windowStart) / clock.Elapsed.TotalSeconds;
-                    rate = rate <= 0 ? now : rate * 0.7 + now * 0.3;
-                    windowStart = done;
-                    clock.Restart();
-                    progress?.Report(new DownloadProgress(done, m.Bytes, rate));
-                }
+                // The server sent the whole file again: start over.
+                have = 0;
+                sha.GetHashAndReset();
+                progress?.Report(new DownloadProgress(0, m.Bytes, 0));
             }
-            progress?.Report(new DownloadProgress(done, m.Bytes, rate));
+            response.EnsureSuccessStatusCode();
+            try
+            {
+                await using var body = await response.Content.ReadAsStreamAsync(stop);
+                await using var file = new FileStream(part, have > 0 ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
+                var buf = new byte[1 << 20];
+                long done = have, windowStart = have;
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                double rate = 0;
+                int n;
+                while ((n = await body.ReadAsync(buf, stop)) > 0)
+                {
+                    await file.WriteAsync(buf.AsMemory(0, n), stop);
+                    sha.AppendData(buf, 0, n);
+                    done += n;
+                    if (clock.Elapsed.TotalSeconds >= 1)
+                    {
+                        double now = (done - windowStart) / clock.Elapsed.TotalSeconds;
+                        rate = rate <= 0 ? now : rate * 0.7 + now * 0.3;
+                        windowStart = done;
+                        clock.Restart();
+                        progress?.Report(new DownloadProgress(done, m.Bytes, rate));
+                    }
+                }
+                progress?.Report(new DownloadProgress(done, m.Bytes, rate));
+            }
+            catch (IOException e) when (Disk.IsFull(e))
+            {
+                long got = System.IO.File.Exists(part) ? new FileInfo(part).Length : 0;
+                throw new NotEnoughSpaceException(m, m.Bytes - got + Spare);
+            }
         }
-        string got = Convert.ToHexStringLower(sha.GetHashAndReset());
-        if (new FileInfo(part).Length != m.Bytes || got != m.Sha256)
+        long length = new FileInfo(part).Length;
+        // The connection closed early without saying so: what came is kept, and the next try asks for the rest.
+        if (length < m.Bytes) throw new IOException($"The {m.Name} download stopped before the end.");
+        if (length != m.Bytes || Convert.ToHexStringLower(sha.GetHashAndReset()) != m.Sha256)
         {
             System.IO.File.Delete(part);
             throw new InvalidDataException($"The {m.Name} download came out damaged; try again.");
         }
         System.IO.File.Move(part, path, overwrite: true);
         return path;
+    }
+
+    static Task<HttpResponseMessage> SendAsync(HttpClient http, string url, long from, CancellationToken stop)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (from > 0) request.Headers.Range = new RangeHeaderValue(from, null);
+        return http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stop);
+    }
+
+    static async Task HashAsync(string path, IncrementalHash sha, CancellationToken stop)
+    {
+        await using var existing = System.IO.File.OpenRead(path);
+        var buf = new byte[1 << 20];
+        int n;
+        while ((n = await existing.ReadAsync(buf, stop)) > 0) sha.AppendData(buf, 0, n);
     }
 }
 

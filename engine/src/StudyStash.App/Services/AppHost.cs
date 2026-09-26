@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using StudyStash.App.Platform;
@@ -73,8 +72,14 @@ public sealed class AppHost : IDisposable
     Timer? watchdog;
     int checking;
     KeepAwake? awake;
+    readonly ModelSetting models;
+    readonly HttpClient? http;
+    // The model download: one at a time, its stop button, and a nudge that ends a wait to try again.
+    readonly Lock downloadLock = new();
     CancellationTokenSource? download;
-    bool disposed;
+    TaskCompletionSource? retryNow;
+    Task downloadTask = Task.CompletedTask;
+    volatile bool disposed;
 
     public string Home { get; }
     public AppSettings Settings { get; private set; }
@@ -91,6 +96,9 @@ public sealed class AppHost : IDisposable
     /// <summary>The library's name, classes (in order: their colors) and the rest of /api/v2/library.</summary>
     public JsonObject? Overview { get; private set; }
     public DownloadProgress? Downloading { get; private set; }
+    /// <summary>The model <see cref="Downloading"/> is about.</summary>
+    public WhisperModel? DownloadingModel { get; private set; }
+    /// <summary>Why the model isn't downloading ("Not enough space for …", "The download stopped (no internet?)…").</summary>
     public string? DownloadProblem { get; private set; }
     /// <summary>Why Whisper isn't writing lectures down ("Whisper couldn't start: …"); null while it works.</summary>
     public string? WhisperProblem => Whisper.Problem;
@@ -112,13 +120,17 @@ public sealed class AppHost : IDisposable
     /// <summary>
     /// The app's engine room for a settings folder. <paramref name="microphone"/> stands in for the microphone; without
     /// one, STUDYSTASH_MIC_FILE (a WAV) does, and only with neither is the real microphone ever opened.
+    /// <paramref name="models"/> is the model the environment asks for (by default, this process's: see
+    /// <see cref="ModelSetting"/>); <paramref name="http"/> downloads it (a test's pretend server).
     /// </summary>
     public AppHost(string home, Func<IAudioSource>? microphone = null, Func<ITranscriber>? whisper = null, LaptopHost? laptop = null,
-        Action<string>? log = null, ILoginItems? loginItems = null)
+        Action<string>? log = null, ILoginItems? loginItems = null, ModelSetting? models = null, HttpClient? http = null)
     {
         Home = home;
         this.log = log ?? (s => Console.WriteLine(s));
         pretendMic = microphone ?? MicFromEnvironment();
+        this.models = models ?? ModelSetting.FromEnvironment();
+        this.http = http;
         LoginItems = loginItems ?? Platform.LoginItems.System;
         Directory.CreateDirectory(home);
         Settings = AppSettings.Load(home);
@@ -202,11 +214,12 @@ public sealed class AppHost : IDisposable
         return cc.ServerUrl.Length > 0 ? new RemoteLibrary(cc.ServerUrl, cc.PoolKey) : null;
     }
 
-    public WhisperModel Model => WhisperModels.Find(Settings.Model)
-        ?? WhisperModels.Recommended(Machine.Platform, RuntimeInformation.OSArchitecture, Machine.TotalRamGb());
+    /// <summary>The transcription model: the one the environment names, else the one picked in Settings, else the one
+    /// for this computer (large-v3, or the compact turbo with little memory).</summary>
+    public WhisperModel Model => models.Model ?? WhisperModels.Find(Settings.Model) ?? WhisperModels.Recommended(Machine.TotalRamGb());
 
-    /// <summary>STUDYSTASH_MODEL_FILE: a model file to use instead of the downloaded one (trying the app with a small one).</summary>
-    static string? ModelFile => Environment.GetEnvironmentVariable("STUDYSTASH_MODEL_FILE") is { Length: > 0 } f && File.Exists(f) ? f : null;
+    /// <summary>A model file the environment gives to use as it is (nothing downloads); null normally.</summary>
+    public string? ModelFile => models.File;
 
     public bool ModelReady => ModelFile is not null || WhisperModels.IsDownloaded(Home, Model);
 
@@ -223,6 +236,8 @@ public sealed class AppHost : IDisposable
         running.Add(Task.Run(WatchLibrary));
         running.Add(Task.Run(() => Lectures.PruneAudio(Settings.KeepAudioDays, DateTimeOffset.Now)));
         watchdog = new Timer(_ => CheckRecorder(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        // A download that quitting (or a closed laptop) cut short picks up where it stopped.
+        if (Settings.SetupDone && !ModelReady) _ = DownloadModelAsync();
     }
 
     /// <summary>Every second, on the thread pool: the recorder looks at its microphone and the disk. One look at a
@@ -414,40 +429,207 @@ public sealed class AppHost : IDisposable
 
     // --- the model --------------------------------------------------------------------------------------------------
 
-    /// <summary>Download the model for this computer (or pick up a download a closed laptop cut short).</summary>
-    public async Task DownloadModelAsync(WhisperModel? model = null)
+    /// <summary>What the setup and Settings say while a dropped connection waits to be tried again.</summary>
+    public const string DownloadStopped = "The download stopped (no internet?). It picks up where it left off.";
+
+    /// <summary>How long a download that stopped (no internet) waits before trying again: 30 seconds, a minute, two,
+    /// then every five minutes while the app runs.</summary>
+    public static TimeSpan RetryAfter(int failures) => TimeSpan.FromSeconds(failures switch
+    {
+        0 => 30,
+        1 => 60,
+        2 => 120,
+        _ => 300,
+    });
+
+    /// <summary>
+    /// Download a model (the one for this computer unless another is given), or pick up where its download stopped.
+    /// Another model while one downloads: that one stops (its .part stays) and this one starts. The same one while it
+    /// waits to try again: it tries now (setup's Try again, Settings' Download). The task ends when the download does.
+    /// </summary>
+    public Task DownloadModelAsync(WhisperModel? model = null)
     {
         model ??= Model;
-        if (WhisperModels.IsDownloaded(Home, model) || download is not null) return;
-        download = new CancellationTokenSource();
-        DownloadProblem = null;
-        Downloading = new DownloadProgress(0, model.Bytes, 0);
+        if (WhisperModels.IsDownloaded(Home, model)) return Task.CompletedTask;
+        lock (downloadLock)
+        {
+            if (disposed) return Task.CompletedTask;
+            if (download is not null && DownloadingModel?.Id == model.Id)
+            {
+                retryNow?.TrySetResult();
+                return downloadTask;
+            }
+            download?.Cancel();
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+            download = cts;
+            DownloadingModel = model;
+            DownloadProblem = null;
+            string part = WhisperModels.PathFor(Home, model) + ".part";
+            Downloading = new DownloadProgress(File.Exists(part) ? Math.Min(new FileInfo(part).Length, model.Bytes) : 0, model.Bytes, 0);
+            // On the thread pool: picking up a download first reads the gigabytes already here.
+            downloadTask = Task.Run(() => DownloadAsync(model, cts));
+        }
         Changed?.Invoke();
+        return downloadTask;
+    }
+
+    /// <summary>Stop the model download (another model, already here, was picked). What came stays for next time.</summary>
+    public void StopDownload()
+    {
+        lock (downloadLock) download?.Cancel();
+    }
+
+    /// <summary>Throw the model away and download it again (Whisper couldn't start with it: it may be damaged).</summary>
+    public Task RedownloadModel()
+    {
+        var model = Model;
+        if (ModelFile is not null)
+        {
+            // The environment's own file isn't the app's to delete.
+            log($"[model] {ModelFile} is given to use as it is: nothing to download again");
+            return Task.CompletedTask;
+        }
+        lock (downloadLock)
+        {
+            if (download is not null && DownloadingModel?.Id == model.Id)
+            {
+                retryNow?.TrySetResult();
+                return downloadTask;
+            }
+        }
+        string path = WhisperModels.PathFor(Home, model);
         try
         {
-            await ModelDownload.RunAsync(Home, model, new Progress<DownloadProgress>(p =>
+            File.Delete(path);
+            File.Delete(path + ".part");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log($"[model] couldn't remove {path}: {e.Message}");
+            DownloadProblem = $"The old {model.Name} couldn't be removed: {e.Message}";
+            Changed?.Invoke();
+            return Task.CompletedTask;
+        }
+        log($"[model] downloading {model.Name} again");
+        return DownloadModelAsync(model);
+    }
+
+    async Task DownloadAsync(WhisperModel model, CancellationTokenSource cts)
+    {
+        int failures = 0;
+        bool damagedBefore = false;
+        try
+        {
+            while (true)
             {
-                Downloading = p;
-                Changed?.Invoke();
-            }), download.Token);
-            log($"[model] {model.Name} downloaded");
+                try
+                {
+                    await ModelDownload.RunAsync(Home, model, Progress(cts), cts.Token, http, models.UrlFor(model));
+                    Say(cts, null);
+                    log($"[model] {model.Name} downloaded");
+                    return;
+                }
+                catch (NotEnoughSpaceException e)
+                {
+                    // Only the student can make room: no trying again until they ask.
+                    log($"[model] {e.Message}");
+                    Say(cts, e.Message);
+                    return;
+                }
+                catch (InvalidDataException e) when (!damagedBefore)
+                {
+                    damagedBefore = true;
+                    log($"[model] {e.Message} Downloading it again.");
+                }
+                catch (InvalidDataException e)
+                {
+                    log($"[model] {e.Message}");
+                    Say(cts, e.Message);
+                    return;
+                }
+                catch (Exception e) when (e is HttpRequestException or IOException || (e is TaskCanceledException && !cts.IsCancellationRequested))
+                {
+                    var wait = RetryAfter(failures++);
+                    log($"[model] {e.Message}: trying again in {wait.TotalSeconds:0} s");
+                    Say(cts, DownloadStopped);
+                    await WaitToRetry(wait, cts);
+                }
+            }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
         }
-        catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException)
+        catch (Exception e)
         {
-            DownloadProblem = e is HttpRequestException ? "The download stopped (no internet?). It picks up where it left off." : e.Message;
-            log($"[model] {e.Message}");
+            // Anything else (a folder it can't write): said, and tried again when the student asks.
+            log($"[model] {e}");
+            Say(cts, $"The download stopped: {e.Message}");
         }
         finally
         {
-            download.Dispose();
-            download = null;
-            Downloading = null;
+            lock (downloadLock)
+            {
+                if (download == cts)
+                {
+                    download = null;
+                    retryNow = null;
+                    Downloading = null;
+                    DownloadingModel = null;
+                }
+                cts.Dispose();
+            }
             Changed?.Invoke();
             Whisper.Wake();
         }
+    }
+
+    /// <summary>Progress straight to the windows, while this is still the download the app wants. Once bytes arrive
+    /// again, a problem from an earlier try is over.</summary>
+    IProgress<DownloadProgress> Progress(CancellationTokenSource cts)
+    {
+        long? from = null;
+        return new Reporter(p =>
+        {
+            lock (downloadLock)
+            {
+                if (download != cts) return;
+                from ??= p.Done;
+                Downloading = p;
+                if (p.Done > from) DownloadProblem = null;
+            }
+            Changed?.Invoke();
+        });
+    }
+
+    /// <summary>Say why this download stopped (or null: it's fine), unless another has taken its place.</summary>
+    void Say(CancellationTokenSource cts, string? problem)
+    {
+        lock (downloadLock)
+        {
+            if (download != cts) return;
+            DownloadProblem = problem;
+        }
+        Changed?.Invoke();
+    }
+
+    async Task WaitToRetry(TimeSpan wait, CancellationTokenSource cts)
+    {
+        var now = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (downloadLock)
+            if (download == cts) retryNow = now;
+        using (var waiting = CancellationTokenSource.CreateLinkedTokenSource(cts.Token))
+        {
+            await Task.WhenAny(Task.Delay(wait, waiting.Token), now.Task);
+            await waiting.CancelAsync();
+        }
+        cts.Token.ThrowIfCancellationRequested();
+        lock (downloadLock)
+            if (retryNow == now) retryNow = null;
+    }
+
+    sealed class Reporter(Action<DownloadProgress> report) : IProgress<DownloadProgress>
+    {
+        public void Report(DownloadProgress value) => report(value);
     }
 
     /// <summary>Stop: the lecture being recorded is saved, and Whisper, the sender and the library check get up to 3
@@ -466,12 +648,17 @@ public sealed class AppHost : IDisposable
             log($"[app] couldn't finish the recording: {e.Message}");
         }
         stop.Cancel();
-        download?.Cancel();
+        Task downloading;
+        lock (downloadLock)
+        {
+            download?.Cancel();
+            downloading = downloadTask;
+        }
         awake?.Dispose();
         awake = null;
         try
         {
-            if (!Task.WaitAll([.. running], TimeSpan.FromSeconds(3))) log("[app] still busy after 3 seconds: quitting anyway");
+            if (!Task.WaitAll([.. running, downloading], TimeSpan.FromSeconds(3))) log("[app] still busy after 3 seconds: quitting anyway");
         }
         catch (AggregateException e)
         {

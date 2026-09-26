@@ -156,7 +156,8 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         Shortcuts = host.Settings.Shortcuts;
         StartAtLogin = host.LoginItems.StartsAtLogin(host.Home);
         ClaudeCommand = claude.ClaudeCodeCommand;
-        foreach (var m in WhisperModels.All.Where(m => m.Id != WhisperModels.Tiny.Id))
+        // Whisper tiny is only for trying things out: listed only when it's the one in use.
+        foreach (var m in WhisperModels.All.Where(m => m.Id != WhisperModels.Tiny.Id || m.Id == host.Model.Id))
             Models.Add(new ModelChoice { Model = m, Chosen = m.Id == host.Model.Id, Here = WhisperModels.IsDownloaded(host.Home, m) });
         foreach (var c in host.Timetable.Classes)
             Rows.Add(new TimetableRow { Name = c.Name, Times = string.Join(", ", c.Times.Select(t => t.Describe())), Dot = Skin.ClassDot(Math.Max(0, host.ColorOf(c.Name))) });
@@ -186,14 +187,23 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
             LibraryState.WrongPassword => "The library's password changed. Type the new one below.",
             _ => "No library yet.",
         };
-        ModelLine = host.ModelReady ? $"{host.Model.Name} is ready."
-            : host.Downloading is { } d ? $"Downloading {host.Model.Name}: {Math.Round(d.Fraction * 100)}%. {d.Left()}"
-            : host.DownloadProblem ?? $"{host.Model.Name} isn't downloaded yet.";
+        ModelLine = ModelWords(host);
         foreach (var m in Models)
         {
             m.Chosen = m.Model.Id == host.Model.Id;
             m.Here = WhisperModels.IsDownloaded(host.Home, m.Model);
         }
+    }
+
+    /// <summary>Settings → Recording's line about the model: ready, "Downloading Whisper large-v3: 1.9 GB of 3.1 GB.
+    /// About 4 minutes left.", why the download stopped, or not downloaded yet.</summary>
+    public static string ModelWords(AppHost host)
+    {
+        if (host.ModelReady) return $"{host.Model.Name} is ready.";
+        if (host.DownloadProblem is { } problem) return problem;
+        if (host.Downloading is { } d)
+            return $"Downloading {(host.DownloadingModel ?? host.Model).Name}: {d.Amount}." + (d.Left() is { } left ? $" {left}." : "");
+        return $"{host.Model.Name} isn't downloaded yet.";
     }
 
     partial void OnSectionChanged(string value)
@@ -286,10 +296,16 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     {
         host.Save(s => s.Model = choice.Model.Id);
         Refresh();
-        if (!WhisperModels.IsDownloaded(host.Home, choice.Model)) _ = host.DownloadModelAsync(choice.Model);
+        // One already here needs nothing, and a download of another one is no longer wanted.
+        if (WhisperModels.IsDownloaded(host.Home, choice.Model)) host.StopDownload();
+        else _ = host.DownloadModelAsync(choice.Model);
     }
 
+    /// <summary>Download (or try again now).</summary>
     [RelayCommand] void DownloadModel() => _ = host.DownloadModelAsync();
+
+    /// <summary>Whisper couldn't start with the model: throw it away and download it again.</summary>
+    [RelayCommand] void RedownloadModel() => _ = host.RedownloadModel();
 
     [RelayCommand]
     async Task AddClass()
