@@ -5,7 +5,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using StudyStash.App;
 using StudyStash.App.Controls;
+using StudyStash.App.ViewModels;
 using StudyStash.App.Views;
 
 namespace StudyStash.App.Tests;
@@ -330,6 +332,79 @@ public class AiShots
             grid.Children.Add(bar);
         }
         return row;
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // The ask bar under a lecture's notes (design 16): a 760×460 page of notes with the "Answer with" menu and the
+    // ask bar drawn inline at the design's offsets (popups don't render into a capture), and the recorder's compact
+    // chat 56 px to the right, bottom-aligned. Picture scaffolding only: the real notes page is another lane's.
+    // ---------------------------------------------------------------------------------------------------------
+
+    const string AskSample = "A recursive function solves a problem by calling itself on a smaller version of it. Each call gets its own frame on the call stack, which holds that call's arguments and local variables. The calls pause in order until a base case returns.";
+
+    static Control AskPage(SkinKind skin, AiAskModel model)
+    {
+        var text = new TextBlock
+        {
+            Text = AskSample, FontSize = skin == SkinKind.Mac ? 16 : 15, LineHeight = skin == SkinKind.Mac ? 25.6 : 24,
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(56, 40, 56, 0), HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        if (skin == SkinKind.Mac) Res(text, TextBlock.FontFamilyProperty, text, "SerifFont");
+        Res(text, TextBlock.ForegroundProperty, text, "Fg");
+
+        var fade = new Border { Height = 200, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
+
+        var menu = skin == SkinKind.Mac
+            ? (Control)new MacAiEngineMenu { DataContext = model.Menu, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 190, 84) }
+            : new WinAiEngineMenu { DataContext = model.Menu, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 200, 84) };
+
+        var bar = skin == SkinKind.Mac
+            ? (Control)new MacAiAskBar { DataContext = model, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 24) }
+            : new WinAiAskBar { DataContext = model, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 24) };
+
+        var panel = new Panel { Width = 760, Height = 460, Children = { text, fade, menu, bar } };
+        var page = new Border { Width = 760, Height = 460, ClipToBounds = true, Child = panel };
+        if (skin == SkinKind.Mac)
+        {
+            Res(page, Border.BackgroundProperty, page, "Win");
+            page.CornerRadius = new CornerRadius(26);
+            Res(page, Border.BoxShadowProperty, page, "GShadow");
+            Fades.Under(fade, "Win", 0.7);
+        }
+        else
+        {
+            Res(page, Border.BackgroundProperty, page, "Mica");
+            page.CornerRadius = new CornerRadius(8);
+            page.BorderThickness = new Thickness(1);
+            Res(page, Border.BorderBrushProperty, page, "FlyStroke");
+            Res(page, Border.BoxShadowProperty, page, "ShadowLg");
+            Fades.Under(fade, "Mica", 0.75);
+        }
+        return page;
+    }
+
+    static Control AskChatPanel(SkinKind skin, AiAskModel model) => skin == SkinKind.Mac
+        ? new MacAiAskChat { DataContext = model, VerticalAlignment = VerticalAlignment.Bottom }
+        : new WinAiAskChat { DataContext = model, VerticalAlignment = VerticalAlignment.Bottom };
+
+    static Control AskComposition(SkinKind skin) =>
+        new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 56, HorizontalAlignment = HorizontalAlignment.Left,
+            Children = { AskPage(skin, AiDemo.Ask()), AskChatPanel(skin, AiDemo.Chat()) },
+        };
+
+    [AvaloniaFact]
+    public void Mac_ai_ask_picker()
+    {
+        foreach (var t in Themes) Shot.Take("mac-16-ai-ask-picker", SkinKind.Mac, t, () => AskComposition(SkinKind.Mac));
+    }
+
+    [AvaloniaFact]
+    public void Win_ai_ask_picker()
+    {
+        foreach (var t in Themes) Shot.Take("win-16-ai-ask-picker", SkinKind.Win, t, () => AskComposition(SkinKind.Win));
     }
 
     // ---------------------------------------------------------------------------------------------------------

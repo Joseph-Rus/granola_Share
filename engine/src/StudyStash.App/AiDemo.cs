@@ -57,4 +57,29 @@ public static class AiDemo
         m.Load().GetAwaiter().GetResult();
         return m;
     }
+
+    /// <summary>The ask bar under a lecture's notes, its "Answer with" menu open: the ask default is Claude Code
+    /// (checked), Ollama is picked for this question (tinted).</summary>
+    public static AiAskModel Ask()
+    {
+        var m = new AiAskModel(new Library(Overview()));
+        m.Load().GetAwaiter().GetResult();
+        m.Engine = "ollama";
+        return m;
+    }
+
+    /// <summary>The recorder's compact chat, one turn answered: the design's sample question, Ollama's answer with
+    /// the moments it drew on.</summary>
+    public static AiAskModel Chat()
+    {
+        var m = new AiAskModel(new Library(Overview()));
+        m.Load().GetAwaiter().GetResult();
+        m.Engine = "ollama";
+        m.Turns.Add(new AiTurn("What did she say is on the midterm?", "Ollama")
+        {
+            Answer = "Recursion traces and call-stack diagrams. Big-O proofs won't be on it.",
+            Byline = "Ollama · 18:05, 18:40",
+        });
+        return m;
+    }
 }
