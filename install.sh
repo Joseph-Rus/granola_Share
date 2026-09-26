@@ -1,100 +1,85 @@
 #!/bin/sh
-# granola-share one-line installer (macOS / Linux).
-#   The Mac mini (keeps the library):
-#     curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- server
-#   Your laptop (the Mac mini's setup prints this line with the address and password filled in):
-#     curl -fsSL .../install.sh | GRANOLA_SHARE_SERVER=http://mac-mini:8787 GRANOLA_SHARE_KEY=pw sh
-# Anything after the role goes to the setup wizard, e.g. `sh -s -- server --yes --pool-name Fall`.
+# Study Stash installer (Mac only; on Windows, run install.ps1 instead).
+#   The computer that keeps the library:
+#     curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- library
+#   Your laptop (the library's setup shows this line, with its address filled in):
+#     curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh
 #
-# Installs the `granola-share` command with uv (no admin rights, no git, its own Python),
-# from the newest release. Safe to rerun: it updates in place and setup keeps your answers.
+# Downloads the newest release's Mac installer (a signed DMG holding one universal app, for Apple
+# silicon and Intel), checks it against the release's SHA256SUMS.txt when there is one, and drags
+# the app into Applications. Safe to rerun: it replaces an older Study Stash.app only once the new
+# copy is fully in place.
 #
-#   GRANOLA_SHARE_VERSION=v0.2.0 | main   what to install (default: newest release, else main)
-#   GRANOLA_SHARE_SRC=/path/to/checkout   install from a local copy (development, CI)
-#   GRANOLA_SHARE_NO_SETUP=1              install only, skip setup
-#   GRANOLA_SHARE_TERMINAL=1              laptop: answer setup in the terminal instead of the browser
-#   GRANOLA_SHARE_HOME=...                data directory (default ~/.granola-share)
-set -e
+#   STUDYSTASH_DMG=<path>          install this DMG instead of downloading one (development, CI)
+#   STUDYSTASH_APPLICATIONS=<dir>  install here instead of /Applications (or ~/Applications)
+#   STUDYSTASH_NO_OPEN=1           don't open the app once it's installed
+set -eu
 
-ROLE=client
-case "${1:-}" in
-  server|client) ROLE="$1"; shift ;;
+if [ "$(uname -s)" != Darwin ]; then
+  echo "Study Stash runs on a Mac or a Windows PC. On Windows, run install.ps1 instead." >&2
+  exit 1
+fi
+
+# The old server/client wording still works; STUDYSTASH_ROLE and a plain argument do too.
+ROLE="${1:-${STUDYSTASH_ROLE:-${GRANOLA_SHARE_ROLE:-laptop}}}"
+case "$ROLE" in
+  library | server) NAME=Study-Stash-Library.dmg ;;
+  *) NAME=Study-Stash-Laptop.dmg ;;
 esac
-SLUG="Joseph-Rus/study-stash"
-HOME_DIR="${GRANOLA_SHARE_HOME:-$HOME/.granola-share}"
-LOG="$HOME_DIR/install.log"
-ORIG_PATH="$PATH"
+SLUG=Joseph-Rus/study-stash
 
 say() { printf '%s\n' "$*"; }
 fail() {
-  say ""
-  say "granola-share install failed: $*"
-  say "Rerunning the same command is safe. Help: https://github.com/$SLUG#troubleshooting"
+  say "Study Stash install failed: $*" >&2
   exit 1
 }
 
-say "== granola-share installer ($ROLE) =="
-command -v curl >/dev/null 2>&1 || fail "curl is missing"
-mkdir -p "$HOME_DIR" || fail "can't create $HOME_DIR"
+# Older releases connected a laptop with an address and password passed as env vars; Study
+# Stash's own setup asks for them now, in the app, so this just points you at them.
+ADDR="${STUDYSTASH_SERVER:-${GRANOLA_SHARE_SERVER:-}}"
+[ -n "$ADDR" ] && say "Type this address in setup: $ADDR"
 
-# 1. uv: installs Python and the app into your home folder.
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-if ! command -v uv >/dev/null 2>&1; then
-  say "Installing uv (Python manager)..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh >"$LOG" 2>&1 || { tail -n 15 "$LOG"; fail "could not install uv"; }
-  command -v uv >/dev/null 2>&1 || fail "uv was installed but can't be found; open a new terminal and rerun"
-fi
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/study-stash-install.XXXXXX")
+cleanup() {
+  hdiutil detach "$WORK/mount" -quiet >/dev/null 2>&1 || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 
-# 2. Which version.
-if [ -n "${GRANOLA_SHARE_SRC:-}" ]; then
-  SRC="$GRANOLA_SHARE_SRC"
-  WHAT="local copy at $SRC"
-else
-  REF="${GRANOLA_SHARE_VERSION:-}"
-  if [ -z "$REF" ]; then
-    REF=$(curl -fsSL "https://api.github.com/repos/$SLUG/releases/latest" 2>/dev/null \
-          | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1) || REF=""
-  fi
-  if [ -z "$REF" ] || [ "$REF" = "main" ]; then
-    SRC="granola-share @ https://github.com/$SLUG/archive/refs/heads/main.tar.gz"
-    WHAT="latest main"
-  else
-    SRC="granola-share @ https://github.com/$SLUG/archive/refs/tags/$REF.tar.gz"
-    WHAT="$REF"
+DMG="${STUDYSTASH_DMG:-}"
+if [ -z "$DMG" ]; then
+  command -v curl >/dev/null 2>&1 || fail "curl is missing"
+  DMG="$WORK/$NAME"
+  say "Downloading $NAME..."
+  curl -fsSL -o "$DMG" "https://github.com/$SLUG/releases/latest/download/$NAME" \
+    || fail "couldn't download $NAME (https://github.com/$SLUG/releases/latest)"
+  SUMS="$WORK/SHA256SUMS.txt"
+  if curl -fsSL -o "$SUMS" "https://github.com/$SLUG/releases/latest/download/SHA256SUMS.txt" 2>/dev/null; then
+    WANT=$(awk -v n="$NAME" '$2 == n { print $1 }' "$SUMS")
+    GOT=$(shasum -a 256 "$DMG" | awk '{ print $1 }')
+    [ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || fail "the download didn't match its checksum, so nothing was installed"
   fi
 fi
 
-# 3. The command itself. A uv-managed Python means a Homebrew or system upgrade can't break it.
-say "Installing granola-share ($WHAT)..."
-UV_PYTHON_PREFERENCE=only-managed uv tool install --force --python 3.12 \
-  --reinstall-package granola-share --refresh-package granola-share "$SRC" >"$LOG" 2>&1 \
-  || { tail -n 20 "$LOG"; fail "uv could not install granola-share (full log: $LOG)"; }
-BIN_DIR="$(uv tool dir --bin 2>/dev/null || printf '%s' "$HOME/.local/bin")"
-BIN="$BIN_DIR/granola-share"
-[ -x "$BIN" ] || fail "installed, but $BIN is missing (log: $LOG)"
-say "Installed $("$BIN" --version)."
-case ":$ORIG_PATH:" in
-  *":$BIN_DIR:"*) ;;
-  *) uv tool update-shell >/dev/null 2>&1 || true  # adds $BIN_DIR to PATH for new terminals
-     say "The granola-share command works in new terminal windows (it lives in $BIN_DIR)." ;;
-esac
+say "Opening $NAME..."
+mkdir -p "$WORK/mount"
+hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$WORK/mount" "$DMG" >/dev/null \
+  || fail "couldn't open $NAME"
+[ -d "$WORK/mount/Study Stash.app" ] || fail "$NAME has no Study Stash.app in it"
 
-# 4. Setup.
-if [ "${GRANOLA_SHARE_NO_SETUP:-}" = "1" ]; then
-  say "Skipping setup. Next: granola-share setup (the Mac mini) or granola-share client open (your laptop)."
-  exit 0
+DEST="${STUDYSTASH_APPLICATIONS:-}"
+if [ -z "$DEST" ]; then
+  DEST=/Applications
+  [ -w "$DEST" ] || DEST="$HOME/Applications"
 fi
-say ""
-if [ "$ROLE" = client ] && [ -z "${GRANOLA_SHARE_TERMINAL:-}" ] && [ "$#" -eq 0 ]; then
-  # The laptop sets up in the Study Stash app (on a Mac; elsewhere the browser): this starts the
-  # background service, adds the app, and opens its setup page with the library's address and password.
-  "$BIN" --home "$HOME_DIR" client open --install || fail "Study Stash didn't start (log: $HOME_DIR/logs/client.log)"
-  say "Setup continues in the Study Stash window. Later, open Study Stash from your Applications folder."
-  exit 0
+mkdir -p "$DEST"
+say "Installing into $DEST..."
+rm -rf "$DEST/Study Stash.app.new"
+ditto "$WORK/mount/Study Stash.app" "$DEST/Study Stash.app.new" || fail "couldn't copy the app into $DEST"
+rm -rf "$DEST/Study Stash.app"
+mv "$DEST/Study Stash.app.new" "$DEST/Study Stash.app"
+
+say "Installed Study Stash in $DEST."
+if [ "${STUDYSTASH_NO_OPEN:-}" != 1 ]; then
+  open "$DEST/Study Stash.app"
 fi
-if [ "$ROLE" = server ]; then set -- setup "$@"; else set -- client setup "$@"; fi
-# `curl | sh` feeds this script on stdin, so the wizard reads answers from the terminal instead.
-if (: </dev/tty) 2>/dev/null; then
-  exec "$BIN" --home "$HOME_DIR" "$@" </dev/tty
-fi
-exec "$BIN" --home "$HOME_DIR" "$@"
