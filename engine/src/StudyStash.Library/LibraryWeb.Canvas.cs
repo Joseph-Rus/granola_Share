@@ -94,11 +94,72 @@ public sealed partial class LibraryWeb
                         else s.Courses.Remove(cls);
                     }
                 if (body?["sync"] is JsonValue sv && sv.TryGetValue(out bool now) && now) s.SyncNow = true;
+                if (body?["poll_minutes"] is JsonValue pv && pv.TryGetValue(out double pm)) s.PollMinutes = Math.Clamp((int)pm, 15, 1440);
                 if (body?["dismiss_update"] is JsonValue dv && dv.TryGetValue(out bool dismiss) && dismiss && s.ExtensionUpdate is { } noted)
                     s.ExtensionUpdate = noted with { Dismissed = true };
             });
             return Http.Json(CanvasJson());
         })));
+        app.MapGet("/api/v2/canvas/state", (HttpContext ctx) => Api(ctx, () => Http.Json(CanvasView.State(Canvas, DateTimeOffset.Now))));
+        app.MapGet("/api/v2/canvas/classes", (HttpContext ctx) => Api(ctx, () =>
+            Http.Json(CanvasView.Classes(cfg.ClassNames(), Canvas.Settings, cfg.Home, ScoutOf, DateTimeOffset.Now))));
+        app.MapGet("/api/v2/canvas/due", (HttpContext ctx) => Api(ctx, () =>
+        {
+            var s = Canvas.Settings;
+            return Http.Json(CanvasView.Due(Assignments.Load(cfg.Home), s.LastDone, DateTimeOffset.Now, Canvas.Zone, Canvas.Crawl.AssignmentFolder));
+        }));
+        app.MapGet("/api/v2/canvas/assignments", (HttpContext ctx, string? @class) => Api(ctx, () =>
+        {
+            if (@class is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(400, "unknown class");
+            var mine = Assignments.Load(cfg.Home).Where(a => a.ClassName == @class).ToList();
+            return Http.Json(CanvasView.ForClass(@class, mine, id => Canvas.Crawl.AssignmentFolder(@class, id)));
+        }));
+        app.MapGet("/api/v2/canvas/assignment", (HttpContext ctx, string? @class, long? id) => Api(ctx, () =>
+        {
+            if (@class is null || id is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(404, "no such assignment");
+            var found = CanvasView.Assignment(CourseIndex.Load(cfg.Home, @class), id.Value, DateTimeOffset.Now, Canvas.Crawl.AssignmentFolder(@class, id.Value));
+            return found is null ? Http.Detail(404, "no such assignment") : Http.Json(found);
+        }));
+        app.MapGet("/api/v2/canvas/modules", (HttpContext ctx, string? @class) => Api(ctx, () =>
+            @class is null || !cfg.ClassNames().Contains(@class) ? Http.Detail(400, "unknown class") : Http.Json(CanvasView.Modules(CourseIndex.Load(cfg.Home, @class)))));
+        app.MapGet("/api/v2/canvas/files", (HttpContext ctx, string? @class) => Api(ctx, () =>
+            @class is null || !cfg.ClassNames().Contains(@class) ? Http.Detail(400, "unknown class") : Http.Json(CanvasView.Files(CourseIndex.Load(cfg.Home, @class)))));
+        app.MapGet("/api/v2/canvas/pages", (HttpContext ctx, string? @class) => Api(ctx, () =>
+            @class is null || !cfg.ClassNames().Contains(@class) ? Http.Detail(400, "unknown class") : Http.Json(CanvasView.Pages(CourseIndex.Load(cfg.Home, @class)))));
+        app.MapGet("/api/v2/canvas/announcements", (HttpContext ctx, string? @class) => Api(ctx, () =>
+        {
+            if (@class is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(400, "unknown class");
+            return Http.Json(CanvasView.Announcements(CourseIndex.Load(cfg.Home, @class), CanvasSeen.For(cfg.Home, @class)));
+        }));
+        app.MapPost("/api/v2/canvas/announcements/seen", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            var body = await Http.JsonBodyAsync(ctx.Request);
+            string cls = S(body?["class"]);
+            if (cls.Length == 0 || !cfg.ClassNames().Contains(cls)) return Http.Detail(400, "unknown class");
+            var ids = (body?["ids"] as JsonArray ?? []).Select(n => n is JsonValue v && v.TryGetValue(out long id) ? id : (long?)null).OfType<long>();
+            CanvasSeen.Mark(cfg.Home, cls, ids);
+            return Http.Json(new JsonObject { ["ok"] = true });
+        })));
+        app.MapGet("/api/v2/canvas/notifications", (HttpContext ctx, long? after) => Api(ctx, () =>
+        {
+            CanvasNotifications.EnsureDueSoon(cfg.Home, Assignments.Upcoming(Assignments.Load(cfg.Home), DateTime.Now, 1), DateTimeOffset.Now, Canvas.Zone);
+            var (last, items) = CanvasNotifications.Since(cfg.Home, after ?? 0);
+            return Http.Json(CanvasView.Notifications(last, items));
+        }));
+        app.MapPost("/api/v2/canvas/notifications/seen", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            var body = await Http.JsonBodyAsync(ctx.Request);
+            if (body?["up_to"] is not JsonValue v || !v.TryGetValue(out long upTo)) return Http.Detail(400, "up_to is required");
+            CanvasNotifications.MarkSeen(cfg.Home, upTo);
+            return Http.Json(new JsonObject { ["ok"] = true });
+        })));
+        app.MapGet("/api/v2/files/raw", (HttpContext ctx, string? @class, string? path) => Api(ctx, () =>
+        {
+            if (@class is null || path is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(404, "no such file");
+            string root = Path.GetFullPath(store.ClassDir(@class)), full = Path.GetFullPath(Path.Combine(root, path));
+            if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !File.Exists(full)) return Http.Detail(404, "no such file");
+            return Results.File(full, "application/octet-stream", Path.GetFileName(full));
+        }));
         app.MapGet("/api/v2/canvas/extension", (HttpContext ctx) => Api(ctx, () => Http.Json(new JsonObject
         {
             ["key"] = CanvasSettings.ExtensionKey(cfg.Home), ["canvas"] = Canvas.Settings.Url, ["version"] = Extension.Version(),
@@ -163,17 +224,38 @@ public sealed partial class LibraryWeb
     string PrepareExtensionHere() =>
         Extension.Prepare(Extension.Folder(cfg.Home), $"http://127.0.0.1:{cfg.WebPort}", CanvasSettings.ExtensionKey(cfg.Home), Canvas.Settings.Url);
 
-    /// <summary>Ask Canvas (through the extension) which courses the person is in, and keep the list for Settings.</summary>
+    /// <summary>Ask Canvas (through the extension) which courses the person is in, and keep the list (with each
+    /// course's code and term, for <see cref="CourseMatch"/>) for Settings. Follows every page.</summary>
     async Task<JsonObject> FindCoursesAsync()
     {
         if (!Canvas.Settings.On) return new JsonObject { ["error"] = "Add your school's Canvas address first." };
-        var r = await Canvas.FetchAsync("/api/v1/courses?enrollment_state=active&per_page=100", "json");
-        if (r["error"] is not null) return r;
         var found = new Dictionary<string, string>();
-        foreach (var c in (JsonNode.Parse(S(r["json"])) as JsonArray ?? []).OfType<JsonObject>())
-            if (c["id"] is JsonValue id && S(c["name"]) is { Length: > 0 } name) found[id.ToJsonString()] = name;
-        CanvasSettings.Update(cfg.Home, s => s.Available = found);
+        var info = new Dictionary<string, CourseInfo>();
+        string? next = "/api/v1/courses?enrollment_state=active&include[]=term&per_page=100";
+        for (int page = 0; page < 20 && next is not null; page++)
+        {
+            var r = await Canvas.FetchAsync(next, "json");
+            if (r["error"] is not null) return page == 0 ? r : CanvasJson();
+            foreach (var c in (JsonNode.Parse(S(r["json"])) as JsonArray ?? []).OfType<JsonObject>())
+                if (c["id"] is JsonValue id && S(c["name"]) is { Length: > 0 } name)
+                {
+                    string sid = id.ToJsonString();
+                    found[sid] = name;
+                    info[sid] = new CourseInfo(S(c["course_code"]), name, S(c["term"]?["name"]));
+                }
+            next = r["next_page"] is JsonValue nv ? S(nv) : null;
+        }
+        CanvasSettings.Update(cfg.Home, s => { s.Available = found; s.CourseInfo = info; });
         return CanvasJson();
+    }
+
+    /// <summary>Where the course scout stands on a class, for <c>/api/v2/canvas/classes</c>.</summary>
+    ScoutState ScoutOf(string cls)
+    {
+        var s = Canvas.Settings;
+        if (options.Scout?.Running == cls) return new ScoutState("exploring", 0, "", "");
+        if (options.Scout?.Waiting.Contains(cls) == true) return new ScoutState("waiting", 0, "", "");
+        return s.Scouts.TryGetValue(cls, out var r) ? new ScoutState(r.Ok ? "done" : "failed", r.Files, r.When, r.Report) : new ScoutState("never", 0, "", "");
     }
 
     JsonObject AssignmentJson(Assignment a) => new()
@@ -194,12 +276,15 @@ public sealed partial class LibraryWeb
         var available = new JsonObject();
         foreach (var (id, name) in s.Available) available[id] = name;
         var (waiting, inflight) = Canvas.Crawl.Left;
+        var courseInfo = new JsonObject();
+        foreach (var (id, info) in s.CourseInfo) courseInfo[id] = new JsonObject { ["code"] = info.Code, ["name"] = info.Name, ["term"] = info.Term };
         return new JsonObject
         {
             ["url"] = s.Url, ["courses"] = courses, ["available"] = available, ["last_sync"] = s.LastSync, ["error"] = s.Error,
             ["needs_login"] = s.NeedsLogin, ["extension_seen"] = s.ExtensionSeen, ["extension_version"] = s.ExtensionVersion,
             ["extension_latest"] = Extension.Version(), ["extension_outdated"] = s.ExtensionOutdated,
             ["extension_update"] = s.ExtensionUpdate is { Dismissed: false } up ? new JsonObject { ["from"] = up.From, ["to"] = up.To, ["at"] = up.At } : null,
+            ["state"] = CanvasView.State(Canvas, DateTimeOffset.Now), ["course_info"] = courseInfo,
             ["syncing"] = Canvas.Crawl.Active, ["left"] = waiting + inflight,
             ["exploring"] = options.Scout?.Running, ["scouts"] = new JsonObject(s.Scouts.Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)new JsonObject
             {
