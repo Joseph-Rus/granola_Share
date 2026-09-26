@@ -1,0 +1,38 @@
+<!-- Canvas's own state (design 08), one card: the Mac's group + icon + pill. Stands alone (e.g. atop the Due list)
+     or feeds Settings → Canvas's header line when it's connected or syncing. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.MacCanvasStatus"
+             x:DataType="vm:CanvasStatusModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/MacCanvasStyles.axaml" />
+  </UserControl.Styles>
+  <Border Classes="cv-card" IsVisible="{Binding IsVisible}">
+    <!-- A Grid, not a horizontal StackPanel: the message column needs a real width bound to wrap its text against
+         (a stacking panel measures its children at infinite width along the stack axis). -->
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+      <c:Spinner Grid.Column="0" IsVisible="{Binding IsSyncing}" Width="18" Height="18" Thickness="2" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+      <c:Icon Grid.Column="0" IsVisible="{Binding !IsSyncing}" Classes="cv-glyph" Glyph="{Binding Glyph}" VerticalAlignment="Center"
+              Classes.cv-info="{Binding IsInfo}" Classes.cv-ok="{Binding IsOk}" Classes.cv-warn="{Binding IsWarn}" Classes.cv-error="{Binding IsError}" />
+      <StackPanel Grid.Column="1" MinWidth="0" VerticalAlignment="Center">
+        <TextBlock Classes="cv-title" Text="{Binding Title}" />
+        <TextBlock Classes="cv-text" Text="{Binding Text}" />
+        <Border Classes="cv-track" IsVisible="{Binding HasProgress}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="{Binding Progress, Converter={x:Static vm:CanvasConverters.FillStar}}" />
+              <ColumnDefinition Width="{Binding Progress, Converter={x:Static vm:CanvasConverters.RestStar}}" />
+            </Grid.ColumnDefinitions>
+            <Border Classes="cv-bar" />
+          </Grid>
+        </Border>
+      </StackPanel>
+      <Button Grid.Column="2" Classes="cv-pill" Classes.cv-primary="{Binding IsPrimary}" Classes.cv-plain="{Binding IsPlain}"
+              IsVisible="{Binding HasAction}" Command="{Binding ActCommand}" VerticalAlignment="Center">
+        <TextBlock Text="{Binding ActionLabel}" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

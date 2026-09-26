@@ -1,0 +1,44 @@
+<!-- Canvas's own state (design 08), one InfoBar: Fluent's ground and icon colours by tone, a close × on every state
+     but Connected and Updated (the design gives those two none). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinCanvasStatus"
+             x:DataType="vm:CanvasStatusModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinCanvasStyles.axaml" />
+  </UserControl.Styles>
+  <Border Classes="cv-bar" IsVisible="{Binding IsVisible}"
+          Classes.cv-info="{Binding IsInfo}" Classes.cv-ok="{Binding IsOk}" Classes.cv-warn="{Binding IsWarn}" Classes.cv-error="{Binding IsError}">
+    <!-- A Grid, not a horizontal StackPanel: the message column needs a real width bound to wrap its text against
+         (a stacking panel measures its children at infinite width along the stack axis). -->
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+      <Border Grid.Column="0" Classes="cv-dot" VerticalAlignment="Top"
+              Classes.cv-info="{Binding IsInfo}" Classes.cv-ok="{Binding IsOk}" Classes.cv-warn="{Binding IsWarn}" Classes.cv-error="{Binding IsError}">
+        <TextBlock Text="{Binding Tone, Converter={x:Static vm:CanvasConverters.InfoBarGlyph}}" />
+      </Border>
+      <StackPanel Grid.Column="1" MinWidth="0" VerticalAlignment="Top">
+        <TextBlock Classes="cv-msg">
+          <Run Text="{Binding Title}" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Text}" />
+        </TextBlock>
+        <Border Classes="cv-track" IsVisible="{Binding HasProgress}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="{Binding Progress, Converter={x:Static vm:CanvasConverters.FillStar}}" />
+              <ColumnDefinition Width="{Binding Progress, Converter={x:Static vm:CanvasConverters.RestStar}}" />
+            </Grid.ColumnDefinitions>
+            <Border Classes="cv-bar-fill" />
+            <Border Grid.Column="1" Classes="cv-bar-rest" />
+          </Grid>
+        </Border>
+      </StackPanel>
+      <Button Grid.Column="2" Classes="cv-btn" Classes.cv-primary="{Binding IsPrimary}" IsVisible="{Binding ShowWinButton}" Command="{Binding ActCommand}">
+        <TextBlock Text="{Binding ActionLabel}" />
+      </Button>
+      <Button Grid.Column="3" Classes="cv-close" IsVisible="{Binding CanClose}" Command="{Binding CloseCommand}">
+        <c:Icon Glyph="close" Size="16" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

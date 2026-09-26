@@ -1,0 +1,106 @@
+<!-- The Canvas screens' shared Windows look (design 06, 08): a "cv-" prefix on every class so it never crosses the
+     settings page's own classes once our controls sit inside it. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:StudyStash.App.Controls">
+
+  <!-- design 08: one state's InfoBar -->
+  <Style Selector="Border.cv-bar">
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="16,12,8,12" />
+    <Setter Property="MinHeight" Value="48" />
+  </Style>
+  <Style Selector="Border.cv-bar.cv-info">
+    <Setter Property="Background" Value="{DynamicResource IbInfo}" />
+  </Style>
+  <Style Selector="Border.cv-bar.cv-ok">
+    <Setter Property="Background" Value="{DynamicResource IbOk}" />
+  </Style>
+  <Style Selector="Border.cv-bar.cv-warn">
+    <Setter Property="Background" Value="{DynamicResource IbWarn}" />
+  </Style>
+  <Style Selector="Border.cv-bar.cv-error">
+    <Setter Property="Background" Value="{DynamicResource IbErr}" />
+  </Style>
+
+  <Style Selector="Border.cv-dot">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Margin" Value="0,3,0,0" />
+  </Style>
+  <Style Selector="Border.cv-dot.cv-info">
+    <Setter Property="Background" Value="{DynamicResource IcInfo}" />
+  </Style>
+  <Style Selector="Border.cv-dot.cv-ok">
+    <Setter Property="Background" Value="{DynamicResource IcOk}" />
+  </Style>
+  <Style Selector="Border.cv-dot.cv-warn">
+    <Setter Property="Background" Value="{DynamicResource IcWarn}" />
+  </Style>
+  <Style Selector="Border.cv-dot.cv-error">
+    <Setter Property="Background" Value="{DynamicResource IcErr}" />
+  </Style>
+  <Style Selector="Border.cv-dot TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource IbGlyph}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.cv-msg">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20.3" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,1,0,0" />
+  </Style>
+
+  <Style Selector="Border.cv-track">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="Margin" Value="0,8,0,0" />
+  </Style>
+  <Style Selector="Border.cv-bar-fill">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.cv-bar-rest">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource Fg3}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- A state's button: the accent (Connect, Show me how) or Fluent's ctrl pill (everything else with one). -->
+  <Style Selector="Button.cv-btn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+  <Style Selector="Button.cv-btn.cv-primary">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.cv-btn.cv-primary TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.cv-close">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+
+</Styles>

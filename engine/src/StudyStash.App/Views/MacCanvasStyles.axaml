@@ -1,0 +1,86 @@
+<!-- The Canvas screens' shared Mac look (design 06, 08): a "cv-" prefix on every class so it never crosses the
+     settings page's own "group"/"row"/"pill" classes once our controls sit inside it. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:StudyStash.App.Controls">
+
+  <!-- design 08: one state's card -->
+  <Style Selector="Border.cv-card">
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Background" Value="{DynamicResource Group}" />
+    <Setter Property="Padding" Value="16,14,14,14" />
+  </Style>
+
+  <Style Selector="c|Icon.cv-glyph">
+    <Setter Property="Size" Value="20" />
+    <Setter Property="Filled" Value="True" />
+  </Style>
+  <Style Selector="c|Icon.cv-glyph.cv-info">
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="c|Icon.cv-glyph.cv-ok">
+    <Setter Property="Foreground" Value="{DynamicResource Ok}" />
+  </Style>
+  <Style Selector="c|Icon.cv-glyph.cv-warn">
+    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+  </Style>
+  <!-- The design has no separate Mac "error" colour: the error card's icon is the accent, same as its title link. -->
+  <Style Selector="c|Icon.cv-glyph.cv-error">
+    <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <Style Selector="TextBlock.cv-title">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.cv-text">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="LineHeight" Value="17.4" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,2,0,0" />
+  </Style>
+
+  <!-- Syncing's progress bar: a flexible track, the done fraction filled in the accent. -->
+  <Style Selector="Border.cv-track">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource Fill2}" />
+    <Setter Property="Margin" Value="0,8,0,0" />
+  </Style>
+  <Style Selector="Border.cv-bar">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <!-- A state's button: a tinted pill (Connect, Show me how), a plain raised pill (everything else with one), or
+       plain text (Dismiss — no fill at all in the design). -->
+  <Style Selector="Button.cv-pill">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource Raised}" />
+  </Style>
+  <Style Selector="Button.cv-pill /template/ Border#PART_Bg">
+    <Setter Property="BoxShadow" Value="{DynamicResource RaisedShadow}" />
+  </Style>
+  <Style Selector="Button.cv-pill.cv-primary">
+    <Setter Property="Background" Value="{DynamicResource Tint}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Button.cv-pill.cv-primary TextBlock">
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Button.cv-pill.cv-primary /template/ Border#PART_Bg">
+    <Setter Property="BoxShadow" Value="{DynamicResource EdgeTint}" />
+  </Style>
+  <Style Selector="Button.cv-pill.cv-plain">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.cv-pill.cv-plain /template/ Border#PART_Bg">
+    <Setter Property="BoxShadow" Value="none" />
+  </Style>
+
+</Styles>
