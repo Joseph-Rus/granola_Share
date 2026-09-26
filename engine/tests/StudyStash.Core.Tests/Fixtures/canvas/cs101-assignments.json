@@ -1,0 +1,130 @@
+[
+  {
+    "id": 9005,
+    "name": "Syllabus quiz",
+    "description": "<p>Ten quick questions on the syllabus: late work, office hours and how labs are marked.</p>",
+    "course_id": 4201,
+    "due_at": "2025-09-06T06:59:00Z",
+    "unlock_at": null,
+    "lock_at": null,
+    "points_possible": 5.0,
+    "grading_type": "points",
+    "submission_types": ["online_quiz"],
+    "allowed_attempts": 2,
+    "published": true,
+    "has_submitted_submissions": true,
+    "is_quiz_assignment": true,
+    "quiz_id": 7001,
+    "html_url": "https://canvas.test/courses/4201/assignments/9005",
+    "submission": {
+      "id": 88005, "assignment_id": 9005, "user_id": 5501, "workflow_state": "unsubmitted",
+      "submitted_at": null, "graded_at": null, "score": null, "grade": null, "attempt": null,
+      "late": false, "missing": false, "excused": true, "points_deducted": null, "seconds_late": 0
+    }
+  },
+  {
+    "id": 9003,
+    "name": "Problem set 3",
+    "description": "<p>Loops and lists: six problems. Hand in one Python file.</p>",
+    "course_id": 4201,
+    "due_at": "2025-09-10T06:59:00Z",
+    "unlock_at": "2025-09-02T07:00:00Z",
+    "lock_at": null,
+    "points_possible": 20.0,
+    "grading_type": "points",
+    "submission_types": ["online_upload"],
+    "allowed_extensions": ["py"],
+    "allowed_attempts": -1,
+    "published": true,
+    "has_submitted_submissions": true,
+    "html_url": "https://canvas.test/courses/4201/assignments/9003",
+    "submission": {
+      "id": 88003, "assignment_id": 9003, "user_id": 5501, "workflow_state": "graded",
+      "submitted_at": "2025-09-09T22:12:00Z", "graded_at": "2025-09-15T17:30:00Z", "score": 20.0, "grade": "20",
+      "attempt": 1, "late": false, "missing": false, "excused": false, "points_deducted": null, "seconds_late": 0
+    }
+  },
+  {
+    "id": 9004,
+    "name": "Lab 2: tracing loops",
+    "description": "<p>Trace the three loops on the handout and say what each one prints.</p>",
+    "course_id": 4201,
+    "due_at": "2025-09-12T06:59:00Z",
+    "unlock_at": null,
+    "lock_at": null,
+    "points_possible": 20.0,
+    "grading_type": "points",
+    "submission_types": ["online_upload"],
+    "allowed_attempts": -1,
+    "published": true,
+    "has_submitted_submissions": true,
+    "html_url": "https://canvas.test/courses/4201/assignments/9004",
+    "submission": {
+      "id": 88004, "assignment_id": 9004, "user_id": 5501, "workflow_state": "graded",
+      "submitted_at": "2025-09-12T15:20:00Z", "graded_at": "2025-09-18T16:00:00Z", "score": 17.0, "grade": "17",
+      "attempt": 1, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "seconds_late": 30060
+    }
+  },
+  {
+    "id": 9002,
+    "name": "Problem set 4",
+    "description": "<p>Five short problems on stack frames and scope. Show your working for 3a and 3b.</p>",
+    "course_id": 4201,
+    "due_at": "2025-09-17T06:59:00Z",
+    "unlock_at": "2025-09-09T07:00:00Z",
+    "lock_at": null,
+    "points_possible": 20.0,
+    "grading_type": "points",
+    "submission_types": ["online_upload"],
+    "allowed_extensions": ["pdf", "py"],
+    "allowed_attempts": -1,
+    "published": true,
+    "has_submitted_submissions": true,
+    "html_url": "https://canvas.test/courses/4201/assignments/9002",
+    "rubric_settings": {"id": 402, "title": "Problem set rubric", "points_possible": 20.0},
+    "rubric": [
+      {"id": "_2001", "points": 5.0, "description": "Base cases", "long_description": "Every recursive function stops where it should.",
+       "ratings": [{"id": "_2001a", "points": 5.0, "description": "Full marks"}, {"id": "_2001b", "points": 0.0, "description": "No marks"}]},
+      {"id": "_2002", "points": 10.0, "description": "Stack traces", "long_description": "A frame for every call, in order.",
+       "ratings": [{"id": "_2002a", "points": 10.0, "description": "Full marks"}, {"id": "_2002b", "points": 8.0, "description": "One frame missing"}, {"id": "_2002c", "points": 0.0, "description": "No marks"}]},
+      {"id": "_2003", "points": 5.0, "description": "Style", "long_description": "",
+       "ratings": [{"id": "_2003a", "points": 5.0, "description": "Full marks"}, {"id": "_2003b", "points": 0.0, "description": "No marks"}]}
+    ],
+    "submission": {
+      "id": 88002, "assignment_id": 9002, "user_id": 5501, "workflow_state": "graded",
+      "submitted_at": "2025-09-17T04:41:00Z", "graded_at": "2025-09-22T18:00:00Z", "score": 18.0, "grade": "18",
+      "attempt": 1, "late": false, "missing": false, "excused": false, "points_deducted": null, "seconds_late": 0
+    }
+  },
+  {
+    "id": 9001,
+    "name": "Lab 3: recursion traces",
+    "description": "<p>Trace factorial(4) and fib(5) by hand. For each one, draw the call stack at its deepest point and write down what every call returns. Hand in a single PDF.</p>",
+    "course_id": 4201,
+    "due_at": "2025-10-01T06:59:00Z",
+    "unlock_at": "2025-09-23T07:00:00Z",
+    "lock_at": null,
+    "points_possible": 20.0,
+    "grading_type": "points",
+    "submission_types": ["online_upload"],
+    "allowed_extensions": ["pdf"],
+    "allowed_attempts": -1,
+    "published": true,
+    "has_submitted_submissions": false,
+    "html_url": "https://canvas.test/courses/4201/assignments/9001",
+    "rubric_settings": {"id": 401, "title": "Lab 3 rubric", "points_possible": 20.0},
+    "rubric": [
+      {"id": "_1001", "points": 10.0, "description": "Correct traces", "long_description": "Every call and every return value is right.",
+       "ratings": [{"id": "_1001a", "points": 10.0, "description": "Full marks"}, {"id": "_1001b", "points": 5.0, "description": "Partial"}, {"id": "_1001c", "points": 0.0, "description": "No marks"}]},
+      {"id": "_1002", "points": 6.0, "description": "Stack diagram at the deepest point", "long_description": "",
+       "ratings": [{"id": "_1002a", "points": 6.0, "description": "Full marks"}, {"id": "_1002b", "points": 3.0, "description": "Partial"}, {"id": "_1002c", "points": 0.0, "description": "No marks"}]},
+      {"id": "_1003", "points": 4.0, "description": "Return values labelled", "long_description": "",
+       "ratings": [{"id": "_1003a", "points": 4.0, "description": "Full marks"}, {"id": "_1003b", "points": 0.0, "description": "No marks"}]}
+    ],
+    "submission": {
+      "id": 88001, "assignment_id": 9001, "user_id": 5501, "workflow_state": "unsubmitted",
+      "submitted_at": null, "graded_at": null, "score": null, "grade": null, "attempt": null,
+      "late": false, "missing": false, "excused": false, "points_deducted": null, "seconds_late": 0
+    }
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "id": 555, "uuid": "u555", "folder_id": 71, "display_name": "recursion-slides.pdf", "filename": "recursion-slides.pdf",
+  "content-type": "application/pdf", "url": "https://canvas.test/files/555/download?download_frd=1&verifier=v555",
+  "size": 2411520, "created_at": "2025-09-19T16:00:00Z", "updated_at": "2025-09-19T16:00:00Z", "modified_at": "2025-09-19T16:00:00Z",
+  "locked": false, "hidden": false, "locked_for_user": false, "hidden_for_user": false, "mime_class": "pdf"
+}
