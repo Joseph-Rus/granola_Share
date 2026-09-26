@@ -252,7 +252,7 @@ public static class Ready
         string rule = Machine.FirewallRule;
         return $"Remove-NetFirewallRule -DisplayName '{rule}' -ErrorAction SilentlyContinue; "
             + $"New-NetFirewallRule -DisplayName '{rule}' "
-            + "-Description 'Lets your laptop reach your Study Stash library. Added by granola-share setup.' "
+            + "-Description 'Lets your laptop reach your Study Stash library. Added by Study Stash setup.' "
             + $"-Direction Inbound -Action Allow -Protocol TCP -LocalPort {port} -RemoteAddress {Tailnet},LocalSubnet "
             + "-Profile Any | Out-Null; "
             + $"$py = @({list}); Get-NetFirewallApplicationFilter | Where-Object {{ $py -contains $_.Program }} "

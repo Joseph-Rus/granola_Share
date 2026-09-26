@@ -3,7 +3,8 @@ using StudyStash.Library;
 namespace StudyStash.Core.Tests;
 
 /// <summary>The engine's commands: the app runs as the engine only for commands that exist, and the ones that are gone
-/// (Granola's sign-in and sync, the laptop's old watcher) open the app or print the usage instead.</summary>
+/// (Granola's sign-in and sync, the laptop's old watcher, the check that compared two engines' config files) open the
+/// app or print the usage instead.</summary>
 public class CliTests
 {
     [Theory]
@@ -23,6 +24,7 @@ public class CliTests
     [InlineData("tools")]
     [InlineData("client", "run")]
     [InlineData("--home", "x", "client", "open")]
+    [InlineData("config-check")]
     [InlineData]
     public void A_command_that_is_gone_opens_the_app(params string[] args) => Assert.False(Cli.IsCommand(args));
 
@@ -30,6 +32,7 @@ public class CliTests
     [InlineData("login")]
     [InlineData("sync")]
     [InlineData("tools")]
+    [InlineData("config-check")]
     public async Task A_command_that_is_gone_prints_the_usage(string command)
     {
         using var dir = new TempDir();

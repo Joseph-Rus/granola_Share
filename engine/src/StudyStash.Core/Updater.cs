@@ -340,7 +340,7 @@ public static partial class Updates
         if (rel is null || !IsNewer(rel)) return "up to date";
         if (!underService || WhyNotUpdatable(host.Dir) is not null)
         {
-            log($"[update] {rel.Tag} is available: run `granola-share update`.");
+            log($"[update] {rel.Tag} is available: run `studystash update`.");
             return "available";
         }
         var gate = new UpdateLock(Path.Combine(home, "update.lock"));

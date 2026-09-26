@@ -69,7 +69,7 @@ public class UpdaterTests
         // run by hand in a terminal: only say so
         Assert.Equal("available", await Updates.CheckAndUpdateAsync(dir.Path, host, logs.Add, false, Latest, Apply, exits.Add));
         Assert.Empty(applied);
-        Assert.Equal("[update] v99.0.0 is available: run `granola-share update`.", logs.Single());
+        Assert.Equal("[update] v99.0.0 is available: run `studystash update`.", logs.Single());
         // under launchd or systemd: install, then stop so the service manager starts the new version
         Assert.Equal("restarting", await Updates.CheckAndUpdateAsync(dir.Path, host, logs.Add, true, Latest, Apply, exits.Add));
         Assert.Equal([("v99.0.0", false)], applied);

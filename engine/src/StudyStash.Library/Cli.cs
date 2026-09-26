@@ -14,7 +14,7 @@ namespace StudyStash.Library;
 public static class Cli
 {
     /// <summary>The words that make the app the engine instead of opening its windows.</summary>
-    public static readonly string[] Commands = ["run", "serve", "setup", "init", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
+    public static readonly string[] Commands = ["run", "serve", "setup", "init", "doctor", "update", "autostart", "version", "mcp", "ai"];
 
     /// <summary>True when these arguments name a command (options may come first: <c>--home DIR run</c>).</summary>
     public static bool IsCommand(IReadOnlyList<string> args)
@@ -34,7 +34,7 @@ public static class Cli
         // The commands:
         //   The library:   run | serve | setup --page | init
         //   Claude and AI: mcp | ai
-        //   Both:          doctor | update | autostart | config-check | version
+        //   Both:          doctor | update | autostart | version
         string[] valued = ["--home", "--role"];
         string? Option(string name) => Array.IndexOf(args, name) is int i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         bool Flag(string name) => args.Contains(name);
@@ -64,17 +64,16 @@ public static class Cli
             "run" => await Library(updates: true),
             "serve" => await Library(updates: false),
             "setup" when Flag("--page") => await Setup(),
-            "init" => Print($"Config: {Configs.WriteExample(home)}\nEdit it, or run `granola-share setup` for the guided version."),
+            "init" => Print($"Config: {Configs.WriteExample(home)}\nEdit it, or run `studystash setup --page` for the guided version."),
             "mcp" => await Mcp(),
             "ai" => await AiCommand(),
             "doctor" => await Doctor.RunAsync(home, Option("--role"), DoctorHost.ThisComputer()),
             "update" => await Update(),
             "autostart" => AutostartCommand(),
-            "config-check" => ConfigCheck(),
             "version" => Print(Engine.Version),
             _ => Print("usage: studystash run | serve | setup --page [--no-browser] | init\n"
                 + "       | doctor [--role server|client] | update [--check] [--force]\n"
-                + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
+                + "       | autostart install|uninstall|status --role server|client | version\n"
                 + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
                 + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)", 2),
         };
@@ -111,7 +110,7 @@ public static class Cli
         {
             if (UnderWindowsKeepAlive("server")) return 0;
             var cfg = Configs.Load(home);
-            if (!File.Exists(cfg.ConfigPath)) return Print($"Not set up yet: run `granola-share setup` (no {cfg.ConfigPath}).", 1);
+            if (!File.Exists(cfg.ConfigPath)) return Print($"Not set up yet: run `studystash setup --page` (no {cfg.ConfigPath}).", 1);
             if (cfg.AdminPassword.Length == 0) // configs from 0.1 have none; Settings needed one then
             {
                 cfg.AdminPassword = Http.TokenUrlSafe(12);
@@ -284,33 +283,6 @@ public static class Cli
             if (action == "status") return Print(Autostart.Status(role));
             if (action == "uninstall") return Print(Autostart.Uninstall(role, ServicePlaces.Default, Machine.Run) ? "Removed." : "Nothing to remove.");
             return Print("Installed: " + Autostart.Install(role, home, ServicePlaces.Default, Machine.Run));
-        }
-
-        // Reads config.toml and client.toml and writes them back in memory: "same" means this engine would leave them byte
-        // for byte as they are. Only line numbers are shown, never contents: these files hold the library password.
-        int ConfigCheck()
-        {
-            int differ = 0;
-            foreach (var (name, dump) in new (string, Func<string>)[]
-                     {
-                         ("config.toml", () => Configs.Dump(Configs.Load(home))),
-                         ("client.toml", () => Configs.DumpClient(Configs.LoadClient(home))),
-                     })
-            {
-                string path = Path.Combine(home, name);
-                if (!File.Exists(path))
-                {
-                    Console.WriteLine($"{name}: not on this computer");
-                    continue;
-                }
-                var before = Py.SplitLines(Py.ReadText(path));
-                var after = Py.SplitLines(dump());
-                var lines = Enumerable.Range(0, Math.Max(before.Count, after.Count))
-                    .Where(i => i >= before.Count || i >= after.Count || before[i] != after[i]).Select(i => i + 1).ToList();
-                Console.WriteLine(lines.Count == 0 ? $"{name}: same" : $"{name}: differs on line {string.Join(", ", lines)}");
-                if (lines.Count > 0) differ++;
-            }
-            return differ == 0 ? 0 : 1;
         }
     }
 }

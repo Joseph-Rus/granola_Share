@@ -90,7 +90,7 @@ public static class Doctor
     static async Task<Check> VersionCheckAsync(Func<Task<Release?>> latest)
     {
         var rel = await latest();
-        if (Updates.IsNewer(rel)) return new Check("Version", Warn, $"{Engine.Version} installed, {rel!.Tag} is out", "run `granola-share update`");
+        if (Updates.IsNewer(rel)) return new Check("Version", Warn, $"{Engine.Version} installed, {rel!.Tag} is out", "run `studystash update`");
         return new Check("Version", Ok, Engine.Version + (rel is not null ? " (newest)" : ""));
     }
 
@@ -101,13 +101,13 @@ public static class Doctor
         host ??= new DoctorHost();
         string system = host.System;
         var output = new List<Check>();
-        if (!File.Exists(cfg.ConfigPath)) return [new Check("Config", Fail, $"no {cfg.ConfigPath}", "run `granola-share setup`")];
+        if (!File.Exists(cfg.ConfigPath)) return [new Check("Config", Fail, $"no {cfg.ConfigPath}", "run `studystash setup --page`")];
         int n = cfg.Classes.Count;
         output.Add(new Check("Config", cfg.PoolPassword.Length > 0 ? Ok : Warn, $"{cfg.ConfigPath}, {n} class{(n != 1 ? "es" : "")}",
             cfg.PoolPassword.Length > 0 ? "" : "no pool password: anyone who can reach the server can read and add notes"));
         if (n == 0)
             output.Add(new Check("Classes", Warn, "none yet, so everything lands in Unsorted",
-                "add them in the web UI under Settings, or rerun `granola-share setup`"));
+                "add them in the web UI under Settings, or rerun `studystash setup --page`"));
 
         try
         {
@@ -133,7 +133,7 @@ public static class Doctor
                 string ver = info is not null && Py.Truthy(info["version"]) ? Py.Str(info["version"]) : "an old version";
                 bool stale = ver != Engine.Version;
                 output.Add(new Check("Web server", stale ? Warn : Ok, $"answering on port {cfg.WebPort} (running {ver})",
-                    stale ? "restart it to load this version: `granola-share autostart install --role server`" : ""));
+                    stale ? "restart it to load this version: `studystash autostart install --role server`" : ""));
             }
             else
             {
@@ -145,7 +145,7 @@ public static class Doctor
         {
             string tail = LogTail(log);
             string fix = svc != "missing" && tail.Length > 0 ? "it is installed but not answering; recent log:\n" + tail
-                : "start it: `granola-share autostart install --role server` (or `granola-share run` to watch it)";
+                : "start it: `studystash autostart install --role server` (or `studystash run` to watch it)";
             output.Add(new Check("Web server", Fail, $"nothing answers on port {cfg.WebPort}", fix));
         }
 
@@ -153,9 +153,9 @@ public static class Doctor
         {
             "running" => new Check("Background service", Ok, "starts at login and restarts if it stops"),
             "stopped" => new Check("Background service", Fail, "installed but not running",
-                $"`granola-share autostart install --role server`, then check {log}"),
+                $"`studystash autostart install --role server`, then check {log}"),
             _ => new Check("Background service", Warn, "not installed, so the library stops when you log out or reboot",
-                "`granola-share autostart install --role server`"),
+                "`studystash autostart install --role server`"),
         });
 
         if (cfg.OllamaEnabled)
@@ -174,7 +174,7 @@ public static class Doctor
             else if (models is null)
             {
                 output.Add(new Check("Ollama", Fail, "not installed, so study notes and AI sorting are paused",
-                    "rerun `granola-share setup`: it installs Ollama for you (or get it from https://ollama.com)"));
+                    "rerun `studystash setup --page`: it installs Ollama for you (or get it from https://ollama.com)"));
             }
             else
             {
@@ -199,15 +199,15 @@ public static class Doctor
             output.Add(new Check("Tailscale", Ok, "your laptop can reach " + HostInfo.ServerUrls(cfg.WebPort, ts, host.HostName())[0]));
         else if (!ts.Installed)
             output.Add(new Check("Tailscale", Warn, "not installed; your laptop can only reach this computer on the same Wi-Fi",
-                "rerun `granola-share setup` to install it, or get it from https://tailscale.com/download; "
+                "rerun `studystash setup --page` to install it, or get it from https://tailscale.com/download; "
                 + "sign in on both computers with one account"));
         else
             output.Add(new Check("Tailscale", Warn, problem + "; your laptop can only reach this computer on the same Wi-Fi",
-                "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"));
+                "open Tailscale and sign in (same account as your laptop), or rerun `studystash setup --page`"));
 
         if (system == "Windows" && host.Firewall(cfg.WebPort) == false)
             output.Add(new Check("Firewall", Warn, $"Windows Firewall has no rule for port {cfg.WebPort}, so it may block your laptop",
-                "rerun `granola-share setup` and let it add the rule (Windows asks for permission)"));
+                "rerun `studystash setup --page` and let it add the rule (Windows asks for permission)"));
 
         if (Machine.SleepFix.TryGetValue(system, out string? sleepFix))
         {
@@ -330,9 +330,9 @@ public static class Doctor
         {
             var checks = r == "server" ? await ServerChecksAsync(Configs.Load(home), host) : await ClientChecksAsync(Configs.LoadClient(home), host);
             failed |= checks.Any(c => c.State == Fail);
-            print(FormatChecks($"granola-share {Engine.Version}: {(r == "server" ? "library" : "laptop")} ({home})", checks, host.Unicode) + "\n");
+            print(FormatChecks($"studystash {Engine.Version}: {(r == "server" ? "library" : "laptop")} ({home})", checks, host.Unicode) + "\n");
         }
-        print(failed ? $"Fix the {Marks(host.Unicode)[Fail]} items above, then run `granola-share doctor` again." : "All good.");
+        print(failed ? $"Fix the {Marks(host.Unicode)[Fail]} items above, then run `studystash doctor` again." : "All good.");
         return failed ? 1 : 0;
     }
 }
