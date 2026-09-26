@@ -83,9 +83,12 @@ public static class Demo
         2. What happens if the base case is n == 1 and you call factorial(0)?
         """;
 
-    public static LibraryModel Library()
+    /// <summary>The sample library; with <paramref name="due"/> a "Due" item heads the sidebar (nothing selected), to
+    /// eyeball it against the Canvas Due screen.</summary>
+    public static LibraryModel Library(bool due = false)
     {
         var m = new LibraryModel { ClassTitle = "CS 101", ClassCount = "12 lectures", Status = "Library connected", DrawChrome = true };
+        if (due) m.Classes.Add(new ClassItem { Name = "Due", IsDue = true, Count = 3 });
         m.Classes.Add(new ClassItem { Name = "CS 101", Dot = Cs, Count = 12, Selected = true });
         m.Classes.Add(new ClassItem { Name = "BIO 110", Dot = Bio, Count = 9 });
         m.Classes.Add(new ClassItem { Name = "CALC II", Dot = Calc, Count = 11 });

@@ -182,7 +182,7 @@ public sealed partial class NoteView : StackPanel
         var t = new TextBlock { Text = text.TrimEnd(), FontFamily = new FontFamily("SF Mono, Menlo, Cascadia Mono, Consolas, monospace"), FontSize = 13, LineHeight = 19.5, TextWrapping = TextWrapping.Wrap };
         t.Bind(TextBlock.ForegroundProperty, t.GetResourceObservable("Fg"));
         var box = new Border { Padding = new Thickness(12, 10), CornerRadius = new CornerRadius(Mac ? 8 : 4), Child = t };
-        box.Bind(Border.BackgroundProperty, box.GetResourceObservable("Fill"));
+        box.Bind(Border.BackgroundProperty, box.GetResourceObservable("Fill2"));
         return box;
     }
 

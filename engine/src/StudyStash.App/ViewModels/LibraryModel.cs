@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -70,6 +71,9 @@ public sealed partial class NoteModel : ObservableObject
 public sealed partial class LibraryModel : ObservableObject
 {
     public ObservableCollection<ClassItem> Classes { get; } = [];
+    /// <summary>What's due soon, if Canvas has anything: the sidebar draws it above "Classes".</summary>
+    public ClassItem? Due => Classes.FirstOrDefault(c => c.IsDue);
+    public bool HasDue => Due is not null;
     [ObservableProperty] public partial ClassItem? Unsorted { get; set; }
     public ObservableCollection<LectureGroup> Groups { get; } = [];
     [ObservableProperty] public partial string ClassTitle { get; set; } = "";
@@ -94,7 +98,15 @@ public sealed partial class LibraryModel : ObservableObject
     public bool HasAnswer => Answer is not null || Thinking;
     public bool HasSources => Sources.Count > 0;
 
-    public LibraryModel() => Sources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSources));
+    public LibraryModel()
+    {
+        Sources.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSources));
+        Classes.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(Due));
+            OnPropertyChanged(nameof(HasDue));
+        };
+    }
 
     partial void OnAnswerChanged(string? value) => OnPropertyChanged(nameof(HasAnswer));
     partial void OnThinkingChanged(bool value) => OnPropertyChanged(nameof(HasAnswer));
