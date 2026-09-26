@@ -19,6 +19,12 @@ public sealed class FakeChecks
     DateTime clock = DateTime.Now;
     Func<string, string, string, string>? signIn;
 
+    /// <summary>How many times each probe that touches the world (Ollama, a terminal) was actually called, so a
+    /// test can prove an action reached only the fake and never a real Ollama or terminal.</summary>
+    public int StartCalls { get; private set; }
+    public int PullCalls { get; private set; }
+    public int SignInCalls { get; private set; }
+
     public FakeChecks Installed(params string[] binaries)
     {
         foreach (string b in binaries) which[b] = "/usr/bin/" + b;
@@ -88,13 +94,22 @@ public sealed class FakeChecks
             Env = n => envNow.GetValueOrDefault(n),
             OllamaInstalled = () => installedNow,
             OllamaModels = _ => Task.FromResult(modelsNow),
-            StartOllama = _ => Task.FromResult(startsNow),
+            StartOllama = _ =>
+            {
+                StartCalls++;
+                return Task.FromResult(startsNow);
+            },
             PullModel = (_, _, progress, _) =>
             {
+                PullCalls++;
                 progress?.Invoke(pullNow.Ok ? 10 : 3, 10);
                 return Task.FromResult(pullNow);
             },
-            OpenSignIn = signInNow ?? ((home, terminal, id) => $"Opened a fake terminal to sign in to {id}."),
+            OpenSignIn = (home, terminal, id) =>
+            {
+                SignInCalls++;
+                return (signInNow ?? ((h, t, i) => $"Opened a fake terminal to sign in to {i}."))(home, terminal, id);
+            },
             Now = () => clockNow,
         };
     }
