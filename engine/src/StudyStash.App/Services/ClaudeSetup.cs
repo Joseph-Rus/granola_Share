@@ -45,6 +45,40 @@ public sealed class ClaudeSetup
             : $"Claude Code didn't take it: {Py.Head(Py.Strip(p?.Stdout ?? ""), 200)}";
     }
 
+    /// <summary>Whether Claude Code already has Study Stash added, asked of Claude Code itself (never the config
+    /// file: Claude Code keeps its own).</summary>
+    public bool InClaudeCode()
+    {
+        if (ClaudeCli() is not { } claude) return false;
+        try
+        {
+            return Run(claude, ["mcp", "get", ClaudeTools.ServerName], TimeSpan.FromSeconds(10)) is { ExitCode: 0 };
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            return false;
+        }
+    }
+
+    static string TomlString(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    /// <summary>What to paste into <c>~/.codex/config.toml</c>, under its own heading.</summary>
+    public string CodexSetup => $"""
+        [mcp_servers.{ClaudeTools.ServerName}]
+        command = {TomlString(Program)}
+        args = [{string.Join(", ", McpArgs.Select(TomlString))}]
+        """;
+
+    JsonObject McpServerJson => new()
+    {
+        ["command"] = Program,
+        ["args"] = new JsonArray(McpArgs.Select(a => (JsonNode?)a).ToArray()),
+    };
+
+    /// <summary>The <c>mcpServers</c> JSON any other MCP client's settings take, to paste in by hand.</summary>
+    public string McpJson => new JsonObject { ["mcpServers"] = new JsonObject { [ClaudeTools.ServerName] = McpServerJson } }
+        .ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+
     public bool InClaudeDesktop()
     {
         try
@@ -71,15 +105,32 @@ public sealed class ClaudeSetup
         }
         var servers = config["mcpServers"] as JsonObject ?? [];
         config["mcpServers"] = servers;
-        servers[ClaudeTools.ServerName] = new JsonObject
-        {
-            ["command"] = Program,
-            ["args"] = new JsonArray(McpArgs.Select(a => (JsonNode?)a).ToArray()),
-        };
+        servers[ClaudeTools.ServerName] = McpServerJson;
         Directory.CreateDirectory(Path.GetDirectoryName(DesktopConfig)!);
         string tmp = DesktopConfig + ".tmp";
         File.WriteAllText(tmp, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(tmp, DesktopConfig, overwrite: true);
         return "Added to Claude Desktop. Quit and reopen Claude Desktop to see it.";
+    }
+
+    /// <summary>Take Study Stash out of Claude Desktop's MCP servers, keeping everything else in its config.</summary>
+    public string RemoveFromClaudeDesktop()
+    {
+        if (!File.Exists(DesktopConfig)) return "Claude Desktop doesn't have Study Stash added.";
+        JsonObject config;
+        try
+        {
+            config = JsonNode.Parse(File.ReadAllText(DesktopConfig)) as JsonObject ?? [];
+        }
+        catch (JsonException)
+        {
+            return "Claude Desktop's settings file isn't valid JSON, so it's left alone.";
+        }
+        if (config["mcpServers"] is not JsonObject servers || !servers.Remove(ClaudeTools.ServerName))
+            return "Claude Desktop doesn't have Study Stash added.";
+        string tmp = DesktopConfig + ".tmp";
+        File.WriteAllText(tmp, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(tmp, DesktopConfig, overwrite: true);
+        return "Removed from Claude Desktop.";
     }
 }
