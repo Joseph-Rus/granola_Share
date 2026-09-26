@@ -1,0 +1,53 @@
+<!-- The Due list (design 09, Windows): header, groups, rows with the Fluent selected-row indicator. Draws no outer
+     padding or window — the library window's list column gives the width and margins. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             x:Class="StudyStash.App.Views.WinCanvasDue"
+             x:DataType="vm:CanvasDueModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinCanvasStyles.axaml" />
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,*">
+    <StackPanel Grid.Row="0" Margin="20,20,20,4" Spacing="0">
+      <TextBlock Classes="cv-due-title" Text="{x:Static vm:CanvasDueModel.Header}" />
+      <TextBlock Classes="cv-due-sub" Text="{Binding SubHeader}" />
+    </StackPanel>
+    <TextBlock Grid.Row="1" Classes="cv-due-sub" Margin="20,20" Text="{x:Static vm:CanvasDueModel.EmptyText}" IsVisible="{Binding IsEmpty}" />
+    <ScrollViewer Grid.Row="1" IsVisible="{Binding !IsEmpty}" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Groups}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:DueGroup">
+            <StackPanel>
+              <TextBlock Classes="cv-group-label" Classes.cv-accent="{Binding Accent}" Text="{Binding Label}" />
+              <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DueRow">
+                    <Button Classes="cv-due-row" Classes.cv-selected="{Binding Selected}" Command="{Binding SelectCommand}">
+                      <!-- No column/row defs: the indicator overlays the row's content, matching the design's
+                           absolutely-positioned accent bar. -->
+                      <Grid>
+                        <Border Classes="cv-row-indicator" IsVisible="{Binding Selected}" />
+                        <StackPanel Spacing="2" Margin="12,0,0,0">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Classes="cv-row-title" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Classes="cv-row-right" Classes.cv-strong="{Binding Strong}"
+                                       Text="{Binding Right}" Margin="8,0,0,0" VerticalAlignment="Bottom" />
+                          </Grid>
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse Classes="cv-row-dot" Fill="{Binding Dot}" VerticalAlignment="Center" />
+                            <TextBlock Classes="cv-row-sub" Text="{Binding Sub}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Grid>
+</UserControl>
