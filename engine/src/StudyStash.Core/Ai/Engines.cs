@@ -154,6 +154,25 @@ public static class Engines
         settings.Limits.TryGetValue(id, out string? until) && DateTime.TryParse(until, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t)
         && t > checks.Now();
 
+    /// <summary>
+    /// Whether an engine (never Ollama, the fallback itself) is known unusable right now — not installed, not
+    /// signed in, or over its usage limit — worked out without contacting an account, so it can be checked before
+    /// a real run: Ask's up-front fallback and the notes-writing pre-flight fallback both call this, so they agree
+    /// on when a job really runs on Ollama instead. Null when it looks fine to try.
+    /// </summary>
+    public static string? KnownUnusableWhy(string id, AiSettings settings, EngineChecks checks)
+    {
+        if (id == "ollama") return null;
+        var (state, _) = CliState(id, settings, checks);
+        return state switch
+        {
+            "not_installed" => $"{Name(id)} isn't installed on your library's computer.",
+            "not_signed_in" => $"{Name(id)} isn't signed in on your library.",
+            "limited" => $"{Name(id)} hit its usage limit.",
+            _ => null,
+        };
+    }
+
     static (string State, string Until) CliState(string id, AiSettings settings, EngineChecks checks)
     {
         if (checks.Which(AiProviders.Get(id).Binary) is null) return ("not_installed", "");
