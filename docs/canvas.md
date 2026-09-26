@@ -379,7 +379,72 @@ list and all its keys. The extension's door (`/api/v2/canvas/work`, `/results`, 
 
 ## Claude's Canvas tools
 
-_Filled in by T8._
+`Core/ClaudeTools.cs` gives Claude read-only tools over Canvas, on top of `ILibrarySource.CanvasAsync(what, body)`:
+`LocalLibrary` answers straight from `CanvasView` and each class's `CourseIndex` (in the library itself, or a laptop
+running `Study Stash mcp` against its own home folder); `RemoteLibrary` calls the §5 endpoints over `/api/v2` (a
+laptop reading a remote library), and a 404 (an older library without an endpoint) becomes "The library runs an
+older Study Stash, without this." The `what`s: `courses`, `fetch` (unchanged, for `canvas_api`/`canvas_page`/
+`canvas_download`), `assignments` (class, days — the flat due list), `assignment` (class, id or name), `modules`
+(class), `files` (class), `announcements` (class, limit).
+
+Tools (all `ReadOnly`, `Idempotent`; only `canvas_download` isn't read-only), registered when `lib.HasCanvas`:
+
+- **due_assignments** (class_name?, days=14) — the due list, grouped the way the app shows it (Overdue, Due soon, No
+  due date) and labelled ("To do", "Missing", "Submitted late", …), soonest first, with the folder holding each
+  assignment's spec.md and feedback.md.
+- **get_assignment** (class_name, assignment: an id, or words of its name — "problem set 4") — the whole story:
+  instructions, due date, points, status, the rubric with your marks and the grader's comments ("Stack traces: 8 / 10
+  · The frame for n = 1 is missing in 3b."), what you submitted and its files, the grader's comments with author and
+  date, and where spec.md/feedback.md live. Several names matching lists them instead of guessing.
+- **class_modules** (class_name) — a class's modules in order, each item's kind and whether/where it's saved
+  ("(saved from Box)", "(link)", "(locked)").
+- **class_files** (class_name) — the Files area, or says plainly when Canvas hides it from the student.
+- **class_announcements** (class_name, limit=10) — newest first, author, date, whether it's new, body cut short.
+- **canvas_courses**, **canvas_api**, **canvas_page**, **canvas_download** — unchanged, except `canvas_api`/
+  `canvas_page`/`canvas_download` now refuse other people's data (below) before ever asking Canvas.
+
+**Other people's data is refused**, not just left unmirrored: `CanvasSync.DeniesOtherPeople` (checked in `FetchAsync`,
+by path, ignoring the query like everywhere else here) refuses a roster (`/users`, except the student's own
+`/users/self`), `/enrollments`, `/peer_reviews`, `/search/recipients`, `/conversations`, a discussion's `/entries`,
+`/view` or `/entry_list`, and a course's bare `/students` (its own `/students/submissions` — the student's own grades
+— is fine) with "Study Stash doesn't read other people's Canvas data.", before Canvas is ever asked. The sync itself
+never requests any of these either (§ "What's mirrored, and what's not" below).
+
+The course scout's prompt (`Scout.Prompt`) now lists everything the sync already saves (spec/feedback/submission,
+modules and their files and pages, syllabus, pages outside modules, the Files area, announcements, quizzes,
+discussions) so it only explores what's missing, and tells it exactly how to make a Box/Drive/OneDrive download show
+up as "saved" in modules.md and `class_modules`: save it into that module's own folder, named after the item's title
+(an item titled "Tracing worksheet" becomes "Tracing worksheet.pdf") — the naming contract `CanvasView.Modules` (T5)
+already checks for.
+
+### What's mirrored, and what's not, and why
+
+Mirrored: assignments with rubric and submission (T3), HTML read well with linked files saved (T4), every module
+item type with Box/Drive/OneDrive sources (T5), the Files area when Canvas allows it (T5), announcements, quizzes and
+discussion prompts (T6), the cross-class Due list (T6), course info and connection state (T7), notifications (T7).
+
+Never mirrored, on purpose:
+
+| What | Why |
+|---|---|
+| Calendar events | Not coursework; only planner assignments and to-dos feed the Due list. |
+| Other students' posts, discussion entries/views, rosters, enrollments, peer reviews, conversations | Privacy — never requested by the sync, and refused in AI reads (above). |
+| Quiz questions, answers and submissions | Academic integrity; only a quiz's facts (title, due, points, description) are kept. |
+| Grade statistics / distributions | Not the student's own data. |
+| New Quizzes and LTI tool content (Turnitin, Gradescope, publisher tools) | No stable, student-readable API without the tool's own sign-in; a module item just links out. |
+| Videos, and any file over 40 MB | Too big for the extension's transport (bug 10); recorded as `skipped` with a Canvas link. |
+| Material only reachable outside Canvas (Box, Drive, OneDrive, a course website) | The sync has no session there; the course scout explores and saves what it can reach. |
+
+### A gap found while wiring these tools (not T8's — flagged for whoever next touches T5/T6)
+
+`Crawl.Modules(cls, list)` and `Crawl.Announcements(cls, list)` still only render `modules.md`/`announcements.md`
+(today's mirror); neither fills `CourseIndex.Modules` or `.Announcements` (the `ModuleInfo`/`AnnouncementInfo` lists
+the data model, `CanvasView`, the JSON API and `class_modules`/`class_announcements` all already expect). Against a
+real sync, `GET /api/v2/canvas/modules` and `/announcements` (and these two tools) answer an empty list today, even
+though the .md files and the assignments/submissions data are correct. `CanvasApiTests`/`CanvasToolsTests` don't
+catch it because they only check the JSON's shape, not that it's non-empty. Fixing it belongs with T5/T6 (populate
+`ModuleInfo`/`ModuleItemInfo`/`AnnouncementInfo` the way `AssignmentsPage` already does for assignments) — out of
+scope here, but worth doing before WS3 builds the Canvas screens against these endpoints.
 
 ## Testing
 
