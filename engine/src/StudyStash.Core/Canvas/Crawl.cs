@@ -906,7 +906,10 @@ public sealed partial class Crawl
     void Page(string cls, JsonObject page, string dir)
     {
         if (Flag(page["locked_for_user"])) return;
-        string text = $"# {S(page["title"])}\n\n_From Canvas ({S(page["html_url"])}), updated {CanvasMarkdown.When(S(page["updated_at"]), zone())}._\n\n{HtmlText.ToMarkdown(S(page["body"]))}\n";
+        // A file a module page links to is wanted into that module's own folder, not pages/files/.
+        var (body, links) = HtmlText.Convert(S(page["body"]), BuildContext(cls, Staged(cls).CourseId, Rel(cls, dir)));
+        QueueFileLinks(cls, links, Path.Combine(dir, "files"));
+        string text = $"# {S(page["title"])}\n\n_From Canvas ({S(page["html_url"])}), updated {CanvasMarkdown.When(S(page["updated_at"]), zone())}._\n\n{body}\n";
         Write(cls, Path.Combine(dir, SafeName(S(page["title"]) is { Length: > 0 } t ? t : "page") + ".md"), text);
     }
 
