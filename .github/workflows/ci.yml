@@ -1,10 +1,11 @@
-# The build and release pipeline for Study Stash (C# on .NET 10).
-#   Every push and pull request: the engine's tests on macOS, Linux and Windows, the engine zips for each computer
-#   (each run on a computer of its kind), and the Mac and Windows apps, each started once to show it opens.
-#   Push to main with a new StudyStashVersion in engine/Directory.Build.props: once all of that passes, publish
-#   release v<version> with the apps, their installers, and the engine zips the updater downloads. Installed
-#   copies pick it up within a few hours (auto_update), or right away with `studystash update`. A version that
-#   is already released is never published again.
+# The build and release pipeline for Study Stash (C# on .NET 10, one app for both roles).
+#   Every push and pull request: the engine's tests on macOS, Linux and Windows; the Mac app (one universal
+#   bundle, both roles' DMGs, self-tested here and again natively on an Intel runner); and the Windows app
+#   (both roles' Setup.exe, self-tested, installed, updated in place, and uninstalled cleanly).
+#   Push to main with a StudyStashVersion in engine/Directory.Build.props that has no tag yet: once all of the
+#   above passes, publish release v<version> with the four installers and SHA256SUMS.txt. Installed copies pick
+#   it up within a few hours (auto_update), or right away with `studystash update`. A version already released
+#   is never published again.
 name: ci
 
 on:
@@ -57,270 +58,284 @@ jobs:
           # Windows: also run the library as a real background service, from the Startup folder with no window.
           STUDYSTASH_LIVE_SERVICE: ${{ runner.os == 'Windows' && '1' || '' }}
 
+  # The Mac app: one universal bundle for Apple silicon and Intel, started by its own launcher (D1); ad hoc
+  # signed with the microphone entitlement; both roles' DMGs (D2). Proved with the real self-test (D5): real
+  # windows open, the pretend microphone records, Whisper (Metal) hears the speech from inside the bundle.
   mac-app:
-    name: Mac apps (DMGs)
-    timeout-minutes: 20
+    name: Mac app (DMGs, self-test)
+    needs: [engine]
+    timeout-minutes: 25
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Study Stash.app and Study Stash Library.app, their zips, and the DMGs
-        run: sh macos/build.sh "" dist
-      - name: Both apps start
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/whisper
+          key: whisper-ggml-tiny-v1
+      - name: Whisper tiny, for the self-test
         run: |
-          for app in "Study Stash" "Study Stash Library"; do
-            file "dist/$app.app/Contents/MacOS/Study Stash" | grep -q "universal binary"
-            codesign --verify --deep "dist/$app.app"
-            GRANOLA_SHARE_HOME="$RUNNER_TEMP/none" "dist/$app.app/Contents/MacOS/Study Stash" &
-            sleep 8
-            kill -0 $!   # still running after 8 seconds: it launched and showed its window
-            kill $!
+          mkdir -p "$RUNNER_TEMP/whisper"
+          [ -f "$RUNNER_TEMP/whisper/ggml-tiny.bin" ] || curl -fsSL -o "$RUNNER_TEMP/whisper/ggml-tiny.bin" \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          echo "STUDYSTASH_WHISPER_MODEL=$RUNNER_TEMP/whisper/ggml-tiny.bin" >> "$GITHUB_ENV"
+      - name: Build Study Stash.app (both roles) and both DMGs
+        run: sh macos/build-app.sh dist/mac
+      - name: Signed, universal, and reports its version on both architectures
+        run: |
+          APP="dist/mac/Study Stash.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --verify --deep --strict --verbose=2 "dist/mac/library/Study Stash.app"
+          lipo -info "$APP/Contents/MacOS/StudyStash" | grep -q "x86_64"
+          lipo -info "$APP/Contents/MacOS/StudyStash" | grep -q "arm64"
+          V=$(env -u DOTNET_ROOT "$APP/Contents/MacOS/StudyStash" version)
+          [ -n "$V" ]
+          softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
+          [ "$(env -u DOTNET_ROOT arch -x86_64 "$APP/Contents/MacOS/StudyStash" version)" = "$V" ]
+      - name: Self-test (D5) - real windows, the pretend mic, Whisper from inside the bundle
+        run: sh macos/selftest.sh "dist/mac/Study Stash.app" "$RUNNER_TEMP/selftest"
+      - name: Both DMGs hold the app with the right role, and no model is bundled (D6)
+        run: |
+          for pair in Laptop:laptop Library:library; do
+            name=${pair%%:*}; role=${pair##*:}
+            mnt="$RUNNER_TEMP/mnt-$name"
+            mkdir -p "$mnt"
+            hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "dist/mac/Study-Stash-$name.dmg"
+            /usr/libexec/PlistBuddy -c "Print :StudyStashRole" "$mnt/Study Stash.app/Contents/Info.plist" | grep -qx "$role"
+            [ -L "$mnt/Applications" ]
+            if find "$mnt" -iname 'ggml-*.bin' -o -name '*.bin' -size +1M | grep -q .; then
+              hdiutil detach -quiet "$mnt"
+              echo "a model file is bundled in Study-Stash-$name.dmg" >&2
+              exit 1
+            fi
+            hdiutil detach -quiet "$mnt"
           done
-          /usr/libexec/PlistBuddy -c "Print :StudyStashRole" "dist/Study Stash Library.app/Contents/Info.plist" | grep -qx library
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-app
+          name: mac-installers
           path: |
-            dist/Study-Stash-Laptop.dmg
-            dist/Study-Stash-Library.dmg
-            dist/Study-Stash-mac.zip
-            dist/Study-Stash-Library-mac.zip
+            dist/mac/Study-Stash-Laptop.dmg
+            dist/mac/Study-Stash-Library.dmg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-selftest
+          path: ${{ runner.temp }}/selftest
 
+  # The Intel self-test (D5), for real: a physical Intel Mac, so the x64 tree runs natively (mac-app already
+  # checked it runs enough to print its version under Rosetta).
+  mac-intel:
+    name: Mac app self-test (Intel)
+    needs: [mac-app]
+    timeout-minutes: 15
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-installers
+          path: dist/mac
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/whisper
+          key: whisper-ggml-tiny-v1
+      - name: Whisper tiny, for the self-test
+        run: |
+          mkdir -p "$RUNNER_TEMP/whisper"
+          [ -f "$RUNNER_TEMP/whisper/ggml-tiny.bin" ] || curl -fsSL -o "$RUNNER_TEMP/whisper/ggml-tiny.bin" \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          echo "STUDYSTASH_WHISPER_MODEL=$RUNNER_TEMP/whisper/ggml-tiny.bin" >> "$GITHUB_ENV"
+      - name: Mount the laptop DMG and copy the app out (artifacts lose exec bits, so it travels as a DMG)
+        run: |
+          mkdir -p "$RUNNER_TEMP/mnt"
+          hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$RUNNER_TEMP/mnt" dist/mac/Study-Stash-Laptop.dmg
+          ditto "$RUNNER_TEMP/mnt/Study Stash.app" "$RUNNER_TEMP/Study Stash.app"
+          hdiutil detach -quiet "$RUNNER_TEMP/mnt"
+          codesign --verify --deep --strict "$RUNNER_TEMP/Study Stash.app"
+      - name: Self-test, natively on Intel
+        run: sh macos/selftest.sh "$RUNNER_TEMP/Study Stash.app" "$RUNNER_TEMP/selftest"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-intel-selftest
+          path: ${{ runner.temp }}/selftest
+
+  # The Windows app: one AppId for both roles (D2/D3), self-tested (D5), installed, updated in place with a
+  # silent Setup.exe, and uninstalled without touching lectures or settings outside the install folder.
   windows-app:
-    name: Windows apps (Setup.exe)
-    timeout-minutes: 20
+    name: Windows app (Setup.exe, self-test, install)
+    needs: [engine]
+    timeout-minutes: 25
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tools (Inno Setup, and WebView2 if this image lacks it)
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Inno Setup 6, if this image lacks it
         shell: pwsh
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
-          $wv = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-          if (-not (Test-Path $wv)) {
-            Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "$env:RUNNER_TEMP\wv2.exe"
-            Start-Process "$env:RUNNER_TEMP\wv2.exe" -ArgumentList "/silent", "/install" -Wait
-          }
-      - name: Build Study Stash.exe, its zip, and both Setup.exe installers
-        shell: pwsh
-        run: ./windows/build.ps1 -Out dist
-      - name: The app starts and shows its first screen, as the laptop's and as the library's
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\whisper
+          key: whisper-ggml-tiny-v1
+      - name: Whisper tiny, for the self-test
         shell: pwsh
         run: |
-          $env:GRANOLA_SHARE_HOME = "$env:RUNNER_TEMP\none"
-          $env:GRANOLA_SHARE_ENGINE = "$env:RUNNER_TEMP\none\granola-share.exe"  # not installed: the welcome screen
-          foreach ($mode in @(@(), @("--library"))) {
-            $env:GRANOLA_SHARE_SELFTEST = "$env:RUNNER_TEMP\selftest$($mode.Count).txt"
-            $p = if ($mode.Count) { Start-Process -FilePath "dist\Study Stash\Study Stash.exe" -ArgumentList $mode -PassThru }
-                 else { Start-Process -FilePath "dist\Study Stash\Study Stash.exe" -PassThru }
-            for ($i = 0; $i -lt 60 -and -not (Test-Path $env:GRANOLA_SHARE_SELFTEST); $i++) { Start-Sleep 1 }
-            if (-not (Test-Path $env:GRANOLA_SHARE_SELFTEST)) { Stop-Process -Id $p.Id -ErrorAction SilentlyContinue; throw "no first screen in 60 s ($mode)" }
-            $said = Get-Content $env:GRANOLA_SHARE_SELFTEST
-            Write-Host "$mode $said"
-            if ($said -notlike "ok*") { throw $said }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\whisper" | Out-Null
+          $model = "$env:RUNNER_TEMP\whisper\ggml-tiny.bin"
+          if (-not (Test-Path $model)) {
+            Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" -OutFile $model
           }
-      - name: Each Setup.exe installs its app for this account, with a Start Menu entry
+          echo "STUDYSTASH_WHISPER_MODEL=$model" >> $env:GITHUB_ENV
+      - name: Build win-x64 and win-arm64, and both Setup.exe
+        shell: pwsh
+        run: .\windows\build.ps1 -Out dist\windows
+      - name: Reports the version from Directory.Build.props, and no model is bundled (D6)
         shell: pwsh
         run: |
-          foreach ($pair in @(@("Laptop", "Study Stash"), @("Library", "Study Stash Library"))) {
-            $setup, $name = $pair
-            Start-Process "dist\Study-Stash-$setup-Setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-            if (-not (Test-Path "$env:LOCALAPPDATA\Programs\$name\Study Stash.exe")) { throw "$name isn't installed" }
-            if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\$name.lnk")) { throw "no Start Menu entry for $name" }
+          $V = (Select-String -Path engine\Directory.Build.props -Pattern '<StudyStashVersion>(.*)</StudyStashVersion>').Matches[0].Groups[1].Value
+          if (-not $V) { throw "no StudyStashVersion in engine/Directory.Build.props" }
+          $printed = (& "dist\windows\win-x64\StudyStash.exe" version | Out-String).Trim()
+          if ($printed -ne $V) { throw "version printed '$printed', expected '$V'" }
+          echo "V=$V" >> $env:GITHUB_ENV
+          $bad = Get-ChildItem dist\windows -Recurse -File -Filter "*.bin" -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 1MB }
+          if ($bad) { throw "a model file is bundled: $($bad.FullName -join ', ')" }
+      - name: Self-test (D5)
+        shell: pwsh
+        run: |
+          $selftestHome = "$env:RUNNER_TEMP\selftest-home"
+          $out = "$env:RUNNER_TEMP\selftest"
+          New-Item -ItemType Directory -Force -Path $selftestHome, $out | Out-Null
+          $env:STUDYSTASH_SELFTEST = $out
+          $env:STUDYSTASH_MIC_FILE = (Resolve-Path "engine\tests\StudyStash.Core.Tests\Fixtures\speech.wav").Path
+          $env:STUDYSTASH_MIC_SPEED = "4"
+          $env:STUDYSTASH_MODEL_FILE = $env:STUDYSTASH_WHISPER_MODEL
+          $p = Start-Process -FilePath "dist\windows\win-x64\StudyStash.exe" -ArgumentList "--home", $selftestHome -PassThru
+          if (-not $p.WaitForExit(480000)) { $p.Kill(); throw "Study Stash didn't exit within 480 s" }
+          $lines = Get-Content "$out\selftest.txt"
+          $lines | Write-Host
+          if ($p.ExitCode -ne 0) { throw "exit code $($p.ExitCode)" }
+          if ($lines[-1] -ne "ok") { throw "last line was not ok" }
+          if ($lines -match "heard nothing|no model|recording didn't start|FAILED") { throw "the self-test reported a problem" }
+      - name: The Laptop installer puts Study Stash on this account, marked laptop
+        shell: pwsh
+        run: |
+          Start-Process "dist\windows\Study-Stash-Laptop-Setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Study Stash"
+          if (-not (Test-Path "$app\StudyStash.exe")) { throw "Study Stash isn't installed" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Study Stash.lnk")) { throw "no Start Menu entry" }
+          if (-not (Select-String -Path "$app\study-stash.ini" -Pattern "role\s*=\s*laptop" -Quiet)) { throw "not marked laptop" }
+          $printed = (& "$app\StudyStash.exe" version | Out-String).Trim()
+          if ($printed -ne $env:V) { throw "installed version '$printed', expected '$env:V'" }
+      - name: The Library installer, over it, is an in-place upgrade marked library
+        shell: pwsh
+        run: |
+          Start-Process "dist\windows\Study-Stash-Library-Setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Study Stash"
+          if (-not (Select-String -Path "$app\study-stash.ini" -Pattern "role\s*=\s*library" -Quiet)) { throw "not marked library" }
+          $entries = @(Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -eq "Study Stash" })
+          if ($entries.Count -ne 1) { throw "expected one uninstall entry for Study Stash, found $($entries.Count)" }
+      - name: A silent update (relaunch=1) starts the app again from the same folder
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Programs\Study Stash"
+          $updateHome = "$env:RUNNER_TEMP\update-home"
+          New-Item -ItemType Directory -Force -Path $updateHome | Out-Null
+          Start-Process -FilePath "$app\StudyStash.exe" -ArgumentList "--home", $updateHome, "--background" | Out-Null
+          Start-Sleep 3
+          Start-Process "dist\windows\Study-Stash-Library-Setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS", "/relaunch=1" -Wait
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            if (Get-Process -Name StudyStash -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$app\StudyStash.exe" }) { $ok = $true; break }
+            Start-Sleep 1
           }
-          if (-not (Select-String -Path "$env:LOCALAPPDATA\Programs\Study Stash Library\study-stash.ini" -Pattern "role=library" -Quiet)) { throw "the library's copy isn't marked" }
+          if (-not $ok) { throw "no StudyStash.exe from $app running again within 30 s of the silent update" }
+          Get-Process -Name StudyStash -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: Uninstalling removes only the app; lectures and settings stay
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Programs\Study Stash"
+          $settingsKeep = "$env:USERPROFILE\.study-stash\keep.txt"
+          $lectureKeep = "$env:USERPROFILE\Documents\Study Stash\CS 101\keep.txt"
+          New-Item -ItemType Directory -Force -Path (Split-Path $settingsKeep), (Split-Path $lectureKeep) | Out-Null
+          "keep" | Out-File $settingsKeep
+          "keep" | Out-File $lectureKeep
+          Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
+          $gone = $false
+          for ($i = 0; $i -lt 60; $i++) { if (-not (Test-Path $app)) { $gone = $true; break }; Start-Sleep 1 }
+          if (-not $gone) { throw "$app is still there 60 s after uninstalling" }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Study Stash.lnk") { throw "the Start Menu entry survived" }
+          if (-not (Test-Path $settingsKeep)) { throw "settings outside the app folder were deleted" }
+          if (-not (Test-Path $lectureKeep)) { throw "a lecture outside the app folder was deleted" }
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-app
+          name: windows-installers
           path: |
-            dist/Study-Stash-windows.zip
-            dist/Study-Stash-Laptop-Setup.exe
-            dist/Study-Stash-Library-Setup.exe
+            dist\windows\Study-Stash-Laptop-Setup.exe
+            dist\windows\Study-Stash-Library-Setup.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-selftest
+          path: ${{ runner.temp }}\selftest
 
-  # The C# engine as the folders a release carries, one per computer: what the updater downloads
-  # (Study-Stash-engine-<os>-<cpu>.zip, study-stash-engine.txt beside the program). Each is built self-contained
-  # and run on a computer of its kind before it's kept.
-  engine-zips:
-    name: engine zip (${{ matrix.asset }})
-    needs: [engine]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: macos-latest, rid: osx-arm64, asset: mac-arm64 }
-          - { os: macos-15-intel, rid: osx-x64, asset: mac-x64 }
-          - { os: ubuntu-latest, rid: linux-x64, asset: linux-x64 }
-          - { os: ubuntu-24.04-arm, rid: linux-arm64, asset: linux-arm64 }
-          - { os: windows-latest, rid: win-x64, asset: windows-x64 }
-    timeout-minutes: 20
-    runs-on: ${{ matrix.os }}
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
+  # Whether engine/Directory.Build.props holds a version with no tag yet: gates the release job below.
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      new: ${{ steps.v.outputs.new }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - name: Publish the engine
-        shell: bash
+      - id: v
         run: |
           V=$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' engine/Directory.Build.props)
-          OUT="$RUNNER_TEMP/engine"
-          dotnet publish engine/src/StudyStash.Engine -c Release -r ${{ matrix.rid }} --self-contained true -p:DebugType=None -o "$OUT"
-          printf '%s\n' "$V" > "$OUT/study-stash-engine.txt"
-          echo "V=$V" >> "$GITHUB_ENV"
-      - name: It runs here and says its version
-        shell: bash
-        run: |
-          EXE="$RUNNER_TEMP/engine/studystash"; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
-          test "$("$EXE" version | tr -d '\r')" = "$V"
-          "$EXE" --home "$RUNNER_TEMP/h" ai   # the AI settings read with no ai.json
-      - name: Zip it (the program at the top, as the updater unpacks it)
-        shell: bash
-        run: |
-          mkdir -p dist
-          # Windows has no zip command; the updater sets the program's exec bit itself, so either archive works.
-          if [ "$RUNNER_OS" = Windows ]; then
-            pwsh -NoProfile -Command "Compress-Archive -Path '$RUNNER_TEMP/engine/*' -DestinationPath 'dist/Study-Stash-engine-${{ matrix.asset }}.zip'"
+          if [ -z "$V" ]; then echo "no StudyStashVersion in engine/Directory.Build.props" >&2; exit 1; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if [ -z "$(git ls-remote --tags origin "refs/tags/v$V")" ]; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
           else
-            command -v zip >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zip; }   # a slim Linux image may lack it
-            (cd "$RUNNER_TEMP/engine" && zip -qr "$GITHUB_WORKSPACE/dist/Study-Stash-engine-${{ matrix.asset }}.zip" .)
+            echo "new=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: engine-${{ matrix.asset }}
-          path: dist/Study-Stash-engine-${{ matrix.asset }}.zip
 
-  # The new app (engine/src/StudyStash.App: the menu bar panel, recorder, quick panel, library, and the AI, Canvas,
-  # chat and capture), for Apple silicon and Intel Macs. The Apple silicon one tries itself in its real windows.
-  new-app-mac:
-    name: new app (Mac)
-    needs: [engine]
-    timeout-minutes: 25
-    runs-on: macos-latest
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - name: Build Study Stash.app and its DMG, for each kind of Mac
-        run: |
-          sh macos/build-app.sh arm64 dist/arm64
-          sh macos/build-app.sh x64 dist/x64
-      - name: It opens its windows and tries each one (no library, so setup first)
-        run: |
-          APP="dist/arm64/Study Stash.app"
-          codesign --verify --deep "$APP"
-          STUDYSTASH_SELFTEST="$RUNNER_TEMP/selftest" "$APP/Contents/MacOS/StudyStash" --home "$RUNNER_TEMP/none" &
-          for i in $(seq 1 90); do [ -f "$RUNNER_TEMP/selftest/selftest.txt" ] && break; sleep 1; done
-          cat "$RUNNER_TEMP/selftest/selftest.txt"
-          tail -1 "$RUNNER_TEMP/selftest/selftest.txt" | grep -qx ok
-      - name: Name the DMGs for the release
-        run: |
-          mkdir -p out
-          cp dist/arm64/*.dmg out/Study-Stash-App-preview-mac-arm64.dmg
-          cp dist/x64/*.dmg out/Study-Stash-App-preview-mac-x64.dmg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: new-app-mac
-          path: out/*.dmg
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: new-app-mac-selftest
-          path: ${{ runner.temp }}/selftest
-
-  new-app-windows:
-    name: new app (Windows)
-    needs: [engine]
-    timeout-minutes: 25
-    runs-on: windows-latest
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_NOLOGO: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - name: Publish the app (Whisper's libraries for Windows only)
-        shell: pwsh
-        run: |
-          $out = "dist\Study Stash"
-          dotnet publish engine\src\StudyStash.App -c Release -r win-x64 --self-contained true -p:DebugType=None -o $out
-          Get-ChildItem "$out\runtimes" -Directory | Where-Object { $_.Name -notin @("win-x64", "vulkan") } | Remove-Item -Recurse -Force
-      - name: It opens its windows and tries each one (no library, so setup first)
-        shell: pwsh
-        run: |
-          $env:STUDYSTASH_SELFTEST = "$env:RUNNER_TEMP\selftest"
-          $p = Start-Process -FilePath "dist\Study Stash\StudyStash.exe" -ArgumentList "--home", "$env:RUNNER_TEMP\none" -PassThru
-          $f = "$env:STUDYSTASH_SELFTEST\selftest.txt"
-          for ($i = 0; $i -lt 90 -and -not (Test-Path $f); $i++) { Start-Sleep 1 }
-          if (-not (Test-Path $f)) { Stop-Process -Id $p.Id -ErrorAction SilentlyContinue; throw "no self-test in 90 s" }
-          Get-Content $f
-          if ((Get-Content $f | Select-Object -Last 1) -ne "ok") { throw "the self-test failed" }
-      - name: Zip it
-        shell: pwsh
-        run: Compress-Archive -Path "dist\Study Stash" -DestinationPath dist\Study-Stash-App-preview-windows-x64.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: new-app-windows
-          path: dist/Study-Stash-App-preview-windows-x64.zip
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: new-app-windows-selftest
-          path: ${{ runner.temp }}/selftest
-
+  # Publish v<version> the first time it passes everything above, with exactly the four installers and their
+  # checksums (D2). A version already tagged (or released) is never published again.
   release:
     name: publish release
-    needs: [engine, mac-app, windows-app, engine-zips, new-app-mac, new-app-windows]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [version, engine, mac-app, mac-intel, windows-app]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.new == 'true'
     timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          name: mac-app
+          name: mac-installers
           path: dist
       - uses: actions/download-artifact@v4
         with:
-          name: windows-app
+          name: windows-installers
           path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: engine-*
-          merge-multiple: true
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: new-app-mac
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: new-app-windows
-          path: dist
-      - name: Publish v<version> if it is new
+      - name: Publish v${{ needs.version.outputs.version }}
         env:
           GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
         run: |
-          V=$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' engine/Directory.Build.props)
-          if [ -z "$V" ]; then echo "no StudyStashVersion in engine/Directory.Build.props"; exit 1; fi
-          # Never publish a version twice: its tag, or a release by that name, means it is out already.
+          # Re-check the race: another push could have published this tag while this run was building.
           if git rev-parse -q --verify "refs/tags/v$V" >/dev/null || gh release view "v$V" >/dev/null 2>&1; then
             echo "v$V is already released; bump StudyStashVersion in engine/Directory.Build.props to publish a new one."
             exit 0
           fi
-          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
-            dist/Study-Stash-Laptop.dmg dist/Study-Stash-Library.dmg dist/Study-Stash-Laptop-Setup.exe \
-            dist/Study-Stash-Library-Setup.exe dist/Study-Stash-mac.zip dist/Study-Stash-Library-mac.zip \
-            dist/Study-Stash-windows.zip \
-            dist/Study-Stash-engine-*.zip dist/Study-Stash-App-preview-*
+          (cd dist && sha256sum Study-Stash-* > SHA256SUMS.txt)
+          gh release create "v$V" --target "$GITHUB_SHA" --title "Study Stash $V" --generate-notes \
+            dist/Study-Stash-Laptop.dmg dist/Study-Stash-Library.dmg \
+            dist/Study-Stash-Laptop-Setup.exe dist/Study-Stash-Library-Setup.exe \
+            dist/SHA256SUMS.txt
