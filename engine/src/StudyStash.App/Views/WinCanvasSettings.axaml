@@ -1,0 +1,186 @@
+<!-- Settings -> Canvas (design 06, Windows): connection, courses and the last sync's changes as Fluent cards, the
+     InfoBar status always shown at the top. Draws no outer padding or window — SettingsView (integration) gives the
+     margins, the way it gives every other section's. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:v="using:StudyStash.App.Views"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinCanvasSettings"
+             x:DataType="vm:CanvasSettingsModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinCanvasStyles.axaml" />
+    <Style Selector="Border.cv-field">
+      <Setter Property="Height" Value="32" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="11,0" />
+    </Style>
+    <Style Selector="Button.cv-select">
+      <Setter Property="Theme" Value="{StaticResource Surface}" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="10,0,11,0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="0">
+
+      <TextBlock Classes="cv-h1" Text="Canvas" Margin="0,0,0,12" />
+      <v:WinCanvasStatus DataContext="{Binding Status}" />
+      <TextBlock Classes="cv-intro" Text="Study Stash only reads from Canvas. Nothing there changes, and everything stays in your library." />
+
+      <!-- Connection -->
+      <TextBlock Classes="cv-h2" Text="Connection" />
+      <Border Classes="cv-item" IsVisible="{Binding !EditingSchool}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Glyph="language" Size="20" />
+          <StackPanel Grid.Column="1" Spacing="0" Margin="16,0,0,0" VerticalAlignment="Center" MinWidth="0">
+            <TextBlock Text="School" FontSize="14" />
+            <TextBlock Classes="cv-value" Text="{Binding School}" />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="cv-btn" VerticalAlignment="Center" Command="{Binding ChangeSchoolCommand}">
+            <TextBlock Text="Change" />
+          </Button>
+        </Grid>
+      </Border>
+      <Border Classes="cv-item" IsVisible="{Binding EditingSchool}">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+          <c:Icon Glyph="language" Size="20" />
+          <Border Grid.Column="1" Classes="cv-field" VerticalAlignment="Center" Margin="16,0,0,0">
+            <TextBox Classes="bare" Text="{Binding SchoolField}" FontSize="14" />
+          </Border>
+          <Button Grid.Column="2" Classes="cv-btn cv-primary" VerticalAlignment="Center" IsEnabled="{Binding !SavingSchool}" Command="{Binding SaveSchoolCommand}">
+            <TextBlock Text="Save" />
+          </Button>
+          <Button Grid.Column="3" Classes="cv-btn" VerticalAlignment="Center" Command="{Binding CancelSchoolCommand}">
+            <TextBlock Text="Cancel" />
+          </Button>
+        </Grid>
+      </Border>
+      <TextBlock Classes="cv-link" Margin="0,0,0,8" Text="{Binding SchoolError}" IsVisible="{Binding SchoolError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <Border Classes="cv-item">
+        <Grid ColumnDefinitions="Auto,*">
+          <c:Icon Glyph="extension" Size="20" />
+          <StackPanel Grid.Column="1" Spacing="0" Margin="16,0,0,0" VerticalAlignment="Center" MinWidth="0">
+            <TextBlock Text="Chrome extension" FontSize="14" />
+            <TextBlock Classes="cv-value" Text="{Binding ExtensionLine}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Classes="cv-item">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <c:Icon Glyph="sync" Size="20" />
+          <StackPanel Grid.Column="1" Spacing="0" Margin="16,0,0,0" VerticalAlignment="Center" MinWidth="0">
+            <TextBlock Text="Sync" FontSize="14" />
+            <TextBlock Classes="cv-value" Text="Runs while Chrome is open" />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="cv-select" Width="160" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding PollLabel}" TextTrimming="CharacterEllipsis" />
+              <c:Icon Grid.Column="1" Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" Margin="6,0,0,0" />
+            </Grid>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <ItemsControl ItemsSource="{Binding PollChoices}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PollChoice">
+                      <Button Classes="cv-select-item"
+                              Command="{Binding $parent[ItemsControl].((vm:CanvasSettingsModel)DataContext).PickPollCommand}"
+                              CommandParameter="{Binding Minutes}">
+                        <TextBlock Text="{Binding Label}" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- Courses -->
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="cv-h2" Text="Courses" />
+        <Button Grid.Column="1" Theme="{StaticResource Surface}" Padding="0" VerticalAlignment="Center"
+                IsEnabled="{Binding !FindingCourses}" Command="{Binding FindCoursesCommand}">
+          <TextBlock Classes="cv-link" Text="Find my courses again" />
+        </Button>
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Courses}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:CanvasCourseRow">
+            <Border Classes="cv-item">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Grid.Column="0" Width="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Ellipse Classes="cv-dot" Fill="{Binding Dot}" HorizontalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center" MinWidth="0">
+                  <TextBlock Classes="cv-dot-label" Text="{Binding Class}" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <c:Spinner IsVisible="{Binding ScoutSpinning}" Width="14" Height="14" Thickness="2" Foreground="{DynamicResource Accent}" />
+                    <c:Icon IsVisible="{Binding !ScoutSpinning}" Classes="cv-scout" Glyph="{Binding ScoutGlyph}"
+                            Classes.cv-ok="{Binding ScoutOk}" Classes.cv-warn="{Binding ScoutWarn}" />
+                    <TextBlock Classes="cv-scout" Text="{Binding ScoutLine}" />
+                    <Button Theme="{StaticResource Surface}" Padding="4,0" Margin="-4,0,0,0" IsVisible="{Binding ShowTryAgain}" Command="{Binding TryAgainCommand}">
+                      <TextBlock Classes="cv-link" Text="{x:Static vm:CanvasWords.TryAgain}" />
+                    </Button>
+                  </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="2" Classes="cv-select" Width="260" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Selected.Label}" TextTrimming="CharacterEllipsis"
+                               Classes.cv-placeholder="{Binding Selected.Id, Converter={x:Static ObjectConverters.IsNull}}" />
+                    <c:Icon Grid.Column="1" Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" Margin="6,0,0,0" />
+                  </Grid>
+                  <Button.Flyout>
+                    <Flyout Placement="BottomEdgeAlignedRight">
+                      <ItemsControl ItemsSource="{Binding Choices}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:CourseChoice">
+                            <Button Classes="cv-select-item"
+                                    Command="{Binding $parent[ItemsControl].((vm:CanvasCourseRow)DataContext).PickCommand}"
+                                    CommandParameter="{Binding}">
+                              <TextBlock Text="{Binding Label}" />
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Classes="cv-link" Margin="0,0,0,8" Text="{Binding CoursesSay}" IsVisible="{Binding CoursesSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <!-- Last sync -->
+      <StackPanel Spacing="0" IsVisible="{Binding HasChanges}">
+        <TextBlock Classes="cv-h2" Text="{Binding LastSyncHeader}" />
+        <Border CornerRadius="4" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardStroke}" BorderThickness="1" Padding="16,6">
+          <ItemsControl ItemsSource="{Binding Changes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CanvasChangeRow">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Height="36">
+                  <c:Icon Classes="cv-change" Glyph="{Binding Glyph}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Classes="cv-change" Text="{Binding Text}" VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
