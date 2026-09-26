@@ -46,6 +46,23 @@ public class CanvasContentTests
     }
 
     [Fact]
+    public void A_file_that_failed_to_download_is_asked_for_again_next_sync()
+    {
+        using var dir = new TempDir();
+        var sync = FakeCanvas.Library(dir, () => FakeCanvas.DesignNow);
+        var canvas = FakeCanvas.Cs101().Json(AssignmentsPath, LinkedAssignment).FailTimes(FileDownload, 3, 500);
+        Assert.True(canvas.Run(sync));
+
+        string filePath = Path.Combine(RootFor(dir), "assignments", "Lab 3- recursion traces", "files", "recursion-slides.pdf");
+        Assert.False(File.Exists(filePath));
+
+        // Nothing about "someone already asked" survives a download that never arrived: the next sync tries again,
+        // and this time Canvas answers.
+        Assert.True(canvas.Run(sync));
+        Assert.Equal("%PDF-1.4 recursion slides", File.ReadAllText(filePath));
+    }
+
+    [Fact]
     public void The_same_file_linked_from_a_page_is_not_downloaded_twice_and_links_to_the_first_copy()
     {
         using var dir = new TempDir();

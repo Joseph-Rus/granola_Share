@@ -410,6 +410,15 @@ public sealed partial class Crawl
         else if (handedOut >= until) data["backoff"] = 0;
     }
 
+    /// <summary>A file's bytes are wanted no more (its want was signed out, hidden, or failed for good): the
+    /// "someone already asked" marker <see cref="WantFile"/> left comes off, so a later sync asks again instead of
+    /// believing forever that the file is on its way.</summary>
+    void Unqueue(JsonObject tag)
+    {
+        if (S(tag["type"]) == "file_bytes" && S(tag["key"]) is { Length: > 0 } key && S(Manifest[key]).StartsWith("queued:", StringComparison.Ordinal))
+            Manifest.Remove(key);
+    }
+
     /// <summary>File one answer. False when it isn't one of this crawl's jobs.</summary>
     public bool Handle(CanvasResult r)
     {
@@ -425,11 +434,15 @@ public sealed partial class Crawl
                 switch (Classify(r))
                 {
                     case CanvasAnswer.SignedOut:
+                        Unqueue(tag);
+                        foreach (var (_, inflight) in Inflight) Unqueue(inflight!["job"]!["tag"]!.AsObject());
+                        foreach (var waiting in Jobs) Unqueue(waiting!["tag"]!.AsObject());
                         data["signed_out"] = true;
                         data["jobs"] = new JsonArray();
                         data["inflight"] = new JsonObject();
                         break;
                     case CanvasAnswer.Hidden:
+                        Unqueue(tag);
                         Section(cls, type, "hidden");
                         break;
                     case CanvasAnswer.RateLimited:
@@ -442,6 +455,7 @@ public sealed partial class Crawl
                         Jobs.Add(again);
                         break;
                     case CanvasAnswer.Transient or CanvasAnswer.Failed:
+                        Unqueue(tag);
                         Errors.Add($"{cls} {type}: {Why(r)}");
                         Section(cls, type, "failed");
                         break;
@@ -453,6 +467,7 @@ public sealed partial class Crawl
             }
             catch (Exception e) when (e is JsonException or IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
             {
+                Unqueue(tag);
                 Errors.Add($"{cls} {type}: {e.Message}"); // one odd item never stops the sync
                 Section(cls, type, "failed");
             }
