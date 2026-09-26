@@ -15,6 +15,24 @@ public static partial class Shell
     static string? openClass;
     static string? openLecture;
     static int searchTurn;
+    /// <summary>Every load of the library window (the whole thing, or one class) takes the next turn: a load that's
+    /// no longer the latest by the time it's back stops instead of clobbering what a later one already drew.</summary>
+    static int libraryTurn;
+    static bool libraryReloadQueued;
+
+    /// <summary>A lecture was filed, or the library just came back: if its window is open, the class showing gets its
+    /// new note within a second (not on every change in that second, just the last one).</summary>
+    static void RequestLibraryReload()
+    {
+        if (libraryReloadQueued || mainWindow?.IsVisible != true) return;
+        libraryReloadQueued = true;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        {
+            libraryReloadQueued = false;
+            if (quitting || mainWindow?.IsVisible != true) return;
+            _ = dueOpen ? ShowDueAsync() : openClass is { } cls ? ShowClassAsync(cls) : Task.CompletedTask;
+        }, TimeSpan.FromSeconds(1));
+    }
 
     static string S(JsonNode? n) => n is JsonValue v && v.TryGetValue(out string? s) ? s ?? "" : "";
 
@@ -36,11 +54,14 @@ public static partial class Shell
 
     static async Task LoadLibraryAsync()
     {
+        int turn = ++libraryTurn;
         await host.CheckLibraryAsync();
+        if (turn != libraryTurn) return; // a later load (or an explicit class) has already taken over
         library.Classes.Clear();
         foreach (var (name, color, count) in host.Classes())
             library.Classes.Add(new ClassItem { Name = name, Dot = Skin.ClassDot(color), Count = count });
         await AddDueAsync();
+        if (turn != libraryTurn) return;
         int unsorted = host.Overview?["unsorted"]?.GetValue<int>() ?? 0;
         library.Unsorted = unsorted > 0 ? new ClassItem { Name = Configs.Unsorted, IsUnsorted = true, Count = unsorted } : null;
         if (host.Library != LibraryState.Connected || host.OlderLibrary)
@@ -69,6 +90,7 @@ public static partial class Shell
 
     static async Task ShowClassAsync(string name)
     {
+        int turn = ++libraryTurn;
         openClass = name;
         dueOpen = false;
         foreach (var c in library.Classes) c.Selected = c.Name == name && !c.IsDue;
@@ -82,9 +104,10 @@ public static partial class Shell
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException)
         {
-            library.Empty = "Can't reach your library right now.";
+            if (turn == libraryTurn) library.Empty = "Can't reach your library right now.";
             return;
         }
+        if (turn != libraryTurn) return; // a later class (or a whole reload) has already taken over
         library.ClassCount = $"{list.Count} lecture{(list.Count == 1 ? "" : "s")}";
         library.Groups.Clear();
         var lectures = list.OfType<JsonObject>().ToList();
@@ -100,6 +123,7 @@ public static partial class Shell
         }
         // With Canvas: what's still to hand in for this class comes first.
         var todo = linkedClasses.Contains(name) ? await AssignmentCardsAsync(lib, name, null) : [];
+        if (turn != libraryTurn) return;
         if (todo.Count > 0)
         {
             var due = new LectureGroup { Label = "To hand in", First = true };
@@ -280,12 +304,14 @@ public static partial class Shell
 
     static async Task ShowDueAsync()
     {
+        int turn = ++libraryTurn;
         dueOpen = true;
         foreach (var c in library.Classes) c.Selected = c.IsDue;
         if (library.Unsorted is { } u) u.Selected = false;
         library.ClassTitle = "Due";
         if (host.Remote() is not { } lib) return;
         var cards = await AssignmentCardsAsync(lib, null, 30);
+        if (turn != libraryTurn) return;
         library.ClassCount = cards.Count == 1 ? "1 to hand in" : $"{cards.Count} to hand in";
         library.Groups.Clear();
         library.Empty = cards.Count == 0 ? "Nothing due in the next month." : null;

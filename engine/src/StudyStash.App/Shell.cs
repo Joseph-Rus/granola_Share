@@ -52,6 +52,7 @@ public static partial class Shell
     static string? liveId;
     /// <summary>What's wrong right now (from <see cref="Problems"/>), so the panel's Fix button knows what to do.</summary>
     static AppProblem? currentProblem;
+    static LibraryState lastLibraryState = LibraryState.NotSetUp;
 
     public static AppHost Host => host;
 
@@ -85,8 +86,12 @@ public static partial class Shell
         host = new AppHost(home, laptop: new LaptopHost(), log: Program.Log);
         host.Changed += RequestRefresh;
         host.Heard += (l, lines) => Dispatcher.UIThread.Post(() => AddHeard(l, lines));
-        host.Filed += l => Dispatcher.UIThread.Post(() => Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",
-            l.FiledTitle.Length > 0 ? l.FiledTitle : "The notes are written.", "Open note", () => OpenLecture(l.Id)));
+        host.Filed += l => Dispatcher.UIThread.Post(() =>
+        {
+            Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",
+                l.FiledTitle.Length > 0 ? l.FiledTitle : "The notes are written.", "Open note", () => OpenLecture(l.Id));
+            RequestLibraryReload();
+        });
         host.Problem += (title, why) => Dispatcher.UIThread.Post(() => Toast(title, why, null, null));
         if (host.PretendMic) Program.Log("[app] recording from a pretend microphone (STUDYSTASH_MIC_FILE)");
         Wire();
@@ -796,6 +801,10 @@ public static partial class Shell
             _ => "No library yet",
         };
         library.StatusGood = host.Library == LibraryState.Connected;
+        // The library just came back: the window, if it's open, gets its class reloaded so a note written while it
+        // was gone shows up without reopening the window.
+        if (lastLibraryState != LibraryState.Connected && host.Library == LibraryState.Connected) RequestLibraryReload();
+        lastLibraryState = host.Library;
         RefreshRecent();
         if (trayRecording != recording && tray is not null)
         {
