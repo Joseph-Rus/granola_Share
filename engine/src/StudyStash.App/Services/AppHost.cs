@@ -269,10 +269,21 @@ public sealed class AppHost : IDisposable
         if (Settings.SetupDone && !ModelReady) _ = DownloadModelAsync();
         if (Settings.Role != AppRole.Laptop && Settings.SetupDone)
         {
-            LocalLibrary = localLibrary?.Invoke() ?? new LibraryService(Home, Configs.Load(Home));
-            LocalLibrary.Changed += () => Changed?.Invoke();
-            _ = LocalLibrary.StartAsync();
+            var svc = localLibrary?.Invoke() ?? new LibraryService(Home, Configs.Load(Home));
+            UseLocalLibrary(svc);
+            _ = svc.StartAsync();
         }
+    }
+
+    /// <summary>Take this as this computer's own library: the one <see cref="LocalLibrary"/> shows from now on, stopped
+    /// in <see cref="Dispose"/>. Setup calls this the moment it starts one (before the app has even reached
+    /// <see cref="Start"/> for a first-time "this computer" library), so that library is never left running past quit.
+    /// Does nothing if one is already in charge.</summary>
+    internal void UseLocalLibrary(LibraryService svc)
+    {
+        if (LocalLibrary is not null) return;
+        LocalLibrary = svc;
+        svc.Changed += () => Changed?.Invoke();
     }
 
     /// <summary>Every second, on the thread pool: the recorder looks at its microphone and the disk. One look at a
