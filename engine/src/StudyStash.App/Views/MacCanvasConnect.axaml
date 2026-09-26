@@ -55,15 +55,17 @@
 
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
                 <Border Classes="cv-illus" Height="88">
-                  <DockPanel LastChildFill="False">
-                    <TextBlock DockPanel.Dock="Top" Classes="cv-illus-title" Text="Extensions" />
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" Margin="0,-14,0,0">
-                      <TextBlock Classes="cv-illus-row" Text="Developer mode" />
-                      <Border Classes="cv-illus-toggle"><Ellipse Classes="cv-illus-knob" /></Border>
-                    </StackPanel>
-                    <Border DockPanel.Dock="Bottom" Height="6" CornerRadius="3" Background="{DynamicResource Fill2}" Margin="0,10,20,0" />
-                    <Border DockPanel.Dock="Bottom" Height="6" CornerRadius="3" Background="{DynamicResource Fill2}" Margin="0,6,40,0" />
-                  </DockPanel>
+                  <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                      <TextBlock Classes="cv-illus-title" Text="Extensions" />
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                        <TextBlock Classes="cv-illus-row" Text="Developer mode" VerticalAlignment="Center" />
+                        <Border Classes="cv-illus-toggle"><Ellipse Classes="cv-illus-knob" /></Border>
+                      </StackPanel>
+                    </Grid>
+                    <Border Height="6" CornerRadius="3" Background="{DynamicResource Fill2}" Margin="0,4,20,0" />
+                    <Border Height="6" CornerRadius="3" Background="{DynamicResource Fill2}" Margin="0,0,40,0" />
+                  </StackPanel>
                 </Border>
                 <Border Grid.Column="1" Classes="cv-illus" Height="88">
                   <StackPanel Spacing="10">
@@ -82,9 +84,9 @@
               </Grid>
 
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
-                <StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Classes="cv-caption-num" Text="1" /><TextBlock Classes="cv-caption" Text="Turn on Developer mode, top right" TextWrapping="Wrap" /></StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"><TextBlock Classes="cv-caption-num" Text="2" /><TextBlock Classes="cv-caption" Text="Click Load unpacked" TextWrapping="Wrap" /></StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"><TextBlock Classes="cv-caption-num" Text="3" /><TextBlock Classes="cv-caption" Text="Pick the Study Stash Extension folder" TextWrapping="Wrap" /></StackPanel>
+                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="cv-caption-num" Text="1" Margin="0,0,4,0" /><TextBlock Grid.Column="1" Classes="cv-caption" Text="Turn on Developer mode, top right" TextWrapping="Wrap" /></Grid>
+                <Grid Grid.Column="1" ColumnDefinitions="Auto,*"><TextBlock Classes="cv-caption-num" Text="2" Margin="0,0,4,0" /><TextBlock Grid.Column="1" Classes="cv-caption" Text="Click Load unpacked" TextWrapping="Wrap" /></Grid>
+                <Grid Grid.Column="2" ColumnDefinitions="Auto,*"><TextBlock Classes="cv-caption-num" Text="3" Margin="0,0,4,0" /><TextBlock Grid.Column="1" Classes="cv-caption" Text="Pick the Study Stash Extension folder" TextWrapping="Wrap" /></Grid>
               </Grid>
 
               <Grid ColumnDefinitions="*,Auto,Auto">
