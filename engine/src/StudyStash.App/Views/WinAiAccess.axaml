@@ -1,0 +1,139 @@
+<!-- Settings → AI tool access (design 14, Windows): the off switch, what Claude and other MCP tools may read,
+     connecting a tool, and the connected list. The pane's own padding and scrolling; the settings window is the
+     host's. An "Other…" text button follows Codex — not in the design, added so Claude Desktop and Claude on the
+     web stay reachable here too (see WIRING.md). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinAiAccess"
+             x:DataType="vm:AiAccessModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="28,28,36,28" Spacing="4">
+
+      <TextBlock Classes="ai-title" Text="AI tool access" />
+      <TextBlock Classes="ai-sub" MaxWidth="560" Margin="0,4,0,0" HorizontalAlignment="Left"
+                 Text="Claude Code, Codex and other tools that support MCP can read your library. They can't change or delete anything." />
+      <Border Height="12" />
+
+      <Border Classes="ai-card">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="hub" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Let AI tools read your library" />
+            <TextBlock Classes="ai-row-sub" Text="Off stops every connected tool at once" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock Text="{Binding On, Converter={x:Static c:Converters.OnOff}}" FontSize="14" />
+            <ToggleButton Theme="{StaticResource AiToggle}" IsChecked="{Binding On}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <TextBlock Classes="ai-section" Text="What they can read" Margin="0,18,0,8" />
+      <Border Classes="ai-card">
+        <StackPanel>
+          <Button Classes="ai-textbtn" Command="{Binding ToggleLecturesCommand}" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,12,*" Height="40">
+              <Border Classes="ai-check" Classes.on="{Binding ReadLectures}">
+                <c:Icon Glyph="check" Size="14" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadLectures}" />
+              </Border>
+              <TextBlock Grid.Column="2" Classes="ai-row-title" Text="Lectures and transcripts" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <Button Classes="ai-textbtn" Command="{Binding ToggleNotesCommand}" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,12,*" Height="40">
+              <Border Classes="ai-check" Classes.on="{Binding ReadNotes}">
+                <c:Icon Glyph="check" Size="14" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadNotes}" />
+              </Border>
+              <TextBlock Grid.Column="2" Classes="ai-row-title" Text="Study notes" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <Button Classes="ai-textbtn" Command="{Binding ToggleCanvasCommand}" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,12,*" Height="40">
+              <Border Classes="ai-check" Classes.on="{Binding ReadCanvas}">
+                <c:Icon Glyph="check" Size="14" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadCanvas}" />
+              </Border>
+              <TextBlock Grid.Column="2" Classes="ai-row-title" Text="Canvas assignments and files" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <Button Classes="ai-textbtn" Command="{Binding ToggleAudioCommand}" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,12,*" Height="40">
+              <Border Classes="ai-check" Classes.on="{Binding ReadAudio}">
+                <c:Icon Glyph="check" Size="14" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadAudio}" />
+              </Border>
+              <TextBlock Grid.Column="2" Classes="ai-row-title" Text="Audio recordings" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Classes="ai-section" Text="Connect a tool" Margin="0,18,0,8" />
+      <Border Classes="ai-card">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="add_link" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Add Study Stash to a tool" />
+            <TextBlock Classes="ai-row-sub" Text="Copies the setup, then paste it into the tool's settings" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <Button Classes="ai-pillbtn" Command="{Binding CopyClaudeCodeCommand}">
+              <Border Classes="ai-pill">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="content_copy" Size="16" />
+                  <TextBlock Text="Claude Code" />
+                </StackPanel>
+              </Border>
+            </Button>
+            <Button Classes="ai-pillbtn" Command="{Binding CopyCodexCommand}">
+              <Border Classes="ai-pill">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <c:Icon Glyph="content_copy" Size="16" />
+                  <TextBlock Text="Codex" />
+                </StackPanel>
+              </Border>
+            </Button>
+            <Button Classes="ai-textbtn" VerticalAlignment="Center">
+              <TextBlock Text="Other…" FontSize="14" />
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}">
+                  <MenuItem Classes="ai-item" Header="Claude Desktop: add it for me" Command="{Binding AddClaudeDesktopCommand}" />
+                  <MenuItem Classes="ai-item" Header="Claude on the web: turn on its address" Command="{Binding TurnOnClaudeWebCommand}" />
+                  <MenuItem Classes="ai-item" Header="Another tool: copy the JSON" Command="{Binding CopyOtherCommand}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <TextBlock Classes="ai-section" Text="Connected tools" Margin="0,18,0,8" IsVisible="{Binding HasConnections}" />
+      <ItemsControl ItemsSource="{Binding Connected}" IsVisible="{Binding HasConnections}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AiConnectionRow">
+            <Border Classes="ai-card" Margin="{Binding First, Converter={x:Static c:Converters.FirstCardMargin}}">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+                <c:Icon Glyph="{Binding Icon}" Size="20" />
+                <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock Classes="ai-row-title" Text="{Binding Name}" />
+                  <TextBlock Classes="ai-row-sub" Text="{Binding WinDetail}" />
+                </StackPanel>
+                <Button Grid.Column="3" Classes="ai-pillbtn" Command="{Binding Remove}" IsVisible="{Binding CanRemove}" VerticalAlignment="Center">
+                  <Border Classes="ai-pill">
+                    <TextBlock Text="Remove" />
+                  </Border>
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Classes="ai-sub" Text="No tools connected yet." IsVisible="{Binding !HasConnections}" Margin="0,18,0,0" />
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

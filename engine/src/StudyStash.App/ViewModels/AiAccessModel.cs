@@ -15,8 +15,15 @@ public sealed class AiConnectionRow
     /// <summary>"Signed in from the web" · "Token" · "This computer".</summary>
     public string Detail { get; init; } = "";
     public string UsedWords { get; init; } = "";
+    public bool HasUsedWords => UsedWords.Length > 0;
+    /// <summary>Windows keeps the used-time in the one subtitle line, Mac on the row's own right side.</summary>
+    public string WinDetail => HasUsedWords ? $"{Detail} · {UsedWords}" : Detail;
     public bool CanRemove { get; init; }
     public IAsyncRelayCommand? Remove { get; internal set; }
+    /// <summary>terminal for Claude, code for Codex, hub for anything else — the row's icon tile.</summary>
+    public string Icon => Name switch { "Claude Code" or "Claude" or "Claude Desktop" => "terminal", "Codex" => "code", _ => "hub" };
+    /// <summary>The first row in the list shows no separator above it.</summary>
+    public bool First { get; set; }
 }
 
 /// <summary>
@@ -90,6 +97,11 @@ public sealed partial class AiAccessModel : ObservableObject
         if (!loading) _ = PostAsync(reading: new ReadingScopes(ReadLectures, ReadNotes, ReadCanvas, ReadAudio));
     }
 
+    [RelayCommand] public void ToggleLectures() => ReadLectures = !ReadLectures;
+    [RelayCommand] public void ToggleNotes() => ReadNotes = !ReadNotes;
+    [RelayCommand] public void ToggleCanvas() => ReadCanvas = !ReadCanvas;
+    [RelayCommand] public void ToggleAudio() => ReadAudio = !ReadAudio;
+
     [RelayCommand]
     public Task Refresh() => Load();
 
@@ -133,7 +145,7 @@ public sealed partial class AiAccessModel : ObservableObject
             PublicUrl = info.PublicUrl;
             HasPassword = info.HasPassword;
 
-            Connected.Clear();
+            List<AiConnectionRow> rows = [];
             foreach (var c in info.Connections)
             {
                 var row = new AiConnectionRow
@@ -145,16 +157,13 @@ public sealed partial class AiAccessModel : ObservableObject
                     CanRemove = true,
                 };
                 row.Remove = new AsyncRelayCommand(() => RemoveAsync(row.Id));
-                Connected.Add(row);
+                rows.Add(row);
             }
-            if (InClaudeCode)
-                Connected.Add(new AiConnectionRow { Id = "claude-code", Name = "Claude Code", Detail = "This computer" });
-            if (InClaudeDesktop)
-            {
-                var row = new AiConnectionRow { Id = "claude-desktop", Name = "Claude Desktop", Detail = "This computer", CanRemove = true };
-                row.Remove = new AsyncRelayCommand(RemoveDesktopAsync);
-                Connected.Add(row);
-            }
+            if (InClaudeCode) rows.Add(new AiConnectionRow { Id = "claude-code", Name = "Claude Code", Detail = "This computer" });
+            if (InClaudeDesktop) rows.Add(NewDesktopRow());
+            if (rows.Count > 0) rows[0].First = true;
+            Connected.Clear();
+            foreach (var row in rows) Connected.Add(row);
             OnPropertyChanged(nameof(HasConnections));
         }
         finally
@@ -164,6 +173,13 @@ public sealed partial class AiAccessModel : ObservableObject
     }
 
     static DateTime Epoch(double seconds) => DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000)).LocalDateTime;
+
+    AiConnectionRow NewDesktopRow()
+    {
+        var row = new AiConnectionRow { Id = "claude-desktop", Name = "Claude Desktop", Detail = "This computer", CanRemove = true };
+        row.Remove = new AsyncRelayCommand(RemoveDesktopAsync);
+        return row;
+    }
 
     [RelayCommand]
     public async Task CopyClaudeCode()
@@ -197,8 +213,8 @@ public sealed partial class AiAccessModel : ObservableObject
         InClaudeDesktop = CheckInClaudeDesktop?.Invoke() ?? InClaudeDesktop;
         if (InClaudeDesktop && Connected.All(c => c.Id != "claude-desktop"))
         {
-            var row = new AiConnectionRow { Id = "claude-desktop", Name = "Claude Desktop", Detail = "This computer", CanRemove = true };
-            row.Remove = new AsyncRelayCommand(RemoveDesktopAsync);
+            var row = NewDesktopRow();
+            row.First = Connected.Count == 0;
             Connected.Add(row);
             OnPropertyChanged(nameof(HasConnections));
         }

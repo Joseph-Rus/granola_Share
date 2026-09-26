@@ -168,4 +168,17 @@
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
+
+  <!-- A checkbox: 16, r5, on = Accent fill with a 13px check (OnAccent); off = a 1px Fg3 ring. -->
+  <Style Selector="Border.ai-check">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Fg3}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.ai-check.on">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
 </Styles>
