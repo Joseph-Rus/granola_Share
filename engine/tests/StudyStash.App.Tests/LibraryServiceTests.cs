@@ -33,7 +33,7 @@ public sealed class LibraryServiceTests
         var cfg = Configs.Load(home);
         cfg.PoolDir = Path.Combine(home, "pool");
         cfg.PoolPassword = "library-service-test";
-        cfg.WebHost = "127.0.0.1";
+        // 0.0.0.0 (the default): a wildcard bind is what PortStatusAsync's own free-port probe actually conflicts with.
         cfg.WebPort = AppPage.FreePort(19200, 400);
         cfg.OllamaEnabled = false;
         cfg.AutoUpdate = false;
