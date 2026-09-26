@@ -78,6 +78,9 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string Password { get; set; } = "";
     [ObservableProperty] public partial string? LibrarySay { get; set; }
     [ObservableProperty] public partial bool LibraryHere { get; set; }
+    /// <summary>How this computer's own library is doing (Both/Library roles only): running, starting, stopped,
+    /// already running from elsewhere, its port taken, or why it stopped.</summary>
+    [ObservableProperty] public partial string LibraryServiceLine { get; set; } = "";
     [ObservableProperty] public partial string DisplayName { get; set; } = "";
 
     // Recording
@@ -133,6 +136,11 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     public bool OnGeneral => Section == "General";
     public bool HasWebUrl => !string.IsNullOrEmpty(WebUrl);
     public bool HasConnections => Connections.Count > 0;
+    /// <summary>This computer's own library isn't running (or couldn't), and its role calls for one.</summary>
+    public bool CanStartLibrary => host.Settings.Role != AppRole.Laptop
+        && host.LocalLibrary?.State is null or LibraryServiceState.Stopped or LibraryServiceState.Failed or LibraryServiceState.PortTaken;
+    /// <summary>This computer's own library is ours to stop (started by us, not one already running elsewhere).</summary>
+    public bool CanStopLibrary => host.LocalLibrary?.State == LibraryServiceState.Running;
 
     public static SettingsModel Make(AppHost host) => new(host);
 
@@ -188,6 +196,18 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
             LibraryState.WrongPassword => "The library's password changed. Type the new one below.",
             _ => "No library yet.",
         };
+        string device = OperatingSystem.IsMacOS() ? "Mac" : "PC";
+        LibraryServiceLine = host.Settings.Role == AppRole.Laptop ? "" : host.LocalLibrary?.State switch
+        {
+            LibraryServiceState.Running => $"Your library runs on this {device}, on port {host.LocalLibrary.Cfg.WebPort}.",
+            LibraryServiceState.Starting => "Starting your library…",
+            LibraryServiceState.Elsewhere => $"A library is already running on this {device}.",
+            LibraryServiceState.PortTaken => host.LocalLibrary.Failure ?? "Its port is taken by another program.",
+            LibraryServiceState.Failed => $"It stopped: {host.LocalLibrary.Failure}",
+            _ => "Stopped.",
+        };
+        OnPropertyChanged(nameof(CanStartLibrary));
+        OnPropertyChanged(nameof(CanStopLibrary));
         ModelLine = ModelWords(host);
         foreach (var m in Models)
         {
@@ -290,6 +310,34 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     {
         var cc = host.Client();
         if (cc.ServerUrl.Length > 0) Dialogs.OpenUrl(cc.ServerUrl);
+    }
+
+    /// <summary>Start this computer's own library again (after Stop, or a problem such as a taken port).</summary>
+    [RelayCommand]
+    void StartLibrary() => _ = host.RefreshLocalLibraryAsync();
+
+    /// <summary>Stop this computer's own library. Only the one we started or adopted: never a library from elsewhere.</summary>
+    [RelayCommand]
+    async Task StopLibrary()
+    {
+        if (host.LocalLibrary is { } svc) await svc.StopAsync();
+    }
+
+    /// <summary>A plain laptop decides, from Settings, to also run the library on this computer.</summary>
+    [RelayCommand]
+    async Task MakeThisTheLibrary()
+    {
+        LibrarySay = "Starting your library…";
+        try
+        {
+            string done = await Services.LibraryHere.ThisComputer().CreateAsync(host, $"{DisplayName}'s library", StudyStash.Library.Http.TokenUrlSafe(12), DisplayName);
+            LibraryHere = true;
+            LibrarySay = done;
+        }
+        catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+        {
+            LibrarySay = e.Message;
+        }
     }
 
     [RelayCommand]

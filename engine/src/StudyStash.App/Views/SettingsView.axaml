@@ -129,7 +129,15 @@
           <TextBlock Classes="say" Text="{Binding LibrarySay}" IsVisible="{Binding LibrarySay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Classes="sub" Text="Your name in the library" />
           <Border Classes="field" Width="240" HorizontalAlignment="Left"><TextBox Classes="bare" Text="{Binding DisplayName}" FontSize="13" /></Border>
-          <TextBlock Classes="say" IsVisible="{Binding LibraryHere}" Text="This computer is a library too: its service starts when you log in, and the page above has its own settings (the notes model, classes, the password)." />
+          <TextBlock Classes="say" IsVisible="{Binding LibraryHere}" Text="This computer is a library too: it runs while Study Stash is open. Turn on Start at login in General to keep it running. The page above has its own settings (the notes model, classes, the password)." />
+          <TextBlock Classes="say" IsVisible="{Binding LibraryHere}" Text="{Binding LibraryServiceLine}" />
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0" IsVisible="{Binding LibraryHere}">
+            <Button Classes="push" Command="{Binding StartLibraryCommand}" IsVisible="{Binding CanStartLibrary}"><TextBlock Text="Start" FontSize="13" /></Button>
+            <Button Classes="push" Command="{Binding StopLibraryCommand}" IsVisible="{Binding CanStopLibrary}"><TextBlock Text="Stop" FontSize="13" /></Button>
+          </StackPanel>
+          <Button Classes="push" Margin="0,10,0,0" IsVisible="{Binding !LibraryHere}" Command="{Binding MakeThisTheLibraryCommand}">
+            <TextBlock Text="Make this computer the library too" FontSize="13" />
+          </Button>
         </StackPanel>
 
         <!-- Recording -->

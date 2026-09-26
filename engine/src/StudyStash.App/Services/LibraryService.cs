@@ -47,6 +47,8 @@ public sealed class LibraryService : IDisposable
     bool stopping;
     bool disposed;
 
+    /// <summary>The port and password it's running with (or would, once started).</summary>
+    public Config Cfg => cfg;
     public LibraryServiceState State { get; private set; } = LibraryServiceState.Stopped;
     /// <summary>Why it's <see cref="LibraryServiceState.Failed"/> or <see cref="LibraryServiceState.PortTaken"/>; null otherwise.</summary>
     public string? Failure { get; private set; }

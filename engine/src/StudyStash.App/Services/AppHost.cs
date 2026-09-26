@@ -286,6 +286,18 @@ public sealed class AppHost : IDisposable
         svc.Changed += () => Changed?.Invoke();
     }
 
+    /// <summary>Start this computer's own library (Settings' Start button, after Stop or a problem): make one if there
+    /// isn't one yet, otherwise just ask the one we have to try again (a no-op while it's already up).</summary>
+    public Task RefreshLocalLibraryAsync()
+    {
+        if (LocalLibrary is null)
+        {
+            var svc = localLibrary?.Invoke() ?? new LibraryService(Home, Configs.Load(Home));
+            UseLocalLibrary(svc);
+        }
+        return LocalLibrary!.StartAsync();
+    }
+
     /// <summary>Every second, on the thread pool: the recorder looks at its microphone and the disk. One look at a
     /// time (reopening a microphone can take a moment).</summary>
     void CheckRecorder()
