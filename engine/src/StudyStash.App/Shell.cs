@@ -320,7 +320,8 @@ public static partial class Shell
         var l = host.StopRecording();
         chosenClass = null;
         recorderWindow?.Hide();
-        if (l is not null) Toast("Recording saved", "Study Stash is writing it down; the library files it and writes your notes.", null, null);
+        if (l is { State: LectureState.Failed }) Toast(l.Error, "Its sound file is damaged, so it can't be written down.", null, null);
+        else if (l is not null) Toast("Recording saved", "Study Stash is writing it down; the library files it and writes your notes.", null, null);
         Refresh();
     }
 

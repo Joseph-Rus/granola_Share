@@ -1,24 +1,49 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
+using StudyStash.Audio;
 
 namespace StudyStash.Core.Tests;
 
 /// <summary>A microphone that plays back what a test gives it, at the rate and channels of a real one.</summary>
 public sealed class FakeMic(int rate = 48000, int channels = 2) : IAudioSource
 {
+    bool muted;
+
     public string Name => "Fake";
     public int SampleRate => rate;
     public int Channels => channels;
     public event Action<float[]>? Samples;
     public event Action<string>? Failed;
     public bool Running { get; private set; }
+    public bool Disposed { get; private set; }
 
-    public void Start() => Running = true;
+    /// <summary>Start fails with these words, as a microphone that won't open does.</summary>
+    public string? WontStart { get; init; }
+
+    public void Start()
+    {
+        if (WontStart is not null) throw new InvalidOperationException(WontStart);
+        Running = true;
+    }
+
     public void Stop() => Running = false;
-    public void Dispose() => Running = false;
+
+    public void Dispose()
+    {
+        Running = false;
+        Disposed = true;
+    }
+
+    /// <summary>Unplugged, or not back after a nap: it's still on, but nothing comes from it any more.</summary>
+    public void Mute() => muted = true;
+
+    /// <summary>Exact silence, as macOS sends when Study Stash isn't allowed to hear the microphone.</summary>
+    public void Zeros(double seconds) => Play(seconds, amplitude: 0);
 
     /// <summary>Seconds of a tone (0 amplitude: silence), in buffers of 10 ms, as a sound card sends them.</summary>
     public void Play(double seconds, double hz = 440, double amplitude = 0.5)
     {
+        if (muted) return;
         int frames = (int)(seconds * rate), per = rate / 100;
         for (int at = 0; at < frames; at += per)
         {
@@ -42,9 +67,17 @@ public sealed class FakeWhisper : ITranscriber
     public List<(int Samples, string Prompt, string Language)> Calls { get; } = [];
     public bool Disposed { get; private set; }
 
+    /// <summary>This many calls fail first, as Whisper running out of memory does.</summary>
+    public int Failures { get; set; }
+
     public Task<Transcription> TranscribeAsync(float[] samples, string prompt, string language, CancellationToken stop)
     {
         Calls.Add((samples.Length, prompt, language));
+        if (Failures > 0)
+        {
+            Failures--;
+            throw new InvalidOperationException("out of memory");
+        }
         double seconds = samples.Length / (double)Sound.Rate;
         return Task.FromResult(new Transcription([new Spoken(0.5, seconds - 0.5, $"piece {Calls.Count}"), new Spoken(1, 2, "[BLANK_AUDIO]")], "en"));
     }
@@ -290,20 +323,367 @@ public class RecordingTests
         Assert.False(File.Exists(store.AudioPath(l.Id)));
     }
 
+    /// <summary>A recorder whose microphones are kept, newest last, and whose log and problems are kept too.</summary>
+    sealed class Watched : IDisposable
+    {
+        public List<FakeMic> Mics { get; } = [];
+        public List<string> Said { get; } = [];
+        public List<string> Log { get; } = [];
+        public Recorder Recorder { get; }
+        public FakeMic Mic => Mics[^1];
+        public LectureState? State => Recorder.Current?.State;
+
+        public Watched(LectureStore store, Func<FakeMic>? mic = null, Func<string, bool, IWavSink>? openFile = null, Func<string, long?>? freeBytes = null)
+        {
+            Recorder = new Recorder(store, () =>
+            {
+                var m = mic?.Invoke() ?? new FakeMic();
+                Mics.Add(m);
+                return m;
+            }, () => Tuesday, line =>
+            {
+                lock (Log) Log.Add(line);
+            }, openFile, freeBytes);
+            Recorder.Problem += why =>
+            {
+                lock (Said) Said.Add(why);
+            };
+        }
+
+        public void Dispose() => Recorder.Dispose();
+    }
+
+    static readonly DateTime Now0 = new(2026, 9, 22, 17, 2, 12, DateTimeKind.Utc);
+
     [Fact]
-    public void A_microphone_that_fails_pauses_the_lecture()
+    public void A_microphone_that_goes_quiet_is_opened_again_then_paused()
     {
         using var dir = new TempDir();
         var store = new LectureStore(dir.Path);
-        FakeMic? mic = null;
-        using var rec = new Recorder(store, () => mic = new FakeMic());
-        string? told = null;
-        rec.Problem += why => told = why;
+        using var w = new Watched(store);
+        var rec = w.Recorder;
         rec.Start("CS 101");
-        mic!.Play(2);
-        mic.Break("unplugged");
-        Assert.Equal("unplugged", told);
-        Assert.Equal(LectureState.Paused, rec.Current!.State);
+        var t = Now0;
+        w.Mic.Play(1);
+        rec.Check(t);
+        w.Mic.Play(1);
+        rec.Check(t = t.AddSeconds(1));
+
+        // Unplugged: the sound system says nothing, it just stops sending.
+        w.Mic.Mute();
+        rec.Check(t.AddSeconds(1));
+        rec.Check(t.AddSeconds(2));
+        Assert.Single(w.Mics);
+        rec.Check(t = t.AddSeconds(3));
+        Assert.Equal(2, w.Mics.Count); // opened again: the new default microphone
+        Assert.False(w.Mics[0].Running);
+        Assert.True(w.Mics[0].Disposed);
+        Assert.True(w.Mic.Running);
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Empty(w.Said);
+        Assert.Contains(w.Log, l => l.Contains("opened it again"));
+
+        // The new one works, and recording goes on into the same file.
+        w.Mic.Play(1);
+        rec.Check(t = t.AddSeconds(1));
+        Assert.Equal(LectureState.Recording, w.State);
+
+        // Later it goes quiet too: opened again once more, and when that brings nothing either, the lecture pauses.
+        w.Mic.Mute();
+        rec.Check(t = t.AddSeconds(3));
+        Assert.Equal(3, w.Mics.Count);
+        rec.Check(t.AddSeconds(1));
+        rec.Check(t.AddSeconds(2));
+        Assert.Equal(LectureState.Recording, w.State);
+        rec.Check(t.AddSeconds(3));
+        Assert.Equal(LectureState.Paused, w.State);
+        Assert.Equal(3, w.Mics.Count);
+        Assert.False(w.Mic.Running);
+        Assert.Equal(["The microphone stopped. Plug it back in, then press Resume."], w.Said);
+        Assert.Equal(RecordingWords.MicStopped, rec.LastProblem);
+        Assert.InRange(rec.Current!.Seconds, 2.98, 3.02); // every second that was sent is in the file
+        Assert.InRange(Sound.WavSeconds(store.AudioPath(rec.Current.Id)), 2.98, 3.02);
+
+        // Plugged back in: Resume records again, and the problem is gone.
+        rec.Resume();
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Null(rec.LastProblem);
+    }
+
+    [Fact]
+    public void A_nap_is_a_gap_in_the_recording_not_a_problem()
+    {
+        using var dir = new TempDir();
+        using var w = new Watched(new LectureStore(dir.Path));
+        var rec = w.Recorder;
+        rec.Start("CS 101");
+        w.Mic.Play(1);
+        rec.Check(Now0);
+        // The laptop's lid closed for an hour: no checks, no sound. Waking, the microphone gets its moment.
+        var woke = Now0.AddHours(1);
+        rec.Check(woke);
+        rec.Check(woke.AddSeconds(2));
+        w.Mic.Play(1);
+        rec.Check(woke.AddSeconds(3));
+        Assert.Single(w.Mics);
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Empty(w.Said);
+        Assert.Contains(w.Log, l => l.Contains("slept"));
+    }
+
+    [Fact]
+    public void Only_zeros_at_the_start_says_the_microphone_isnt_allowed()
+    {
+        Assert.Equal("Study Stash can't hear the microphone. Allow it in System Settings → Privacy & Security → Microphone.", RecordingWords.CantHearMac);
+        using var dir = new TempDir();
+        using var w = new Watched(new LectureStore(dir.Path));
+        var rec = w.Recorder;
+        rec.Start("CS 101");
+        for (int s = 0; s < 5; s++)
+        {
+            w.Mic.Zeros(1);
+            rec.Check(Now0.AddSeconds(s));
+            Assert.Equal(LectureState.Recording, w.State);
+        }
+        w.Mic.Zeros(1);
+        rec.Check(Now0.AddSeconds(5));
+        Assert.Equal(LectureState.Paused, w.State);
+        Assert.Equal([RecordingWords.CantHear], w.Said);
+        if (OperatingSystem.IsMacOS()) Assert.Equal(RecordingWords.CantHearMac, w.Said[0]);
+
+        // Allowed now: Resume, and the room is heard. A quiet room later on (a pause in the lecture) is only quiet.
+        rec.Resume();
+        var t = Now0.AddSeconds(10);
+        w.Mic.Play(1, amplitude: 0.01);
+        rec.Check(t);
+        for (int s = 1; s <= 20; s++)
+        {
+            w.Mic.Zeros(1);
+            rec.Check(t.AddSeconds(s));
+        }
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Single(w.Said);
+    }
+
+    [Fact]
+    public void A_microphone_that_fails_is_opened_again_then_paused()
+    {
+        using var dir = new TempDir();
+        using var w = new Watched(new LectureStore(dir.Path));
+        var rec = w.Recorder;
+        rec.Start("CS 101");
+        w.Mic.Play(2);
+        rec.Check(Now0);
+        // Windows says the device went away. Nothing happens on the device's own thread: the watchdog acts.
+        w.Mic.Break("The microphone stopped (the device was removed).");
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Single(w.Mics);
+        rec.Check(Now0.AddSeconds(1));
+        Assert.Single(w.Mics);
+        rec.Check(Now0.AddSeconds(2)); // a second later: the default microphone, opened again
+        Assert.Equal(2, w.Mics.Count);
+        Assert.Equal(LectureState.Recording, w.State);
+        Assert.Empty(w.Said);
+
+        w.Mic.Break("unplugged");
+        rec.Check(Now0.AddSeconds(3));
+        rec.Check(Now0.AddSeconds(4));
+        Assert.Equal(LectureState.Paused, w.State);
+        Assert.Equal(["unplugged"], w.Said);
+        Assert.Equal(2, w.Mics.Count);
+    }
+
+    /// <summary>A WAV on a disk that fills up: it takes <paramref name="room"/> samples, then the disk is full.</summary>
+    sealed class FillingDisk(string path, bool append, long room, IOException full) : IWavSink
+    {
+        readonly WavWriter wav = new(path, Sound.Rate, append);
+        bool filled;
+
+        public double Seconds => wav.Seconds;
+
+        public void Write(ReadOnlySpan<float> samples)
+        {
+            if (wav.Samples + samples.Length > room)
+            {
+                filled = true;
+                throw full;
+            }
+            wav.Write(samples);
+        }
+
+        public void Dispose()
+        {
+            wav.Dispose();
+            if (filled) throw full; // the last of it doesn't fit either
+        }
+    }
+
+    [Fact]
+    public void A_full_disk_pauses_the_recording_and_says_so()
+    {
+        Assert.True(Disk.IsFull(new IOException("No space left on device", 28)));
+        Assert.True(Disk.IsFull(new IOException("There is not enough space on the disk.", unchecked((int)0x80070070))));
+        Assert.True(Disk.IsFull(new IOException("Reached the end of the file.", unchecked((int)0x80070027))));
+        Assert.False(Disk.IsFull(new IOException("Input/output error", 5)));
+
+        foreach (var (full, words) in new[]
+        {
+            (new IOException("No space left on device", 28), "Your disk is full: recording paused. Free some space, then press Resume."),
+            (new IOException("Input/output error", 5), "Recording paused: the recording couldn't be saved (Input/output error)."),
+        })
+        {
+            using var dir = new TempDir();
+            var store = new LectureStore(dir.Path);
+            using var w = new Watched(store, openFile: (path, append) => new FillingDisk(path, append, Sound.Rate * 6, full));
+            var rec = w.Recorder;
+            var l = rec.Start("CS 101");
+            w.Mic.Play(8);
+            Assert.True(SpinWait.SpinUntil(() => w.Said.Count > 0, 5000), "nothing was said");
+            Assert.Equal([words], w.Said);
+            Assert.Equal(LectureState.Paused, w.State);
+            Assert.Equal(words, rec.LastProblem);
+            Assert.False(w.Mic.Running);
+
+            // Stopping keeps what fit on the disk; nothing is thrown, although the file's last write failed too.
+            var kept = rec.Stop();
+            Assert.Equal(LectureState.Transcribing, kept!.State);
+            Assert.InRange(kept.Seconds, 5.9, 6.0);
+            Assert.InRange(Sound.WavSeconds(store.AudioPath(l.Id)), 5.9, 6.0);
+            Assert.Null(rec.LastProblem);
+        }
+    }
+
+    [Fact]
+    public void No_room_no_recording()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        long free = 200L << 20;
+        using var w = new Watched(store, freeBytes: _ => free);
+        var rec = w.Recorder;
+        var e = Assert.Throws<InvalidOperationException>(() => rec.Start("CS 101"));
+        Assert.Equal("Your disk is nearly full: free some space to record.", e.Message);
+        Assert.Empty(w.Mics);
+        Assert.Empty(store.All());
+
+        // Room enough to start; then the disk fills while it records, and under 100 MB it pauses.
+        free = 1L << 30;
+        rec.Start("CS 101");
+        w.Mic.Play(1);
+        rec.Check(Now0);
+        Assert.Equal(LectureState.Recording, w.State);
+        free = 90L << 20;
+        w.Mic.Play(1);
+        rec.Check(Now0.AddSeconds(1));
+        Assert.Equal(LectureState.Paused, w.State);
+        Assert.Equal([RecordingWords.DiskFull], w.Said);
+
+        // Resume while it's still full: it stays paused and says so again.
+        rec.Resume();
+        Assert.Equal(LectureState.Paused, w.State);
+        Assert.Equal([RecordingWords.DiskFull, RecordingWords.DiskFull], w.Said);
+        Assert.Single(w.Mics);
+
+        // The real disk has room, and says how much.
+        Assert.True(Disk.FreeBytes(dir.Path) > 0);
+    }
+
+    [Fact]
+    public void A_microphone_that_wont_open_leaves_nothing_behind()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        using (var w = new Watched(store, () => new FakeMic { WontStart = "The microphone didn't open (error -50)." }))
+        {
+            var e = Assert.Throws<InvalidOperationException>(() => w.Recorder.Start("CS 101"));
+            Assert.Equal("The microphone didn't open (error -50).", e.Message);
+            Assert.Null(w.Recorder.Current);
+            Assert.True(w.Mic.Disposed);
+        }
+        Assert.Empty(store.All());
+        Assert.Empty(Directory.GetFiles(store.Dir)); // no WAV, no record: on Windows an open file couldn't be deleted
+
+        // The file can't be made (a disk that's full): the microphone is turned off again.
+        using (var w = new Watched(store, openFile: (_, _) => throw new IOException("No space left on device", 28)))
+        {
+            var e = Assert.Throws<InvalidOperationException>(() => w.Recorder.Start("CS 101"));
+            Assert.Equal(RecordingWords.NearlyFull, e.Message);
+            Assert.False(w.Mic.Running);
+            Assert.True(w.Mic.Disposed);
+        }
+        Assert.Empty(store.All());
+        Assert.Empty(Directory.GetFiles(store.Dir));
+
+        // A microphone that won't open again after a pause: it stays paused and says why, and nothing is thrown.
+        bool broken = false;
+        using (var w = new Watched(store, () => broken ? new FakeMic { WontStart = "There's no microphone." } : new FakeMic()))
+        {
+            w.Recorder.Start("CS 101");
+            w.Mic.Play(6);
+            w.Recorder.Pause();
+            broken = true;
+            w.Recorder.Resume();
+            Assert.Equal(LectureState.Paused, w.State);
+            Assert.Equal(["There's no microphone."], w.Said);
+            Assert.True(w.Mic.Disposed);
+            Assert.Equal(LectureState.Transcribing, w.Recorder.Stop()!.State);
+        }
+    }
+
+    [Fact]
+    public void A_damaged_recording_fails_the_lecture_without_throwing()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        using var w = new Watched(store);
+        var l = w.Recorder.Start("CS 101");
+        w.Mic.Play(6);
+        w.Recorder.Pause();
+        File.WriteAllBytes(store.AudioPath(l.Id), new byte[100]); // not a WAV any more
+        var stopped = w.Recorder.Stop();
+        Assert.Equal(LectureState.Failed, stopped!.State);
+        Assert.Equal("The recording couldn't be read", stopped.Error);
+        Assert.Null(w.Recorder.Current);
+        Assert.NotNull(store.Get(l.Id)); // kept, so the student sees what happened to it
+    }
+
+    [Fact]
+    public void FileMicrophone_plays_faster_when_asked()
+    {
+        using var dir = new TempDir();
+        string path = dir["speech.wav"];
+        using (var wav = new WavWriter(path)) wav.Write(Enumerable.Range(0, Sound.Rate).Select(i => (float)Math.Sin(i / 9.0) * 0.4f).ToArray());
+        var sound = Sound.ReadWav(path);
+
+        double Play(int speed, int samples, out List<float> got)
+        {
+            var heard = new List<float>();
+            using var mic = new FileMicrophone(path, speed);
+            Assert.Equal(speed, mic.Speed);
+            mic.Samples += b =>
+            {
+                lock (heard) heard.AddRange(b);
+            };
+            var took = Stopwatch.StartNew();
+            mic.Start();
+            Assert.True(SpinWait.SpinUntil(() =>
+            {
+                lock (heard) return heard.Count >= samples;
+            }, 10000));
+            double seconds = took.Elapsed.TotalSeconds;
+            mic.Stop();
+            lock (heard) got = [.. heard];
+            return seconds;
+        }
+
+        // Four seconds of sound: about 4 s in real time, about 1 s at 4×.
+        double fast = Play(4, 4 * Sound.Rate, out var fastSound);
+        Assert.True(fast < 2.5, $"4× took {fast:0.00} s");
+        // It's the file's sound, in order, round again.
+        for (int i = 0; i < 4 * Sound.Rate; i++) Assert.Equal(sound[i % sound.Length], fastSound[i]);
+        double real = Play(1, Sound.Rate / 2, out _);
+        Assert.True(real >= 0.3, $"real time took {real:0.00} s for half a second");
+        Assert.Equal(1, new FileMicrophone(path, 0).Speed);
     }
 
     [Fact]
@@ -389,6 +769,128 @@ public class RecordingTests
         Assert.Contains("missing", store.Get("rec-1")!.Error);
     }
 
+    /// <summary>A recorded lecture waiting for Whisper: <paramref name="seconds"/> of speech in its WAV. Each one
+    /// made in a test started an hour after the one before (rec-1 at 10:00), so Whisper takes them in that order.</summary>
+    static Lecture Recorded(LectureStore store, string id, double seconds, LectureState state = LectureState.Transcribing)
+    {
+        var audio = new float[(int)(seconds * Sound.Rate)];
+        Speech(audio, 0, seconds);
+        using (var w = new WavWriter(store.AudioPath(id))) w.Write(audio);
+        string started = $"2026-09-22T{9 + store.All().Count + 1:00}:00:00-07:00";
+        return store.Add(new Lecture { Id = id, Started = started, State = state, ClassName = "CS 101", Seconds = seconds });
+    }
+
+    [Fact]
+    public async Task Whisper_that_wont_load_leaves_lectures_waiting_and_says_why()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        Recorded(store, "rec-1", 10);
+        int loads = 0;
+        bool broken = true;
+        var now = Now0;
+        var worker = new TranscriptionWorker(store, () =>
+        {
+            loads++;
+            return broken ? throw new InvalidOperationException("the model file is damaged") : new FakeWhisper();
+        }, () => null) { Clock = () => now };
+        int changes = 0;
+        worker.ProblemChanged += () => changes++;
+
+        Assert.False(await worker.StepAsync(default));
+        Assert.Equal(LectureState.Transcribing, store.Get("rec-1")!.State); // waiting, not failed
+        Assert.Equal("Whisper couldn't start: the model file is damaged", worker.Problem);
+        Assert.Equal(1, changes);
+
+        // Not tried again straight away: once a minute.
+        now = now.AddSeconds(30);
+        Assert.False(await worker.StepAsync(default));
+        Assert.Equal(1, loads);
+        now = now.AddSeconds(31);
+        Assert.False(await worker.StepAsync(default));
+        Assert.Equal(2, loads);
+        Assert.Equal(1, changes); // the same problem
+
+        // A wake (the model downloaded again) tries it at once; it loads, and the problem's gone.
+        broken = false;
+        worker.Wake();
+        Assert.True(await worker.StepAsync(default));
+        Assert.Equal(3, loads);
+        Assert.Null(worker.Problem);
+        Assert.Equal(2, changes);
+        Assert.Equal(LectureState.Sending, store.Get("rec-1")!.State);
+    }
+
+    [Fact]
+    public async Task A_piece_whisper_fails_on_is_tried_three_times()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        Recorded(store, "rec-1", 10);
+        Recorded(store, "rec-2", 10);
+        var whisper = new FakeWhisper { Failures = 2 };
+        var worker = new TranscriptionWorker(store, () => whisper, () => null);
+        while (await worker.StepAsync(default) && store.Get("rec-1")!.State == LectureState.Transcribing) { }
+        // Twice it failed, the third time it wrote the piece down.
+        Assert.Equal(LectureState.Sending, store.Get("rec-1")!.State);
+        Assert.Equal(3, whisper.Calls.Count);
+
+        // A piece it fails on every time: three tries, then the lecture fails, saying why.
+        whisper.Failures = 100;
+        while (await worker.StepAsync(default)) { }
+        Assert.Equal(6, whisper.Calls.Count);
+        var failed = store.Get("rec-2")!;
+        Assert.Equal(LectureState.Failed, failed.State);
+        Assert.Equal("Whisper couldn't write part of it down: out of memory", failed.Error);
+    }
+
+    [Fact]
+    public async Task A_piece_of_a_lecture_still_recording_isnt_failed()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        Lecture? live = Recorded(store, "rec-1", 40, LectureState.Recording);
+        var whisper = new FakeWhisper { Failures = 100 };
+        var worker = new TranscriptionWorker(store, () => whisper, () => live);
+        while (await worker.StepAsync(default)) { }
+        Assert.Equal(3, whisper.Calls.Count);
+        Assert.Equal(LectureState.Recording, store.Get("rec-1")!.State); // the recorder still has it
+        Assert.False(await worker.StepAsync(default)); // and it waits, trying again at the next look
+    }
+
+    [Fact]
+    public async Task Retry_puts_a_failed_lecture_back()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        Recorded(store, "rec-1", 10, LectureState.Failed);
+        store.Update("rec-1", x => x.Error = "Whisper couldn't write part of it down: out of memory");
+        store.Add(new Lecture
+        {
+            Id = "rec-2", Started = "2026-09-22T12:00:00-07:00", State = LectureState.Failed, Seconds = 10, TranscribedSeconds = 10,
+            Segments = [new(0, 5, "Hi.")], Error = "old", RetryAt = 1e12, Tries = 4,
+        });
+        store.Add(new Lecture { Id = "rec-3", Started = "2026-09-22T13:00:00-07:00", State = LectureState.Filed });
+        var worker = new TranscriptionWorker(store, () => new FakeWhisper(), () => null);
+
+        var back = worker.Retry("rec-1")!;
+        Assert.Equal(LectureState.Transcribing, back.State);
+        Assert.Equal("", back.Error);
+        while (await worker.StepAsync(default)) { }
+        Assert.Equal(LectureState.Sending, store.Get("rec-1")!.State);
+
+        // All written down already: straight back to waiting for the library, with its waits forgotten.
+        var sending = worker.Retry("rec-2")!;
+        Assert.Equal(LectureState.Sending, sending.State);
+        Assert.Equal("", sending.Error);
+        Assert.Null(sending.RetryAt);
+        Assert.Equal(0, sending.Tries);
+
+        Assert.Null(worker.Retry("rec-3")); // only a failed one
+        Assert.Equal(LectureState.Filed, store.Get("rec-3")!.State);
+        Assert.Null(worker.Retry("rec-none"));
+    }
+
     // --- to the library -------------------------------------------------------------------------------------------
 
     sealed class FakeLibrary
@@ -470,6 +972,63 @@ public class RecordingTests
         store.Update("rec-1", x => x.State = LectureState.Sending);
         await sender.StepAsync();
         Assert.Equal("password", sender.ProblemKind);
+    }
+
+    [Fact]
+    public async Task A_waiting_lecture_goes_as_soon_as_the_library_answers()
+    {
+        using var dir = new TempDir();
+        var store = new LectureStore(dir.Path);
+        store.Add(new Lecture { Id = "rec-1", Started = "2026-09-22T10:02:12-07:00", State = LectureState.Sending, Segments = [new(0, 5, "Hi.")] });
+        var lib = new FakeLibrary { Down = new HttpRequestException("no route to host") };
+        var now = Tuesday;
+        var sender = new LectureSender(store, () => new ClientConfig(dir.Path) { ServerUrl = "http://mini:8000", PoolKey = "pw" }, lib.Host(() => now));
+        await sender.StepAsync();
+        // It has been away a while: the next try is ten minutes off.
+        double tenMinutes = now.ToUnixTimeSeconds() + 600;
+        store.Update("rec-1", x =>
+        {
+            x.Tries = 5;
+            x.RetryAt = tenMinutes;
+        });
+        lib.Down = null;
+        Assert.Equal(0, await sender.StepAsync()); // a wake alone leaves it waiting
+        Assert.Empty(lib.Sent);
+
+        // The library answers again: it goes in the same step.
+        sender.RetryNow();
+        Assert.Equal(1, await sender.StepAsync());
+        Assert.Single(lib.Sent);
+        var sent = store.Get("rec-1")!;
+        Assert.Equal(LectureState.Writing, sent.State);
+        Assert.Null(sent.RetryAt);
+        Assert.Equal(0, sent.Tries);
+        Assert.Null(sender.Problem);
+    }
+
+    [Fact]
+    public async Task After_a_restart_waiting_lectures_are_sent()
+    {
+        using var dir = new TempDir();
+        var now = Tuesday;
+        new LectureStore(dir.Path).Add(new Lecture
+        {
+            Id = "rec-1", Started = "2026-09-22T10:02:12-07:00", State = LectureState.Sending, ClassName = "CS 101", Segments = [new(0, 5, "Hi.")],
+            RetryAt = now.ToUnixTimeSeconds() + 600, Tries = 5, Error = "Can't reach your library. Lectures wait here until it's back.",
+        });
+
+        // The app starts again: a new store and sender on the same folder. The first pass doesn't wait out the old wait.
+        var store = new LectureStore(dir.Path);
+        var lib = new FakeLibrary();
+        var sender = new LectureSender(store, () => new ClientConfig(dir.Path) { ServerUrl = "http://mini:8000", PoolKey = "pw" }, lib.Host(() => now));
+        Assert.Equal(1, await sender.StepAsync());
+        Assert.Equal(LectureState.Writing, store.Get("rec-1")!.State);
+        Assert.Equal("", store.Get("rec-1")!.Error);
+        lib.Status = "done";
+        Assert.Equal(1, await sender.StepAsync());
+        var filed = new LectureStore(dir.Path).Get("rec-1")!;
+        Assert.Equal(LectureState.Filed, filed.State);
+        Assert.Equal("CS 101", filed.FiledClass);
     }
 
     [Fact]

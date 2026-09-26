@@ -2,11 +2,21 @@ using System.Buffers.Binary;
 
 namespace StudyStash.Core;
 
+/// <summary>Where a recording's sound goes as it's recorded: a WAV file (a test gives one whose disk fills up).</summary>
+public interface IWavSink : IDisposable
+{
+    /// <summary>Seconds written so far.</summary>
+    double Seconds { get; }
+
+    /// <summary>More 16 kHz mono sound. Throws IOException when the disk won't take it.</summary>
+    void Write(ReadOnlySpan<float> samples);
+}
+
 /// <summary>
 /// A recording on disk: 16-bit mono WAV. The header's sizes are brought up to date every few seconds, so a crash or a
 /// dead battery leaves a file that plays up to the last flush.
 /// </summary>
-public sealed class WavWriter : IDisposable
+public sealed class WavWriter : IWavSink
 {
     public const int HeaderBytes = 44;
     readonly FileStream file;
@@ -84,10 +94,18 @@ public sealed class WavWriter : IDisposable
         flushedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Brings the header up to date and closes the file. The file is closed even when the disk is full
+    /// (and that is still thrown).</summary>
     public void Dispose()
     {
-        Flush();
-        file.Dispose();
+        try
+        {
+            Flush();
+        }
+        finally
+        {
+            file.Dispose();
+        }
     }
 }
 

@@ -70,6 +70,8 @@ public sealed class AppHost : IDisposable
     readonly Action<string> log;
     readonly Func<IAudioSource>? pretendMic;
     readonly List<Task> running = [];
+    Timer? watchdog;
+    int checking;
     KeepAwake? awake;
     CancellationTokenSource? download;
     bool disposed;
@@ -90,6 +92,10 @@ public sealed class AppHost : IDisposable
     public JsonObject? Overview { get; private set; }
     public DownloadProgress? Downloading { get; private set; }
     public string? DownloadProblem { get; private set; }
+    /// <summary>Why Whisper isn't writing lectures down ("Whisper couldn't start: …"); null while it works.</summary>
+    public string? WhisperProblem => Whisper.Problem;
+    /// <summary>Why the recording paused by itself (the microphone, the disk); null while all is well.</summary>
+    public string? RecorderProblem => Recorder.LastProblem;
 
     /// <summary>Anything the windows show changed (called on a worker thread).</summary>
     public event Action? Changed;
@@ -124,7 +130,12 @@ public sealed class AppHost : IDisposable
         var net = laptop ?? new LaptopHost();
         Sender = new LectureSender(Lectures, Client, net, this.log);
         Recorder.Changed += () => Changed?.Invoke();
-        Recorder.Problem += why => Problem?.Invoke("Recording paused", why);
+        Recorder.Problem += why =>
+        {
+            Problem?.Invoke("Recording paused", why);
+            Changed?.Invoke();
+        };
+        Whisper.ProblemChanged += () => Changed?.Invoke();
         Whisper.Heard += (l, lines) =>
         {
             Heard?.Invoke(l, lines);
@@ -151,9 +162,17 @@ public sealed class AppHost : IDisposable
     // The only way the app reaches the microphone: with a pretend one (a test, the self-test, STUDYSTASH_MIC_FILE) the
     // real one is never opened, asked for, or even asked about.
 
-    /// <summary>STUDYSTASH_MIC_FILE: a WAV file played, round again, as the microphone.</summary>
-    public static Func<IAudioSource>? MicFromEnvironment() =>
-        Environment.GetEnvironmentVariable("STUDYSTASH_MIC_FILE") is { Length: > 0 } wav && File.Exists(wav) ? () => new FileMicrophone(wav) : null;
+    /// <summary>STUDYSTASH_MIC_FILE: a WAV file played, round again, as the microphone; STUDYSTASH_MIC_SPEED (1 to
+    /// 8) plays it that many times faster than real time.</summary>
+    public static Func<IAudioSource>? MicFromEnvironment()
+    {
+        if (Environment.GetEnvironmentVariable("STUDYSTASH_MIC_FILE") is not { Length: > 0 } wav || !File.Exists(wav)) return null;
+        int speed = MicSpeed(Environment.GetEnvironmentVariable("STUDYSTASH_MIC_SPEED"));
+        return () => new FileMicrophone(wav, speed);
+    }
+
+    /// <summary>STUDYSTASH_MIC_SPEED's value as a speed: 1 (real time) to 8; anything else is 1.</summary>
+    public static int MicSpeed(string? value) => int.TryParse(value, out int n) && n >= 1 ? Math.Min(n, 8) : 1;
 
     /// <summary>A pretend microphone stands in for the real one.</summary>
     public bool PretendMic => pretendMic is not null;
@@ -203,6 +222,26 @@ public sealed class AppHost : IDisposable
         running.Add(Task.Run(() => Sender.RunAsync(stop.Token)));
         running.Add(Task.Run(WatchLibrary));
         running.Add(Task.Run(() => Lectures.PruneAudio(Settings.KeepAudioDays, DateTimeOffset.Now)));
+        watchdog = new Timer(_ => CheckRecorder(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    /// <summary>Every second, on the thread pool: the recorder looks at its microphone and the disk. One look at a
+    /// time (reopening a microphone can take a moment).</summary>
+    void CheckRecorder()
+    {
+        if (Interlocked.Exchange(ref checking, 1) == 1) return;
+        try
+        {
+            Recorder.Check(DateTime.UtcNow);
+        }
+        catch (Exception e)
+        {
+            log($"[recorder] {e.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref checking, 0);
+        }
     }
 
     async Task WatchLibrary()
@@ -281,7 +320,8 @@ public sealed class AppHost : IDisposable
                 Library = LibraryState.Unreachable;
             }
         }
-        if (before != Library && Library == LibraryState.Connected) Sender.Wake();
+        // Lectures that waited for it go now: a wake alone would leave them waiting out their last try's wait (10 minutes).
+        if (before != Library && Library == LibraryState.Connected) Sender.RetryNow();
         Changed?.Invoke();
     }
 
@@ -356,6 +396,13 @@ public sealed class AppHost : IDisposable
 
     public void Resume() => Recorder.Resume();
 
+    /// <summary>Try a lecture that failed again: back to Whisper, or on to the library.</summary>
+    public void Retry(string id)
+    {
+        if (Whisper.Retry(id) is { State: LectureState.Sending }) Sender.Wake();
+        Changed?.Invoke();
+    }
+
     public Lecture? StopRecording()
     {
         var l = Recorder.Stop();
@@ -409,6 +456,7 @@ public sealed class AppHost : IDisposable
     {
         if (disposed) return;
         disposed = true;
+        watchdog?.Dispose();
         try
         {
             if (Recorder.Current is not null) StopRecording();

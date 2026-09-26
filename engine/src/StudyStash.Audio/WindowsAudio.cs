@@ -71,9 +71,11 @@ public sealed class WindowsSound(bool withComputerAudio) : IAudioSource
         }
     }
 
+    /// <summary>The words for a device error. A device that went away mid-lecture (unplugged, AUDCLNT_E_DEVICE_INVALIDATED)
+    /// raises <see cref="Failed"/> with these, and the recorder opens the default microphone again before pausing.</summary>
     static string Explain(Exception e) =>
         e is UnauthorizedAccessException || (e is COMException c && (uint)c.HResult == 0x80070005)
-            ? "Windows isn't letting Study Stash use the microphone. Turn on Settings → Privacy & security → Microphone → Let desktop apps access your microphone."
+            ? RecordingWords.CantHearWindows
             : $"The microphone stopped ({e.Message}).";
 
     void OnPlayed(float[] raw)
