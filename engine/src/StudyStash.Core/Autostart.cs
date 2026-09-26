@@ -14,26 +14,33 @@ public sealed record ServicePlaces(string LaunchAgents, string Startup, string S
 }
 
 /// <summary>
-/// Keep the engine running (autostart.py): launchd on a Mac, the Startup folder on Windows, systemd --user on Linux.
-/// The service names and files are the Python engine's, so installing either engine's service replaces the other's:
-/// a computer never runs two libraries fighting over one port.
+/// Keep the library running under its own name: launchd on a Mac, the Startup folder on Windows, systemd --user on
+/// Linux. Installing it clears any service left by the app's name before the rename first, so a computer never runs
+/// two libraries fighting over one port.
 /// </summary>
 public static class Autostart
 {
     public static readonly IReadOnlyDictionary<string, string[]> Roles = new Dictionary<string, string[]>
     {
         ["server"] = ["run"],
-        ["client"] = ["client", "run"],
     };
 
     /// <summary>Set for the background service only: tells the auto-updater that exiting means "restart me".</summary>
-    public const string ServiceEnv = "GRANOLA_SHARE_SERVICE";
+    public const string ServiceEnv = "STUDYSTASH_SERVICE";
     /// <summary>Windows: set on the service KeepAlive starts, so it doesn't start another KeepAlive.</summary>
-    public const string ChildEnv = "GRANOLA_SHARE_CHILD";
+    public const string ChildEnv = "STUDYSTASH_SERVICE_CHILD";
     /// <summary>Windows: set on the windowless copy the Startup file's copy hands over to (see <see cref="Detach"/>).</summary>
-    public const string SupervisorEnv = "GRANOLA_SHARE_SUPERVISOR";
+    public const string SupervisorEnv = "STUDYSTASH_SERVICE_SUPERVISOR";
     /// <summary>Bytes: the Windows log starts over (keeping one old copy) past this.</summary>
     public const long LogLimit = 5_000_000;
+
+    /// <summary>True while this process runs as the background service: <see cref="ServiceEnv"/>, or the
+    /// <see cref="LegacyServiceEnv"/> that a service file written before the app's rename still sets.</summary>
+    public static bool UnderService(Func<string, string?>? env = null)
+    {
+        env ??= Environment.GetEnvironmentVariable;
+        return env(ServiceEnv) == "1" || env(LegacyServiceEnv) == "1";
+    }
 
     /// <summary>How to start this engine: its own program, or `dotnet studystash.dll` for a build run that way.</summary>
     public static string[] EngineCommand()
@@ -52,7 +59,7 @@ public static class Autostart
         return [.. engine ?? EngineCommand(), "--home", home, .. command];
     }
 
-    public static string Label(string role) => $"com.granola-share.{role}";
+    public static string Label(string role) => $"com.study-stash.{role}";
 
     public static string ServicePath(string role, ServicePlaces? places = null, string? system = null)
     {
@@ -60,8 +67,8 @@ public static class Autostart
         return (system ?? Machine.Platform) switch
         {
             "Darwin" => Path.Combine(places.LaunchAgents, $"{Label(role)}.plist"),
-            "Windows" => Path.Combine(places.Startup, $"granola-share-{role}.cmd"),
-            _ => Path.Combine(places.Systemd, $"granola-share-{role}.service"),
+            "Windows" => Path.Combine(places.Startup, $"study-stash-{role}.cmd"),
+            _ => Path.Combine(places.Systemd, $"study-stash-{role}.service"),
         };
     }
 
@@ -139,6 +146,7 @@ public static class Autostart
         string log = Path.Combine(logs, $"{role}.log");
         string path = ServicePath(role, places, system);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        RemoveLegacy(places, run, system); // never two libraries fighting over one port: the old watcher goes too
         if (system == "Darwin")
         {
             Py.WriteText(path, RenderPlist(Label(role), args, log, env));
@@ -148,13 +156,13 @@ public static class Autostart
         }
         else if (system == "Windows")
         {
-            StopWindows(run, role); // an older copy may still be running, of either engine
+            StopWindows(run, role); // an older copy of this service may still be running
             File.WriteAllText(path, RenderCmd(args, env));
             StartWindows(run, path); // start it right away too
         }
         else
         {
-            Py.WriteText(path, RenderSystemd($"granola-share {role}", args, env));
+            Py.WriteText(path, RenderSystemd("Study Stash library", args, env));
             run("systemctl", ["--user", "daemon-reload"], Quick);
             run("systemctl", ["--user", "enable", Path.GetFileName(path)], Quick);
             run("systemctl", ["--user", "restart", Path.GetFileName(path)], Quick);
@@ -166,12 +174,16 @@ public static class Autostart
     {
         system ??= Machine.Platform;
         string path = ServicePath(role, places, system);
-        if (!File.Exists(path)) return false;
-        if (system == "Darwin") run("launchctl", ["bootout", $"gui/{Machine.Uid()}", path], Quick);
-        else if (system == "Windows") StopWindows(run, role);
-        else run("systemctl", ["--user", "disable", "--now", Path.GetFileName(path)], Quick);
-        File.Delete(path);
-        return true;
+        bool existed = File.Exists(path);
+        if (existed)
+        {
+            if (system == "Darwin") run("launchctl", ["bootout", $"gui/{Machine.Uid()}", path], Quick);
+            else if (system == "Windows") StopWindows(run, role);
+            else run("systemctl", ["--user", "disable", "--now", Path.GetFileName(path)], Quick);
+            File.Delete(path);
+        }
+        RemoveLegacyOne(role, places, run, system); // a service from before the rename doesn't linger once this one's gone
+        return existed;
     }
 
     public static List<string> InstalledRoles(ServicePlaces? places = null, string? system = null) =>
@@ -182,7 +194,8 @@ public static class Autostart
     {
         run ??= Machine.Run;
         system ??= Machine.Platform;
-        if (!File.Exists(ServicePath(role, places, system))) return "missing";
+        string path = ServicePath(role, places, system);
+        if (!File.Exists(path)) return "missing";
         if (system == "Darwin")
         {
             var p = run("launchctl", ["print", $"gui/{Machine.Uid()}/{Label(role)}"], Quick);
@@ -193,7 +206,7 @@ public static class Autostart
             var p = run("powershell", ["-NoProfile", "-Command", $"@(Get-CimInstance Win32_Process | Where-Object {{ {PsFilter(role)} }}).Count"], Quick);
             return p is not null && int.TryParse(Py.Strip(p.Stdout) is { Length: > 0 } n ? n : "0", out int count) && count > 0 ? "running" : "stopped";
         }
-        var s = run("systemctl", ["--user", "is-active", $"granola-share-{role}.service"], Quick);
+        var s = run("systemctl", ["--user", "is-active", Path.GetFileName(path)], Quick);
         return s is not null && Py.Strip(s.Stdout) == "active" ? "running" : "stopped";
     }
 
@@ -219,13 +232,48 @@ public static class Autostart
         }
     }
 
+    // --- legacy: the service files from before the app's rename ----------------------------------------------------
+
+    /// <summary>What a service file written before the app's rename set instead of <see cref="ServiceEnv"/>; still
+    /// recognised so a service installed then still counts as running under this until it's restarted onto today's.</summary>
+    public const string LegacyServiceEnv = "GRANOLA_SHARE_SERVICE";
+
+    static readonly string[] LegacyRoles = ["server", "client"];
+
+    static string LegacyServicePath(string role, ServicePlaces places, string system) => system switch
+    {
+        "Darwin" => Path.Combine(places.LaunchAgents, $"com.granola-share.{role}.plist"),
+        "Windows" => Path.Combine(places.Startup, $"granola-share-{role}.cmd"),
+        _ => Path.Combine(places.Systemd, $"granola-share-{role}.service"),
+    };
+
+    static bool RemoveLegacyOne(string role, ServicePlaces places, Runner run, string system)
+    {
+        string path = LegacyServicePath(role, places, system);
+        if (!File.Exists(path)) return false;
+        if (system == "Darwin") run("launchctl", ["bootout", $"gui/{Machine.Uid()}", path], Quick);
+        else if (system == "Windows") StopWindows(run, role);
+        else run("systemctl", ["--user", "disable", "--now", Path.GetFileName(path)], Quick);
+        File.Delete(path);
+        return true;
+    }
+
+    /// <summary>Stops and deletes any service file left by the app's name before the rename (server, and the old
+    /// laptop watcher's client), so a computer never runs two libraries fighting over one port. Only touches a file
+    /// that's actually under `places`, so a scratch-place test (or the live test) can never reach a real service.</summary>
+    public static List<string> RemoveLegacy(ServicePlaces places, Runner run, string? system = null)
+    {
+        system ??= Machine.Platform;
+        return [.. LegacyRoles.Where(role => RemoveLegacyOne(role, places, run, system)).Select(role => LegacyServicePath(role, places, system))];
+    }
+
     // --- Windows: finding, stopping and starting the service -------------------------------------------------------
 
     // A background service's command line ends in its command: `... granola_share.cli --home X run` (the Python
-    // library, or `serve`), `...studystash.exe" --home X run` (this engine's, or `dotnet ...studystash.dll` for a build
-    // run that way), or `... client run` (the laptop), often with every argument quoted. Nothing else counts, so an
-    // `autostart install` or `status` running right now never stops or counts itself. Both engines count: installing
-    // one stops the other.
+    // engine, or `serve`), `...studystash.exe" --home X run` (this engine's, or `dotnet ...studystash.dll` for a build
+    // run that way), or `... client run` (either engine's laptop watcher, from before the rename dropped that role).
+    // Nothing else counts, so an `autostart install` or `status` running right now never stops or counts itself.
+    // RemoveLegacy uses these on Windows to stop a service from before the rename before deleting its file.
     const string Engines = @"(granola_share\.cli|studystash(\.exe|\.dll)?\x22?\s)";
     public const string ClientRun = Engines + @".*\bclient\x22?\s+\x22?run\x22?\s*$";
     public const string ServerRun = Engines + @".*\b(run|serve)\x22?\s*$";

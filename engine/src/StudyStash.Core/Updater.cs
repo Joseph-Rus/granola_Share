@@ -325,7 +325,7 @@ public static partial class Updates
         Func<Task<Release?>>? latest = null, ApplyFn? apply = null, Action<int>? exit = null)
     {
         log ??= Console.WriteLine;
-        bool underService = supervised ?? Environment.GetEnvironmentVariable(Autostart.ServiceEnv) == "1";
+        bool underService = supervised ?? Autostart.UnderService();
         apply ??= (r, h, l, restart) => ApplyAsync(r, h, host, l, restart);
         exit ??= Environment.Exit;
         Release? rel;

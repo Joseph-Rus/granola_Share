@@ -25,18 +25,16 @@ public static class Apps
     public const string AppName = "Study Stash";
     /// <summary>The same app, as the library computer's own window.</summary>
     public const string LibraryAppName = AppName + " Library";
-    /// <summary>What 0.2 called it: replaced and removed on the next install.</summary>
-    public static readonly string[] OldNames = ["Granola Share"];
-    /// <summary>The native app's program; the script launcher's is granola-share-app.</summary>
+    /// <summary>The native app's program, inside its bundle's Contents/MacOS.</summary>
     public const string NativeExe = "Study Stash";
 
     // --- the Mac -------------------------------------------------------------------------------------------------
 
-    /// <summary>Every place the app may be: today's name first, then older names, in both Applications folders.</summary>
+    /// <summary>Every place the app may be, in both Applications folders.</summary>
     public static List<string> MacAppPaths(AppPlaces? at = null)
     {
         at ??= AppPlaces.Default;
-        return [.. new[] { AppName }.Concat(OldNames).SelectMany(name => new[] { Path.Combine(at.SystemApps, $"{name}.app"), Path.Combine(at.PersonalApps, $"{name}.app") })];
+        return [Path.Combine(at.SystemApps, $"{AppName}.app"), Path.Combine(at.PersonalApps, $"{AppName}.app")];
     }
 
     /// <summary>/Applications when this account can write there (admins can), so it's in Finder's Applications;
@@ -47,8 +45,7 @@ public static class Apps
         return Machine.Writable(at.SystemApps) ? at.SystemApps : at.PersonalApps;
     }
 
-    public static bool IsNative(string app) =>
-        new[] { NativeExe }.Concat(OldNames).Any(exe => File.Exists(Path.Combine(app, "Contents", "MacOS", exe)));
+    public static bool IsNative(string app) => File.Exists(Path.Combine(app, "Contents", "MacOS", NativeExe));
 
     public static string? NativeInstalled(AppPlaces? at = null) => MacAppPaths(at).FirstOrDefault(IsNative);
 

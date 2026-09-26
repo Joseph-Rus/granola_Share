@@ -19,7 +19,7 @@ public static class Cli
     /// <summary>What a command the engine doesn't know prints: every command there is.</summary>
     public const string Usage = "usage: studystash run | serve | setup --page [--no-browser] | init\n"
         + "       | doctor [--role server|client] | update [--check] [--force]\n"
-        + "       | autostart install|uninstall|status --role server|client | version\n"
+        + "       | autostart install|uninstall|status --role server | version\n"
         + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
         + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)";
 
@@ -100,7 +100,7 @@ public static class Cli
         // which runs the service as a child and starts it again whenever it stops. True when this copy was that handover.
         bool UnderWindowsKeepAlive(string role)
         {
-            if (!OperatingSystem.IsWindows() || Env(Autostart.ServiceEnv) != "1" || Env(Autostart.ChildEnv) is not null) return false;
+            if (!OperatingSystem.IsWindows() || !Autostart.UnderService(Env) || Env(Autostart.ChildEnv) is not null) return false;
             if (Env(Autostart.SupervisorEnv) is null) Autostart.Detach(args);
             else Autostart.KeepAlive(home, role, args);
             return true;
@@ -281,8 +281,8 @@ public static class Cli
         int AutostartCommand()
         {
             string? action = words.ElementAtOrDefault(1), role = Option("--role");
-            if (action is not ("install" or "uninstall" or "status") || role is not ("server" or "client"))
-                return Print("usage: studystash autostart install|uninstall|status --role server|client", 2);
+            if (action is not ("install" or "uninstall" or "status") || role != "server")
+                return Print("usage: studystash autostart install|uninstall|status --role server", 2);
             if (action == "status") return Print(Autostart.Status(role));
             if (action == "uninstall") return Print(Autostart.Uninstall(role, ServicePlaces.Default, Machine.Run) ? "Removed." : "Nothing to remove.");
             return Print("Installed: " + Autostart.Install(role, home, ServicePlaces.Default, Machine.Run));
