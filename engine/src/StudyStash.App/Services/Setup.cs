@@ -25,6 +25,7 @@ public static class Setup
     public static SetupModel Make(AppHost host)
     {
         var m = SetupModel.For(Skin.Current);
+        if (Apps.RolePreset() == "library") m.ThisComputer = true; // a library installer opens on "this computer is the library"
         var cc = host.Client();
         m.Address = cc.ServerUrl;
         m.LibraryName = $"{Person()}'s library";

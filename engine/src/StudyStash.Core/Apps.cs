@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace StudyStash.Core;
 
@@ -177,5 +179,99 @@ public static class Apps
             log($"Couldn't install the Study Stash app ({e.Message}); the Start Menu entry still opens Study Stash.");
             return null;
         }
+    }
+
+    // --- the role preset (D3): what setup and the updater start from ---------------------------------------------
+
+    static readonly XmlReaderSettings PlistReaderSettings = new() { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null };
+
+    /// <summary>The &lt;string&gt; that follows &lt;key&gt;key&lt;/key&gt; in a plist, or null: no such key, the value
+    /// isn't a string, or the file isn't a plist at all (a garbled Info.plist should never throw, only answer null).</summary>
+    static string? PlistString(string path, string key)
+    {
+        try
+        {
+            using var reader = XmlReader.Create(path, PlistReaderSettings);
+            var doc = XDocument.Load(reader);
+            var value = doc.Descendants("key").FirstOrDefault(k => k.Value == key)?.ElementsAfterSelf().FirstOrDefault();
+            return value?.Name.LocalName == "string" ? value.Value : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or XmlException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Walking up from a folder inside the bundle (e.g. Contents/MacOS/arm64) to "Study Stash.app" itself, or
+    /// null short of the root (a build folder isn't inside one).</summary>
+    static string? EnclosingMacBundle(string baseDir)
+    {
+        for (var dir = new DirectoryInfo(baseDir); dir is not null; dir = dir.Parent)
+            if (dir.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)) return dir.FullName;
+        return null;
+    }
+
+    /// <summary>A study-stash.ini value, case- and whitespace-insensitive on both the section and the key, tolerant of
+    /// CRLF line endings, a leading BOM and a missing or unreadable file (all answer null, never throw).</summary>
+    static string? IniValue(string path, string section, string key)
+    {
+        try
+        {
+            string? current = null;
+            foreach (string raw in File.ReadAllText(path).Split('\n'))
+            {
+                string line = raw.Trim().TrimEnd('\r');
+                if (line.Length == 0 || line[0] is ';' or '#') continue;
+                if (line[0] == '[' && line[^1] == ']')
+                {
+                    current = line[1..^1].Trim();
+                    continue;
+                }
+                int eq = line.IndexOf('=');
+                if (eq < 0 || !string.Equals(current, section, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(line[..eq].Trim(), key, StringComparison.OrdinalIgnoreCase)) return line[(eq + 1)..].Trim();
+            }
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    static string? Role(string? value) => value?.Trim().ToLowerInvariant() switch { "laptop" => "laptop", "library" => "library", _ => null };
+
+    /// <summary>Which role this copy was set up as, before the student's own choice in Settings takes over: a Mac
+    /// bundle's Info.plist (StudyStashRole) or a Windows install's study-stash.ini ([app] role=). Null in a build
+    /// folder, for an unknown value, or when the file is missing or garbled - setup then asks, same as always.</summary>
+    public static string? RolePreset(string? baseDir = null, string? system = null)
+    {
+        baseDir ??= AppContext.BaseDirectory;
+        return (system ?? Machine.Platform) switch
+        {
+            "Darwin" => EnclosingMacBundle(baseDir) is { } app ? Role(PlistString(Path.Combine(app, "Contents", "Info.plist"), "StudyStashRole")) : null,
+            "Windows" => Role(IniValue(Path.Combine(baseDir, "study-stash.ini"), "app", "role")),
+            _ => null,
+        };
+    }
+
+    /// <summary>D4's "is this an installed copy" check on a Mac: inside a *.app that says com.study-stash.app, not
+    /// still sitting in Gatekeeper's quarantine translocation folder, with a writable parent (so an update can swap
+    /// it). The bundle path, or null - a build folder, someone else's app, or a translocated one never updates itself.</summary>
+    public static string? MacBundleOf(string? baseDir = null)
+    {
+        baseDir ??= AppContext.BaseDirectory;
+        if (EnclosingMacBundle(baseDir) is not { } app) return null;
+        if (app.Contains("/AppTranslocation/", StringComparison.Ordinal)) return null;
+        if (PlistString(Path.Combine(app, "Contents", "Info.plist"), "CFBundleIdentifier") != "com.study-stash.app") return null;
+        return Path.GetDirectoryName(app) is { } parent && Machine.Writable(parent) ? app : null;
+    }
+
+    /// <summary>D4's "is this an installed copy" check on Windows: a folder with an uninstaller beside the exe (the
+    /// Setup.exe wrote one at install time). The folder, or null for a build folder.</summary>
+    public static string? WindowsInstallOf(string? baseDir = null)
+    {
+        baseDir ??= AppContext.BaseDirectory;
+        return File.Exists(Path.Combine(baseDir, "unins000.exe")) ? baseDir : null;
     }
 }
