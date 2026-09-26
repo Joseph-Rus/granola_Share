@@ -113,6 +113,21 @@ public static partial class Shell
         public static void Record() => ToggleRecording();
         public static void StopRecording() => Shell.StopRecording();
         public static void ShowRecorder(bool expanded) => Shell.ShowRecorder(expanded);
+
+        /// <summary>Opens the dropdown the way clicking the real icon would (a Mac's status item; Windows' tray
+        /// otherwise), and how far its centre landed from the icon's own, in points — the self-test's placement
+        /// check ("panel under the icon"). Null off a Mac, or before the icon exists.</summary>
+        public static double? OpenPanelViaIcon()
+        {
+            if (!OperatingSystem.IsMacOS())
+            {
+                Shell.TogglePanel();
+                return null;
+            }
+            double? iconCentre = MacStatusItem.ButtonFrame() is { } f ? f.X + f.Width / 2 : null;
+            MacStatusItem.PerformClick();
+            return iconCentre is double x && panelWindow is { } w ? Math.Abs(w.Position.X + w.Bounds.Width / 2 - x) : null;
+        }
     }
 
     static void OnHandOff(string message)
@@ -174,6 +189,7 @@ public static partial class Shell
         }
         tray?.Dispose();
         tray = null;
+        if (OperatingSystem.IsMacOS()) MacStatusItem.Destroy();
         Player.Stop();
         host.Save(_ => { });
         Program.Log("[app] quitting");
@@ -181,9 +197,9 @@ public static partial class Shell
 
     // --- the tray ---------------------------------------------------------------------------------------------------
 
-    /// <summary>The icon: the waveform glyph (a template image on a Mac, which the menu bar tints), with a red dot
-    /// while recording.</summary>
-    static WindowIcon TrayImage(bool recording)
+    /// <summary>The icon, as PNG bytes: the waveform glyph (a template image on a Mac, which the menu bar tints),
+    /// with a red dot while recording.</summary>
+    static byte[] TrayImageBytes(bool recording)
     {
         const int size = 44;
         var bmp = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
@@ -197,14 +213,26 @@ public static partial class Shell
         }
         var stream = new MemoryStream();
         bmp.Save(stream, PngBitmapEncoderOptions.Default);
-        stream.Position = 0;
+        return stream.ToArray();
+    }
+
+    static WindowIcon TrayImage(bool recording)
+    {
+        var stream = new MemoryStream(TrayImageBytes(recording));
         return new WindowIcon(stream);
     }
 
     static void MakeTray()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            // Avalonia's own TrayIcon never raises Clicked on macOS, so the menu bar icon is a real NSStatusItem.
+            MacStatusItem.Create(leftClick: x => TogglePanel(new PixelPoint((int)x, 0)),
+                record: ToggleRecording, search: ToggleQuick, open: ShowLibrary, settings: ShowSettings, quit: () => Quit());
+            MacStatusItem.SetIcon(TrayImageBytes(false));
+            return;
+        }
         tray = new TrayIcon { Icon = TrayImage(false), ToolTipText = "Study Stash", IsVisible = true };
-        if (OperatingSystem.IsMacOS()) MacOSProperties.SetIsTemplateIcon(tray, true);
         tray.Clicked += (_, _) => TogglePanel();
         var menu = new NativeMenu();
         void Item(string title, Action act)
@@ -213,19 +241,16 @@ public static partial class Shell
             i.Click += (_, _) => act();
             menu.Add(i);
         }
-        // Windows opens the flyout on a click; this menu is the right click (and a Mac's fallback).
         Item("Record", ToggleRecording);
         Item("Search notes and lectures", ToggleQuick);
         Item("Open Study Stash", ShowLibrary);
         Item("Settings…", ShowSettings);
         menu.Add(new NativeMenuItemSeparator());
         Item("Quit Study Stash", () => Quit());
-        if (OperatingSystem.IsWindows()) tray.Menu = menu;
+        tray.Menu = menu;
         TrayIcon.SetIcons(app, new TrayIcons { tray });
-        // Windows' tray ink is black or white depending on the theme; redraw it when that changes (a Mac's menu bar
-        // tints its own template image, so its icon needs no redraw).
-        if (OperatingSystem.IsWindows())
-            app.ActualThemeVariantChanged += (_, _) => tray.Icon = TrayImage(trayRecording);
+        // The tray's ink is black or white depending on the theme; redraw it when that changes.
+        app.ActualThemeVariantChanged += (_, _) => tray.Icon = TrayImage(trayRecording);
     }
 
     // --- what the buttons do ---------------------------------------------------------------------------------------
@@ -412,7 +437,10 @@ public static partial class Shell
 
     static Control PanelView() => Skin.Current == SkinKind.Mac ? new MacPanel { DataContext = panel } : new WinPanel { DataContext = panel };
 
-    static void TogglePanel()
+    /// <summary>Opens or closes the dropdown. <paramref name="near"/> is where the icon was clicked, when that's
+    /// known outright (the Mac status item hands its own icon's position); otherwise the pointer's own position is
+    /// asked for (a Windows tray click, or the shortcut).</summary>
+    static void TogglePanel(PixelPoint? near = null)
     {
         if (panelWindow?.IsVisible == true)
         {
@@ -423,12 +451,12 @@ public static partial class Shell
         if (panelWindow is not null && DateTime.UtcNow - panelWindow.LastDeactivateHide < Floating.ToggleDebounce) return;
         panelWindow ??= new Floating { Content = PanelView(), CloseOnDeactivate = true, Title = "Study Stash" };
         Refresh();
-        var pointer = Floating.Pointer();
+        // NSEvent's mouse location is in points, in the same coordinate space Avalonia's screens report: no
+        // rescaling (a display's own scale factor doesn't change where its menu bar sits in that shared space).
+        var pointer = near ?? Floating.Pointer();
         var (_, scale) = panelWindow.WorkArea(pointer);
         var size = panelWindow.Measured(scale);
         int room = (int)(Floating.ShadowRoom * scale);
-        // NSEvent's mouse location is in points, in the same coordinate space Avalonia's screens report: no
-        // rescaling (a display's own scale factor doesn't change where its menu bar sits in that shared space).
         var anchor = pointer ?? new PixelPoint(0, 0);
         panelWindow.Position = OperatingSystem.IsMacOS()
             ? Placement.MacDropdown(anchor, panelWindow.ScreenList(), size, room)
@@ -721,10 +749,11 @@ public static partial class Shell
         };
         library.StatusGood = host.Library == LibraryState.Connected;
         RefreshRecent();
-        if (trayRecording != recording && tray is not null)
+        if (trayRecording != recording)
         {
             trayRecording = recording;
-            tray.Icon = TrayImage(recording);
+            if (OperatingSystem.IsMacOS()) MacStatusItem.SetIcon(TrayImageBytes(recording));
+            else if (tray is not null) tray.Icon = TrayImage(recording);
         }
         if (OperatingSystem.IsWindows() && mainWindow?.TryGetPlatformHandle()?.Handle is IntPtr hwnd)
         {

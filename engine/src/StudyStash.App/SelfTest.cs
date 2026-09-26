@@ -95,9 +95,10 @@ public static class SelfTest
             Shot(Shell.Windows.Main, "library-answer");
         }
 
-        Shell.Windows.TogglePanel();
+        double? dx = Shell.Windows.OpenPanelViaIcon();
         await Wait(1);
         Shot(Shell.Windows.Panel, "panel-idle");
+        if (dx is double d) Say($"panel under the icon: dx={d:0.#} px");
         Shell.Windows.Panel?.Hide();
 
         Shell.Windows.ToggleQuick();
