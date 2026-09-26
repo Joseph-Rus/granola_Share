@@ -5,8 +5,12 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using SkiaSharp;
+using StudyStash.App.Controls;
 using StudyStash.App.ViewModels;
 using StudyStash.App.Views;
 
@@ -21,8 +25,9 @@ public static class TestApp
 }
 
 /// <summary>
-/// Every surface drawn as the design shows it (on its ground, 64 px in), light and dark, into STUDYSTASH_SHOTS (or
-/// shots/ beside the tests): to compare with the design, and to see the Windows look from CI.
+/// Every surface drawn as the design shows it, light and dark, into STUDYSTASH_SHOTS (or shots/ beside the tests): the
+/// same size, ground and file name as the design's picture of it (ref/mac-01-dropdown-light.png and so on), the
+/// surface 64 px in, so the two can be laid over each other. Also shows the Windows look from CI.
 /// </summary>
 public static class Shot
 {
@@ -36,31 +41,50 @@ public static class Shot
         }
     }
 
-    public static Bitmap Take(string name, SkinKind skin, ThemeVariant theme, Func<Control> build, double width, double height, ColourTheme? colours = null)
+    /// <summary>How tall the design's picture of each section is (they're all 1700 wide): ref/index.json.</summary>
+    static readonly Dictionary<string, int> Heights = new()
+    {
+        ["mac-01"] = 548, ["mac-02"] = 648, ["mac-03"] = 968, ["mac-04"] = 928, ["mac-05"] = 608, ["mac-06"] = 948,
+        ["mac-07"] = 888, ["mac-08"] = 654, ["mac-09"] = 928, ["mac-10"] = 928, ["mac-11"] = 928, ["mac-12"] = 507,
+        ["mac-13"] = 908, ["mac-14"] = 908, ["mac-15"] = 768, ["mac-16"] = 588, ["mac-17"] = 920, ["mac-18"] = 520,
+        ["win-01"] = 673, ["win-02"] = 648, ["win-03"] = 1097, ["win-04"] = 928, ["win-05"] = 608, ["win-06"] = 1118,
+        ["win-07"] = 928, ["win-08"] = 668, ["win-09"] = 928, ["win-10"] = 928, ["win-11"] = 928, ["win-12"] = 608,
+        ["win-13"] = 988, ["win-14"] = 988, ["win-15"] = 808, ["win-16"] = 588, ["win-17"] = 920, ["win-18"] = 567,
+    };
+
+    /// <summary>The size of the design's picture a shot is named after ("mac-05-setup-microphone" is section 05's).</summary>
+    public static Size RefSize(string name) =>
+        name.Length >= 6 && Heights.TryGetValue(name[..6], out int h) ? new Size(1700, h)
+            : throw new ArgumentException($"{name} isn't named after a section of the design; give its size", nameof(name));
+
+    /// <summary>
+    /// Draws what <paramref name="build"/> makes 64 px in on the design's ground (the Mac's wallpaper, Windows' grey)
+    /// and saves it as <c>&lt;name&gt;-&lt;light|dark&gt;.png</c>, the size of the design's picture of that section
+    /// (or <paramref name="size"/>). The glass blurs what's behind it here, as the design does.
+    /// </summary>
+    public static Bitmap Take(string name, SkinKind skin, ThemeVariant variant, Func<Control> build, ColourTheme? theme = null, Size? size = null)
     {
         // The colour theme every time too, so one test's theme never shows up in another's picture.
-        Skin.UseTheme(colours ?? ColourThemes.Default);
+        Skin.UseTheme(theme ?? ColourThemes.Default);
         ((StudyStash.App.App)Application.Current!).UseSkin(skin);
+        var (width, height) = size ?? RefSize(name);
         var content = build();
         content.HorizontalAlignment = HorizontalAlignment.Left;
         content.VerticalAlignment = VerticalAlignment.Top;
-        // Top-aligned, like the design's canvas: a surface taller than the window runs off the bottom, not up.
-        var ground = new Border
-        {
-            Padding = new Thickness(64), Child = content, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left,
-            MinHeight = height + 400, MinWidth = width + 400,
-        };
-        ground.Bind(Border.BackgroundProperty, ground.GetResourceObservable("Ground"));
-        var window = new Window { Width = width + 400, Height = height + 400, RequestedThemeVariant = theme, Content = ground };
+        // Top-aligned, like the design's canvas: a surface taller than the picture runs off the bottom, not up.
+        var surface = new Border { Padding = new Thickness(64), Child = content, VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left };
+        var root = new Panel { Children = { skin == SkinKind.Mac ? Wallpaper(width, height, variant == ThemeVariant.Dark) : Ground(width, height), surface } };
+        // A window with room to spare, cut to the picture's size afterwards, so nothing is squeezed.
+        var window = new Window { Width = width + 400, Height = height + 400, RequestedThemeVariant = variant, Content = root };
+        Glass.SetBlurBackdrop(window, true);
         Views.Look.Apply(window);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var whole = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("nothing rendered");
-        // The design's canvas size: a window with room to spare, cut to it, so nothing is squeezed.
         var frame = new RenderTargetBitmap(new PixelSize((int)width, (int)height));
         using (var ctx = frame.CreateDrawingContext())
             ctx.DrawImage(whole, new Rect(0, 0, width, height), new Rect(0, 0, width, height));
-        using (var file = File.Create(Path.Combine(Dir, $"{name}-{(theme == ThemeVariant.Dark ? "dark" : "light")}.png"))) frame.Save(file, PngBitmapEncoderOptions.Default);
+        using (var file = File.Create(Path.Combine(Dir, $"{name}-{(variant == ThemeVariant.Dark ? "dark" : "light")}.png"))) frame.Save(file, PngBitmapEncoderOptions.Default);
         window.Close();
         return frame;
     }
@@ -71,6 +95,121 @@ public static class Shot
         foreach (var c in items) p.Children.Add(c);
         return p;
     }
+
+    /// <summary>Windows' ground: the design's plain grey (the Ground token).</summary>
+    static Border Ground(double width, double height)
+    {
+        var ground = new Border { Width = width, Height = height, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        ground.Bind(Border.BackgroundProperty, ground.GetResourceObservable("Ground"));
+        return ground;
+    }
+
+    /// <summary>The Mac's ground: the design's desktop, with its "desktop wallpaper placeholder" in the corner.</summary>
+    public static Panel Wallpaper(double width, double height, bool dark)
+    {
+        var label = new TextBlock
+        {
+            Text = "desktop wallpaper placeholder", FontFamily = new FontFamily("SF Mono, Menlo, Consolas, monospace"), FontSize = 11,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 16, 12),
+        };
+        label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("Fg2"));
+        return new Panel
+        {
+            Width = width, Height = height, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            Children = { new Desktop(dark), label },
+        };
+    }
+}
+
+/// <summary>
+/// The design's desktop (renderVals' WALL_L and WALL_D): a wash from top to bottom with three soft patches of colour
+/// over it, blue at the bottom left, violet at the top right and a paler one in the middle. Drawn with Skia directly
+/// so the gradients are dithered as Chrome's are: undithered steps come out as rings once the glass saturates them.
+/// </summary>
+sealed class Desktop(bool dark) : Control
+{
+    public override void Render(DrawingContext context) => context.Custom(new Paint(new Rect(Bounds.Size), dark));
+
+    sealed class Paint(Rect rect, bool dark) : ICustomDrawOperation
+    {
+        public Rect Bounds => rect;
+
+        public bool HitTest(Point p) => false;
+
+        public bool Equals(ICustomDrawOperation? other) => false;
+
+        public void Dispose() { }
+
+        public void Render(ImmediateDrawingContext context)
+        {
+            if (context.TryGetFeature<ISkiaSharpApiLeaseFeature>() is not { } feature) return;
+            using var lease = feature.Lease();
+            var canvas = lease.SkCanvas;
+            float w = (float)rect.Width, h = (float)rect.Height;
+            using var paint = new SKPaint { IsDither = true };
+            void Fill(SKShader shader)
+            {
+                using (shader)
+                {
+                    paint.Shader = shader;
+                    canvas.DrawRect(0, 0, w, h, paint);
+                    paint.Shader = null;
+                }
+            }
+            // CSS lists the top layer first; here the bottom one comes first.
+            Fill(dark ? Wash(w, h, (0.2, 0.04, 250), (0.14, 0.05, 275)) : Wash(w, h, (0.9, 0.04, 240), (0.82, 0.08, 265)));
+            (double X, double Y, double Rx, double Ry, double Fade, Color Colour)[] patches = dark
+                ?
+                [
+                    (0.60, 0.60, 0.6, 0.6, 0.7, Oklch.ToColor(0.3, 0.08, 230)),
+                    (0.95, 0.00, 0.8, 0.7, 0.6, Oklch.ToColor(0.34, 0.12, 300)),
+                    (0.15, 1.10, 0.9, 0.8, 0.6, Oklch.ToColor(0.38, 0.14, 260)),
+                ]
+                :
+                [
+                    (0.60, 0.60, 0.6, 0.6, 0.7, Oklch.ToColor(0.86, 0.07, 220)),
+                    (0.95, 0.00, 0.8, 0.7, 0.6, Oklch.ToColor(0.8, 0.1, 300)),
+                    (0.15, 1.10, 0.9, 0.8, 0.6, Oklch.ToColor(0.72, 0.13, 255)),
+                ];
+            foreach (var (x, y, rx, ry, fade, colour) in patches) Fill(Patch(w, h, x, y, rx, ry, colour, fade));
+        }
+
+        /// <summary>
+        /// CSS <c>linear-gradient(160deg, from, to)</c> over a w × h box: the line runs at 160° through the centre, long
+        /// enough that the corners get the end colours. oklch() colours mix in Oklab in CSS, so the stops between are
+        /// worked out there.
+        /// </summary>
+        static SKShader Wash(float w, float h, (double L, double C, double H) from, (double L, double C, double H) to)
+        {
+            double angle = 160 * Math.PI / 180, dx = Math.Sin(angle), dy = -Math.Cos(angle);
+            double half = (Math.Abs(w * dx) + Math.Abs(h * dy)) / 2;
+            static (double L, double A, double B) Lab((double L, double C, double H) c) =>
+                (c.L, c.C * Math.Cos(c.H * Math.PI / 180), c.C * Math.Sin(c.H * Math.PI / 180));
+            var (a, b) = (Lab(from), Lab(to));
+            const int steps = 8;
+            var colours = new SKColor[steps + 1];
+            var at = new float[steps + 1];
+            for (int i = 0; i <= steps; i++)
+            {
+                double t = (double)i / steps, l = a.L + (b.L - a.L) * t, x = a.A + (b.A - a.A) * t, y = a.B + (b.B - a.B) * t;
+                colours[i] = Sk(Oklch.ToColor(l, Math.Sqrt(x * x + y * y), Math.Atan2(y, x) * 180 / Math.PI));
+                at[i] = (float)t;
+            }
+            return SKShader.CreateLinearGradient(new SKPoint((float)(w / 2 - dx * half), (float)(h / 2 - dy * half)),
+                new SKPoint((float)(w / 2 + dx * half), (float)(h / 2 + dy * half)), colours, at, SKShaderTileMode.Clamp);
+        }
+
+        /// <summary>
+        /// CSS <c>radial-gradient(rx ry at x y, colour 0%, transparent fade)</c>, all relative to the box: a unit circle
+        /// stretched to the ellipse. It fades to the same colour with no alpha (as CSS mixes toward transparent), not
+        /// to transparent black, which would grey it.
+        /// </summary>
+        static SKShader Patch(float w, float h, double x, double y, double rx, double ry, Color colour, double fade) =>
+            SKShader.CreateRadialGradient(new SKPoint(0, 0), 1, [Sk(colour), Sk(colour).WithAlpha(0)], [0, (float)fade], SKShaderTileMode.Clamp,
+                SKMatrix.CreateScale((float)(rx * w), (float)(ry * h)).PostConcat(SKMatrix.CreateTranslation((float)(x * w), (float)(y * h))));
+
+        static SKColor Sk(Color c) => new(c.R, c.G, c.B, c.A);
+    }
 }
 
 public class SurfaceShots
@@ -80,12 +219,21 @@ public class SurfaceShots
     static SurfaceShots() => Environment.SetEnvironmentVariable("STUDYSTASH_STILL", "1");
 
     [AvaloniaFact]
+    public void Mac_dropdown()
+    {
+        foreach (var t in Themes)
+            Shot.Take("mac-01-dropdown", SkinKind.Mac, t, () => Shot.Side(
+                new MacPanel { DataContext = Demo.Panel(recording: false), VerticalAlignment = VerticalAlignment.Top },
+                new MacPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }));
+    }
+
+    [AvaloniaFact]
     public void Win_flyout()
     {
         foreach (var t in Themes)
-            Shot.Take("win-flyout", SkinKind.Win, t, () => Shot.Side(
+            Shot.Take("win-01-dropdown", SkinKind.Win, t, () => Shot.Side(
                 new WinPanel { DataContext = Demo.Panel(recording: false), VerticalAlignment = VerticalAlignment.Top },
-                new WinPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }), 900, 780);
+                new WinPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }));
     }
 
     static StackPanel Recorders(Func<RecorderModel, Control> view)
@@ -99,13 +247,13 @@ public class SurfaceShots
     [AvaloniaFact]
     public void Mac_recorder()
     {
-        foreach (var t in Themes) Shot.Take("mac-recorder", SkinKind.Mac, t, () => Recorders(m => new MacRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }), 860, 640);
+        foreach (var t in Themes) Shot.Take("mac-02-recorder", SkinKind.Mac, t, () => Recorders(m => new MacRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }));
     }
 
     [AvaloniaFact]
     public void Win_recorder()
     {
-        foreach (var t in Themes) Shot.Take("win-recorder", SkinKind.Win, t, () => Recorders(m => new WinRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }), 860, 648);
+        foreach (var t in Themes) Shot.Take("win-02-recorder", SkinKind.Win, t, () => Recorders(m => new WinRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }));
     }
 
     static StackPanel Quick(Func<QuickModel, Control> view)
@@ -119,37 +267,37 @@ public class SurfaceShots
     [AvaloniaFact]
     public void Mac_quick()
     {
-        foreach (var t in Themes) Shot.Take("mac-quick", SkinKind.Mac, t, () => Quick(m => new MacQuick { DataContext = m }), 800, 1180);
+        foreach (var t in Themes) Shot.Take("mac-03-quick-panel", SkinKind.Mac, t, () => Quick(m => new MacQuick { DataContext = m }));
     }
 
     [AvaloniaFact]
     public void Win_quick()
     {
-        foreach (var t in Themes) Shot.Take("win-quick", SkinKind.Win, t, () => Quick(m => new WinQuick { DataContext = m }), 800, 1220);
+        foreach (var t in Themes) Shot.Take("win-03-quick-panel", SkinKind.Win, t, () => Quick(m => new WinQuick { DataContext = m }));
     }
 
     [AvaloniaFact]
     public void Mac_app()
     {
-        foreach (var t in Themes) Shot.Take("mac-app", SkinKind.Mac, t, () => new MacLibrary { DataContext = Demo.Library(), Width = 1280, Height = 800 }, 1400, 928);
+        foreach (var t in Themes) Shot.Take("mac-04-full-app", SkinKind.Mac, t, () => new MacLibrary { DataContext = Demo.Library(), Width = 1280, Height = 800 });
     }
 
     [AvaloniaFact]
     public void Win_app()
     {
-        foreach (var t in Themes) Shot.Take("win-app", SkinKind.Win, t, () => new WinLibrary { DataContext = Demo.Library(), Width = 1280, Height = 800 }, 1400, 928);
+        foreach (var t in Themes) Shot.Take("win-04-full-app", SkinKind.Win, t, () => new WinLibrary { DataContext = Demo.Library(), Width = 1280, Height = 800 });
     }
 
     [AvaloniaFact]
     public void Mac_setup()
     {
-        foreach (var t in Themes) Shot.Take("mac-setup", SkinKind.Mac, t, () => new MacSetup { DataContext = Demo.Setup(SkinKind.Mac), DrawChrome = true }, 850, 608);
+        foreach (var t in Themes) Shot.Take("mac-05-setup", SkinKind.Mac, t, () => new MacSetup { DataContext = Demo.Setup(SkinKind.Mac), DrawChrome = true });
     }
 
     [AvaloniaFact]
     public void Win_setup()
     {
-        foreach (var t in Themes) Shot.Take("win-setup", SkinKind.Win, t, () => new WinSetup { DataContext = Demo.Setup(SkinKind.Win), DrawChrome = true }, 850, 608);
+        foreach (var t in Themes) Shot.Take("win-05-setup", SkinKind.Win, t, () => new WinSetup { DataContext = Demo.Setup(SkinKind.Win), DrawChrome = true });
     }
 
     /// <summary>The steps the design doesn't show, in both looks.</summary>
@@ -158,7 +306,7 @@ public class SurfaceShots
     {
         foreach (var skin in new[] { SkinKind.Mac, SkinKind.Win })
             foreach (var step in new[] { SetupStep.Microphone, SetupStep.Library, SetupStep.Classes })
-                Shot.Take($"{(skin == SkinKind.Mac ? "mac" : "win")}-setup-{step.ToString().ToLowerInvariant()}", skin, ThemeVariant.Light, () =>
+                Shot.Take($"{(skin == SkinKind.Mac ? "mac" : "win")}-05-setup-{step.ToString().ToLowerInvariant()}", skin, ThemeVariant.Light, () =>
                 {
                     var m = SetupModel.For(skin);
                     m.Go(step);
@@ -166,7 +314,7 @@ public class SurfaceShots
                     m.Classes.Add(new SetupClass { Name = "CS 101", When = "Tue Thu 10:00–11:15", Dot = Skin.ClassDot(0) });
                     m.Classes.Add(new SetupClass { Name = "BIO 110", When = "Tue 11:00–12:30", Dot = Skin.ClassDot(1) });
                     return skin == SkinKind.Mac ? new MacSetup { DataContext = m, DrawChrome = true } : new WinSetup { DataContext = m, DrawChrome = true };
-                }, 850, 608);
+                });
     }
 
     /// <summary>The idle dropdown (or flyout) in every colour theme, five to a row: each cell gets its own theme's
@@ -194,22 +342,13 @@ public class SurfaceShots
     public void Mac_themes()
     {
         foreach (var t in Themes)
-            Shot.Take("mac-themes", SkinKind.Mac, t, () => ThemeSheet(SkinKind.Mac, () => new MacPanel { DataContext = Demo.Panel(recording: false) }), 2090, 1040);
+            Shot.Take("mac-themes", SkinKind.Mac, t, () => ThemeSheet(SkinKind.Mac, () => new MacPanel { DataContext = Demo.Panel(recording: false) }), size: new Size(2090, 1040));
     }
 
     [AvaloniaFact]
     public void Win_themes()
     {
         foreach (var t in Themes)
-            Shot.Take("win-themes", SkinKind.Win, t, () => ThemeSheet(SkinKind.Win, () => new WinPanel { DataContext = Demo.Panel(recording: false) }), 2090, 1120);
-    }
-
-    [AvaloniaFact]
-    public void Mac_dropdown()
-    {
-        foreach (var t in Themes)
-            Shot.Take("mac-dropdown", SkinKind.Mac, t, () => Shot.Side(
-                new MacPanel { DataContext = Demo.Panel(recording: false), VerticalAlignment = VerticalAlignment.Top },
-                new MacPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }), 900, 700);
+            Shot.Take("win-themes", SkinKind.Win, t, () => ThemeSheet(SkinKind.Win, () => new WinPanel { DataContext = Demo.Panel(recording: false) }), size: new Size(2090, 1120));
     }
 }
