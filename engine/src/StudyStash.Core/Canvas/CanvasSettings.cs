@@ -17,10 +17,17 @@ public sealed class CanvasSettings
     public Dictionary<string, long> Courses { get; set; } = [];
     /// <summary>The person's Canvas courses (id → name), as last looked up, for picking which class is which.</summary>
     public Dictionary<string, string> Available { get; set; } = [];
+    /// <summary>The same courses' code and term (id → info), for <see cref="CourseMatch"/> and the classes screen.</summary>
+    public Dictionary<string, CourseInfo> CourseInfo { get; set; } = [];
     /// <summary>How often the extension reads Canvas again.</summary>
     public int PollMinutes { get; set; } = 60;
     /// <summary>When the last sync started (ISO), and when the extension last asked for work.</summary>
     public string LastSync { get; set; } = "";
+    /// <summary>When the last sync finished (ISO); "" before any sync has finished. <see cref="LastSync"/> is when it
+    /// started, which is what scheduling (<see cref="Due"/>) goes by.</summary>
+    public string LastDone { get; set; } = "";
+    /// <summary>When the current <see cref="Error"/> started (ISO); "" while there's no error.</summary>
+    public string ErrorAt { get; set; } = "";
     public string ExtensionSeen { get; set; } = "";
     /// <summary>The version of the extension Chrome last ran ("1.3").</summary>
     public string ExtensionVersion { get; set; } = "";
@@ -126,6 +133,9 @@ public sealed class CanvasSettings
 
 /// <summary>What the course scout found last time: whether it finished, its summary, and how many files it saved.</summary>
 public sealed record ScoutReport(bool Ok, string Report, string When, int Files);
+
+/// <summary>A Canvas course as Canvas names it, for matching it to a class and showing it in Settings.</summary>
+public sealed record CourseInfo(string Code, string Name, string Term);
 
 /// <summary>Chrome's extension went from one version to a newer one at <paramref name="At"/> (ISO); dismissed once the
 /// student has seen it.</summary>

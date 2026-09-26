@@ -101,6 +101,7 @@ public sealed partial class CanvasSync
     {
         if (Crawl.TakeFinished() is not { } done) return;
         var now = Clock();
+        string at = now.ToString("o", CultureInfo.InvariantCulture);
         var wall = TimeZoneInfo.ConvertTime(now, Zone).DateTime;
         var before = Assignments.Load(home);
         var order = CanvasSettings.Load(home).Courses.Keys.Concat(done.Sections.Keys).Distinct().ToList();
@@ -125,12 +126,15 @@ public sealed partial class CanvasSync
         var failed = done.Sections.SelectMany(c => c.Value.Where(l => l.Value == "failed").Select(l => $"{c.Key} {l.Key}")).ToList();
         CanvasSettings.Update(home, st =>
         {
+            st.LastDone = at;
             st.Error = failed.Count > 0 ? $"Couldn't read {string.Join(", ", failed)} from Canvas ({Reason(done.Errors, failed[0])}), so what you had is kept."
                 : done.Errors.Count > 0 ? $"{done.Errors.Count} thing(s) couldn't be read: {done.Errors[0]}" : "";
+            st.ErrorAt = st.Error.Length > 0 ? at : "";
             if (changes.Count == 0) return;
             st.Changes = changes.Take(60).Select(c => c.Text).ToList();
             st.LastChanges = changes.Take(60).ToList();
         });
+        CanvasNotifications.AppendChanges(home, changes, at);
         log($"[canvas] sync done: {items.Count} assignments, {changes.Count} changes, {files} files" + (done.Errors.Count > 0 ? $", {done.Errors.Count} errors" : ""));
         if (changes.Count > 0) Finished?.Invoke(changes);
         Synced?.Invoke(done.Sections.Where(c => c.Value.ContainsValue("ok")).Select(c => c.Key).Concat(done.Changed.Keys).Distinct().ToList());
