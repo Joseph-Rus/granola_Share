@@ -80,6 +80,7 @@ public static partial class Shell
         else if (OperatingSystem.IsMacOS())
             Program.Log("[app] this Mac doesn't say when the app is opened again; a second copy still hands off");
         host = new AppHost(home, laptop: new LaptopHost(), log: Program.Log);
+        Skin.UseTheme(ColourThemes.Find(host.Settings.Theme));
         host.Changed += () => Dispatcher.UIThread.Post(Refresh);
         host.Heard += (l, lines) => Dispatcher.UIThread.Post(() => AddHeard(l, lines));
         host.Filed += l => Dispatcher.UIThread.Post(() => Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",

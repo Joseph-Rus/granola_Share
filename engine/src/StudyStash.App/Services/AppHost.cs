@@ -26,6 +26,8 @@ public sealed class AppSettings
     public bool Shortcuts { get; set; } = true;
     public double? RecorderX { get; set; }
     public double? RecorderY { get; set; }
+    /// <summary>The colour theme's name (Settings → Appearance): "Lagoon", "Plum"…</summary>
+    public string Theme { get; set; } = "Lagoon";
 
     public static string PathIn(string home) => System.IO.Path.Combine(home, "app.json");
 

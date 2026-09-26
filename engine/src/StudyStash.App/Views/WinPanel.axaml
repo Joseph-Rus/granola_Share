@@ -34,7 +34,7 @@
       <Border DockPanel.Dock="Bottom" Height="48" Background="{DynamicResource Footer}" BorderBrush="{DynamicResource Sep}" BorderThickness="0,1,0,0"
               Padding="16,0,6,0">
         <Grid ColumnDefinitions="Auto,8,*,Auto">
-          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <Ellipse Width="6" Height="6" Classes="status" Classes.warn="{Binding !StatusGood}" VerticalAlignment="Center" />
           <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
           <Button Grid.Column="3" Theme="{StaticResource Surface}" Height="32" CornerRadius="4" Padding="10,0" Command="{Binding OpenAppCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">

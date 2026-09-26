@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:StudyStash.App.Controls">
   <Styles.Resources>
     <!-- A button that is only its background: the design's buttons, rows and chips. Hover and press lay a faint
          wash over it, the way both systems do. -->
@@ -77,5 +78,34 @@
 
   <Style Selector="TextBlock.num">
     <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+
+  <!-- Status by class, so it follows the look, light and dark: a dot that's green when all is well and amber when
+       something needs you, and a result line that says whether it worked. -->
+  <Style Selector="Ellipse.status">
+    <Setter Property="Fill" Value="{DynamicResource Good}" />
+  </Style>
+  <Style Selector="Ellipse.status.warn">
+    <Setter Property="Fill" Value="{DynamicResource Warn}" />
+  </Style>
+  <Style Selector="TextBlock.result">
+    <Setter Property="Foreground" Value="{DynamicResource Ok}" />
+  </Style>
+  <Style Selector="TextBlock.result.bad">
+    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+  </Style>
+
+  <!-- The Mac's glass: views give it only its corners and padding (and the side panel's or toolbar's shadow), so the
+       fill can change per window below. Its shadow falls outside it, so it never clips. -->
+  <Style Selector="c|Glass">
+    <Setter Property="Background" Value="{DynamicResource Glass}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource GlassShadow}" />
+    <Setter Property="Filter" Value="{DynamicResource GlassFilter}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+  <!-- A floating window (the dropdown, the recorder, the quick panel) is clear, with the desktop right behind it:
+       see-through glass there would be hard to read, so it's solid until the system's blur sits under it. -->
+  <Style Selector=".solidglass c|Glass">
+    <Setter Property="Background" Value="{DynamicResource GlassSolid}" />
   </Style>
 </Styles>
