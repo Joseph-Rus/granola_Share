@@ -28,7 +28,7 @@
         <Border Classes="ai-group">
           <StackPanel>
             <Button Classes="ai-textbtn" Command="{Binding ToggleLecturesCommand}" HorizontalContentAlignment="Stretch">
-              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,8">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,0">
                 <Border Classes="ai-check" Classes.on="{Binding ReadLectures}">
                   <c:Icon Glyph="check" Size="13" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadLectures}" />
                 </Border>
@@ -37,7 +37,7 @@
             </Button>
             <Border Classes="ai-sep" />
             <Button Classes="ai-textbtn" Command="{Binding ToggleNotesCommand}" HorizontalContentAlignment="Stretch">
-              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,8">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,0">
                 <Border Classes="ai-check" Classes.on="{Binding ReadNotes}">
                   <c:Icon Glyph="check" Size="13" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadNotes}" />
                 </Border>
@@ -46,7 +46,7 @@
             </Button>
             <Border Classes="ai-sep" />
             <Button Classes="ai-textbtn" Command="{Binding ToggleCanvasCommand}" HorizontalContentAlignment="Stretch">
-              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,8">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,0">
                 <Border Classes="ai-check" Classes.on="{Binding ReadCanvas}">
                   <c:Icon Glyph="check" Size="13" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadCanvas}" />
                 </Border>
@@ -55,7 +55,7 @@
             </Button>
             <Border Classes="ai-sep" />
             <Button Classes="ai-textbtn" Command="{Binding ToggleAudioCommand}" HorizontalContentAlignment="Stretch">
-              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,8">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*" MinHeight="40" Margin="16,0">
                 <Border Classes="ai-check" Classes.on="{Binding ReadAudio}">
                   <c:Icon Glyph="check" Size="13" Foreground="{DynamicResource OnAccent}" IsVisible="{Binding ReadAudio}" />
                 </Border>
@@ -70,10 +70,10 @@
       <StackPanel Spacing="8">
         <TextBlock Classes="ai-section" Text="Connect a tool" Margin="4,0" />
         <Border Classes="ai-group">
-          <Grid Classes="ai-row" ColumnDefinitions="*,Auto" MinHeight="60" Margin="16,8">
+          <Grid Classes="ai-row" ColumnDefinitions="*,Auto" MinHeight="60" Margin="16,0">
             <StackPanel Classes="ai-row-text" VerticalAlignment="Center">
               <TextBlock Classes="ai-row-title" Text="Add Study Stash to a tool" />
-              <TextBlock Classes="ai-row-sub" Text="Copies the setup, then paste it into the tool's settings" />
+              <TextBlock Classes="ai-row-sub" Text="Copies the setup, then paste it into the tool's settings" TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
               <Button Classes="ai-pillbtn" Command="{Binding CopyClaudeCodeCommand}">
@@ -116,7 +116,7 @@
               <DataTemplate x:DataType="vm:AiConnectionRow">
                 <StackPanel>
                   <Border Classes="ai-sep" IsVisible="{Binding !First}" />
-                  <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*,Auto" MinHeight="56" Margin="16,8">
+                  <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*,Auto" MinHeight="56" Margin="16,0">
                     <Border Classes="ai-tile">
                       <c:Icon Glyph="{Binding Icon}" Size="17" Foreground="{DynamicResource Fg}" />
                     </Border>

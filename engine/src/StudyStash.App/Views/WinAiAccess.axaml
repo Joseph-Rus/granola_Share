@@ -13,7 +13,7 @@
   </UserControl.Styles>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="28,28,36,28" Spacing="4">
+    <StackPanel Margin="36,28,36,28" Spacing="4" MaxWidth="680">
 
       <TextBlock Classes="ai-title" Text="AI tool access" />
       <TextBlock Classes="ai-sub" MaxWidth="560" Margin="0,4,0,0" HorizontalAlignment="Left"
@@ -78,7 +78,7 @@
           <c:Icon Glyph="add_link" Size="20" />
           <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
             <TextBlock Classes="ai-row-title" Text="Add Study Stash to a tool" />
-            <TextBlock Classes="ai-row-sub" Text="Copies the setup, then paste it into the tool's settings" />
+            <TextBlock Classes="ai-row-sub" Text="Copies the setup, then paste it into the tool's settings" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
             <Button Classes="ai-pillbtn" Command="{Binding CopyClaudeCodeCommand}">
