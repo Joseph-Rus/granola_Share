@@ -135,7 +135,9 @@ public sealed partial class FakeCanvas
     }
 
     /// <summary>COMP 101 (course 4201) as the design shows it: five assignments, Problem set 4 graded with a rubric and
-    /// a comment, two modules, four announcements (one unread), a page and the files they link.</summary>
+    /// a comment, two modules, four announcements (one unread), a page and the files they link. Lab 2 (not drawn in
+    /// detail) has what the design doesn't show: two attempts (the first with a video that's never downloaded), a
+    /// marked-up PDF from the grader, a video comment, and a reply by the student.</summary>
     public static FakeCanvas Cs101() => new FakeCanvas()
         .Json("/api/v1/courses/4201/assignments", "cs101-assignments.json")
         .Json("/api/v1/courses/4201/students/submissions", "cs101-submissions.json")
@@ -147,7 +149,9 @@ public sealed partial class FakeCanvas
         .Bytes("/files/8801/download", Encoding.UTF8.GetBytes("%PDF-1.4 ps4 answers"))
         .Bytes("/files/8802/download", Encoding.UTF8.GetBytes("def fact(n):\n    return 1 if n <= 1 else n * fact(n - 1)\n"))
         .Bytes("/files/8701/download", Encoding.UTF8.GetBytes("print('ps3')\n"))
-        .Bytes("/files/8601/download", Encoding.UTF8.GetBytes("%PDF-1.4 lab 2"));
+        .Bytes("/files/8601/download", Encoding.UTF8.GetBytes("%PDF-1.4 lab 2"))
+        .Bytes("/files/8600/download", Encoding.UTF8.GetBytes("%PDF-1.4 lab 2 draft"))
+        .Bytes("/files/8604/download", Encoding.UTF8.GetBytes("%PDF-1.4 lab 2 marked up"));
 
     /// <summary>A library whose classes are linked to these Canvas courses, synced by a <see cref="CanvasSync"/> on the
     /// given clock, in California's time zone. Class folders are under <c>pool/</c> in the temp folder.</summary>

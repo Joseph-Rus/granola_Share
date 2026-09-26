@@ -88,8 +88,7 @@ public sealed class CourseIndex
         File.Move(tmp, path, overwrite: true);
     }
 
-    /// <summary>The whole index as JSON text (what's saved).</summary>
-    public string ToJson() => JsonSerializer.Serialize(this, Options);
+    static CourseIndex Copy(CourseIndex index) => JsonSerializer.Deserialize<CourseIndex>(JsonSerializer.Serialize(index, Options), Options)!;
 
     /// <summary>
     /// A finished sync's index: each listing's state decides whose data it keeps. <c>ok</c>: the staged copy (anything
@@ -100,6 +99,9 @@ public sealed class CourseIndex
     /// </summary>
     public static CourseIndex Promoted(CourseIndex? prev, CourseIndex staged, IReadOnlyDictionary<string, string> sections, string at)
     {
+        // Worked on as copies: the indexes given are left as they were.
+        prev = prev is null ? null : Copy(prev);
+        staged = Copy(staged);
         string State(string listing) => sections.GetValueOrDefault(listing, "");
         List<T> Pick<T>(string listing, List<T> fresh, List<T>? old) => State(listing) switch { "ok" => fresh, "hidden" => [], _ => old ?? [] };
         static string Either(string fresh, string? old) => fresh.Length > 0 ? fresh : old ?? "";

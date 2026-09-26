@@ -746,9 +746,10 @@ public sealed partial class Crawl
             ContentType = type,
             UpdatedAt = S(meta["updated_at"]) is { Length: > 0 } u ? u : null,
             Url = url.Split('?')[0],
+            // A video is never saved, whatever its size: "video" says more than "too big".
             Skipped = Flag(meta["locked_for_user"]) || url.Length == 0 ? "locked"
-                : (D(meta["size"]) ?? 0) > MaxBytes ? "too big"
                 : type.StartsWith("video/", StringComparison.Ordinal) || type.StartsWith("audio/", StringComparison.Ordinal) ? "video"
+                : (D(meta["size"]) ?? 0) > MaxBytes ? "too big"
                 : null,
         };
     }

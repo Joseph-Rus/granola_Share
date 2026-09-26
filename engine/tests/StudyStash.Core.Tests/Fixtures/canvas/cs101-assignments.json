@@ -62,7 +62,7 @@
     "submission": {
       "id": 88004, "assignment_id": 9004, "user_id": 5501, "workflow_state": "graded",
       "submitted_at": "2025-09-12T15:20:00Z", "graded_at": "2025-09-18T16:00:00Z", "score": 17.0, "grade": "17",
-      "attempt": 1, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "seconds_late": 30060
+      "attempt": 2, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "seconds_late": 30060
     }
   },
   {

@@ -24,6 +24,18 @@
        "size": 4096, "created_at": "2025-09-17T04:40:00Z", "updated_at": "2025-09-17T04:40:00Z",
        "locked": false, "hidden": false, "locked_for_user": false, "mime_class": "code"}
     ],
+    "submission_history": [
+      {"id": 88002, "assignment_id": 9002, "user_id": 5501, "attempt": 1, "workflow_state": "graded",
+       "submitted_at": "2025-09-17T04:41:00Z", "late": false, "score": 18.0, "grade": "18",
+       "attachments": [
+         {"id": 8801, "display_name": "ps4-answers.pdf", "filename": "ps4-answers.pdf", "content-type": "application/pdf",
+          "url": "https://canvas.test/files/8801/download?download_frd=1&verifier=v8801", "size": 1258291,
+          "updated_at": "2025-09-17T04:40:00Z", "locked_for_user": false},
+         {"id": 8802, "display_name": "ps4.py", "filename": "ps4.py", "content-type": "text/x-python",
+          "url": "https://canvas.test/files/8802/download?download_frd=1&verifier=v8802", "size": 4096,
+          "updated_at": "2025-09-17T04:40:00Z", "locked_for_user": false}
+       ]}
+    ],
     "rubric_assessment": {
       "_2001": {"rating_id": "_2001a", "comments": "", "points": 5.0},
       "_2002": {"rating_id": "_2002b", "comments": "The frame for n = 1 is missing in 3b.", "points": 8.0},
@@ -60,13 +72,55 @@
   {
     "id": 88004, "assignment_id": 9004, "user_id": 5501, "workflow_state": "graded",
     "submitted_at": "2025-09-12T15:20:00Z", "graded_at": "2025-09-18T16:00:00Z", "score": 17.0, "grade": "17",
-    "attempt": 1, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "submission_type": "online_upload",
+    "attempt": 2, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "submission_type": "online_upload",
     "attachments": [
       {"id": 8601, "display_name": "lab2-traces.pdf", "filename": "lab2-traces.pdf", "content-type": "application/pdf",
        "url": "https://canvas.test/files/8601/download?download_frd=1&verifier=v8601", "size": 88210,
        "updated_at": "2025-09-12T15:19:00Z", "locked_for_user": false}
     ],
-    "submission_comments": [],
+    "submission_history": [
+      {"id": 88004, "assignment_id": 9004, "user_id": 5501, "attempt": 1, "workflow_state": "submitted",
+       "submitted_at": "2025-09-12T06:40:00Z", "late": false, "score": null, "grade": null,
+       "attachments": [
+         {"id": 8600, "display_name": "lab2-draft.pdf", "filename": "lab2-draft.pdf", "content-type": "application/pdf",
+          "url": "https://canvas.test/files/8600/download?download_frd=1&verifier=v8600", "size": 40960,
+          "updated_at": "2025-09-12T06:39:00Z", "locked_for_user": false},
+         {"id": 8603, "display_name": "lab2-walkthrough.mp4", "filename": "lab2-walkthrough.mp4", "content-type": "video/mp4",
+          "url": "https://canvas.test/files/8603/download?download_frd=1&verifier=v8603", "size": 62914560,
+          "updated_at": "2025-09-12T06:39:00Z", "locked_for_user": false}
+       ]},
+      {"id": 88004, "assignment_id": 9004, "user_id": 5501, "attempt": 2, "workflow_state": "graded",
+       "submitted_at": "2025-09-12T15:20:00Z", "late": true, "score": 17.0, "grade": "17",
+       "attachments": [
+         {"id": 8601, "display_name": "lab2-traces.pdf", "filename": "lab2-traces.pdf", "content-type": "application/pdf",
+          "url": "https://canvas.test/files/8601/download?download_frd=1&verifier=v8601", "size": 88210,
+          "updated_at": "2025-09-12T15:19:00Z", "locked_for_user": false}
+       ]}
+    ],
+    "submission_comments": [
+      {"id": 51002, "author_id": 3301, "author_name": "Dr. Okafor",
+       "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png",
+                  "html_url": "https://canvas.test/courses/4201/users/3301", "pronouns": null},
+       "comment": "Marked up on the PDF: loop 2 prints one line too many.",
+       "created_at": "2025-09-18T16:00:00Z", "edited_at": null, "attempt": 2,
+       "attachments": [
+         {"id": 8604, "display_name": "lab2-marked.pdf", "filename": "lab2-marked.pdf", "content-type": "application/pdf",
+          "url": "https://canvas.test/files/8604/download?download_frd=1&verifier=v8604", "size": 317440,
+          "updated_at": "2025-09-18T15:58:00Z", "locked_for_user": false}
+       ]},
+      {"id": 51003, "author_id": 3301, "author_name": "Dr. Okafor",
+       "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png",
+                  "html_url": "https://canvas.test/courses/4201/users/3301", "pronouns": null},
+       "comment": "This is a media comment.",
+       "media_comment": {"content-type": "video/mp4", "display_name": "Lab 2 walkthrough", "media_id": "m-lab2", "media_type": "video",
+                         "url": "https://canvas.test/users/5501/media_download?entryId=m-lab2&type=mp4&redirect=1"},
+       "created_at": "2025-09-18T16:05:00Z", "edited_at": null, "attempt": 2},
+      {"id": 51004, "author_id": 5501, "author_name": "Sam Rivera",
+       "author": {"id": 5501, "display_name": "Sam Rivera", "avatar_image_url": "https://canvas.test/images/messages/avatar-51.png",
+                  "html_url": "https://canvas.test/courses/4201/users/5501", "pronouns": null},
+       "comment": "Thanks, I see it now.",
+       "created_at": "2025-09-18T19:30:00Z", "edited_at": null, "attempt": 2}
+    ],
     "assignment": {"id": 9004, "name": "Lab 2: tracing loops", "points_possible": 20.0, "due_at": "2025-09-12T06:59:00Z",
                    "html_url": "https://canvas.test/courses/4201/assignments/9004", "submission_types": ["online_upload"]}
   },
