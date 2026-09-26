@@ -136,6 +136,12 @@
     <Setter Property="Size" Value="14" />
     <Setter Property="Filled" Value="True" />
   </Style>
+  <Style Selector="c|Icon.cv-scout.cv-ok">
+    <Setter Property="Foreground" Value="{DynamicResource Ok}" />
+  </Style>
+  <Style Selector="c|Icon.cv-scout.cv-warn">
+    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+  </Style>
   <Style Selector="TextBlock.cv-scout">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
