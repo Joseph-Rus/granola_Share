@@ -9,7 +9,7 @@
     <RootNamespace>StudyStash.App</RootNamespace>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\..\..\granola_share\assets\study-stash.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\..\assets\study-stash.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 

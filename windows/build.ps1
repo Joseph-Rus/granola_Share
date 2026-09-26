@@ -9,7 +9,7 @@ param([string]$Version = "", [string]$Out = "dist")
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Version) {
-  $Version = (Select-String -Path (Join-Path $Here "..\granola_share\__init__.py") -Pattern '__version__ = "(.*)"').Matches[0].Groups[1].Value
+  $Version = (Select-String -Path (Join-Path $Here "..\engine\Directory.Build.props") -Pattern '<StudyStashVersion>(.*)</StudyStashVersion>').Matches[0].Groups[1].Value
 }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $Out = (Resolve-Path $Out).Path

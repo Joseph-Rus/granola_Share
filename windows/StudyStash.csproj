@@ -7,7 +7,7 @@
     <LangVersion>10</LangVersion>
     <AssemblyName>Study Stash</AssemblyName>
     <RootNamespace>StudyStash</RootNamespace>
-    <ApplicationIcon>..\granola_share\assets\study-stash.ico</ApplicationIcon>
+    <ApplicationIcon>..\assets\study-stash.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.0.0</Version>
     <Product>Study Stash</Product>
@@ -32,7 +32,7 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\granola_share\assets\study-stash.ico" LogicalName="study-stash.ico" />
-    <EmbeddedResource Include="..\granola_share\assets\icon.png" LogicalName="icon.png" />
+    <EmbeddedResource Include="..\assets\study-stash.ico" LogicalName="study-stash.ico" />
+    <EmbeddedResource Include="..\assets\icon.png" LogicalName="icon.png" />
   </ItemGroup>
 </Project>

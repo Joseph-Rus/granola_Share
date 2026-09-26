@@ -10,7 +10,7 @@
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-VERSION=${1:-$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$HERE/../granola_share/__init__.py")}
+VERSION=${1:-$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' "$HERE/../engine/Directory.Build.props")}
 OUT=${2:-"$HERE/../dist"}
 EXE="Study Stash"
 

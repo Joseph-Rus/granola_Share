@@ -1,7 +1,8 @@
 // Draws the app icon: `swift make_icon.swift out.iconset`, then iconutil. With an output ending
 // in .png it writes one 1024-px picture instead. With an output ending in .tiles it writes
 // icon-<px>.png at the sizes Windows and web pages use, with the tile filling the picture (no
-// macOS margin or shadow); macos/icon_assets.py turns those into granola_share/assets.
+// macOS margin or shadow). The icons in assets/ (study-stash.ico, icon.png and
+// apple-touch-icon.png) were made from those tiles.
 // A lime folder on a dark tile with lines of notes on it: your stash of lecture notes. On Apple's
 // macOS grid: an 824-pt rounded square on a 1024 canvas.
 
