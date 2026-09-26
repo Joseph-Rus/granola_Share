@@ -543,10 +543,17 @@ public static partial class Shell
         var model = SettingsModel.Make(host);
         var w = new Window
         {
-            Title = "Study Stash settings", Width = 760, Height = 560, MinWidth = 640, MinHeight = 440, WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Content = new SettingsView { DataContext = model },
+            Title = "Study Stash settings", Width = 900, Height = Skin.Current == SkinKind.Mac ? 780 : 860, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content = new SettingsView { DataContext = model, DrawChrome = false },
+            ExtendClientAreaToDecorationsHint = true, ExtendClientAreaTitleBarHeightHint = Skin.Current == SkinKind.Mac ? 52 : 32,
         };
         Look.Apply(w);
+        if (Skin.Current == SkinKind.Win)
+        {
+            w.TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
+            w.Background = Brushes.Transparent;
+            w.Opened += (_, _) => MicaIfAvailable(w);
+        }
         w.Closed += (_, _) =>
         {
             settingsWindow = null;
