@@ -103,6 +103,11 @@ public interface IAiLibrary
     Task<AiOverview?> ModelAsync(string engine, string model);
     Task<AiOverview?> DismissAsync(string problemId);
     Task<AskReply?> AskAsync(AskRequest request);
+    Task<RewriteInfo?> RewriteAsync(string lecture);
+    Task<RewriteInfo?> RewriteStartAsync(string lecture, string engine);
+    Task<RewriteInfo?> RewriteCancelAsync(string lecture);
+    Task<RewriteInfo?> RewriteKeepAsync(string lecture);
+    Task<RewriteInfo?> RewriteUseAsync(string lecture);
 }
 
 /// <summary>The library's AI over its API (/api/v2/ai), the way the Study Stash app reads it. Like
@@ -168,4 +173,19 @@ public sealed class AiRemote(string serverUrl, string key, HttpClient? http = nu
 
     public async Task<AskReply?> AskAsync(AskRequest request) =>
         As<AskReply>(await SendAsync(HttpMethod.Post, "/ask", JsonSerializer.SerializeToNode(request, Options)));
+
+    public async Task<RewriteInfo?> RewriteAsync(string lecture) =>
+        As<RewriteInfo>(await SendAsync(HttpMethod.Get, $"/rewrite/{Seg(lecture)}"));
+
+    public async Task<RewriteInfo?> RewriteStartAsync(string lecture, string engine) => As<RewriteInfo>(await SendAsync(
+        HttpMethod.Post, $"/rewrite/{Seg(lecture)}", new JsonObject { ["engine"] = engine }));
+
+    public async Task<RewriteInfo?> RewriteCancelAsync(string lecture) =>
+        As<RewriteInfo>(await SendAsync(HttpMethod.Post, $"/rewrite/{Seg(lecture)}/cancel"));
+
+    public async Task<RewriteInfo?> RewriteKeepAsync(string lecture) =>
+        As<RewriteInfo>(await SendAsync(HttpMethod.Post, $"/rewrite/{Seg(lecture)}/keep"));
+
+    public async Task<RewriteInfo?> RewriteUseAsync(string lecture) =>
+        As<RewriteInfo>(await SendAsync(HttpMethod.Post, $"/rewrite/{Seg(lecture)}/use"));
 }

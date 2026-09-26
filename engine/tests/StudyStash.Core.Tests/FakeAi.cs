@@ -136,6 +136,9 @@ public sealed class ScriptedAi(string id, string name = "") : AiProvider
     public bool Hang { get; set; }
     /// <summary>Thrown as soon as it's asked to run, instead of yielding anything.</summary>
     public Exception? Throws { get; set; }
+    /// <summary>Waits here before yielding <see cref="Script"/> — lets a test hold a job at "still working" until it
+    /// chooses to let it finish (<c>SetResult</c>), honouring cancellation the same way a real run would.</summary>
+    public TaskCompletionSource<bool>? Gate { get; set; }
 
     public override List<string> Command(AiRequest req, bool stream) => [];
     public override IEnumerable<AiEvent> Parse(string line) => [];
@@ -145,6 +148,7 @@ public sealed class ScriptedAi(string id, string name = "") : AiProvider
     {
         if (Throws is not null) throw Throws;
         if (Hang) await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        if (Gate is not null) await Gate.Task.WaitAsync(ct);
         foreach (var e in Script) yield return e;
     }
 }

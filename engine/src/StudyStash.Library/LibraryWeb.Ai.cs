@@ -15,8 +15,22 @@ namespace StudyStash.Library;
 public sealed partial class LibraryWeb
 {
     AiJobs? aiJobs;
+    Rewrites? rewrites;
 
     AiJobs Jobs => options.Ai ?? (aiJobs ??= new AiJobs(cfg.Home, () => cfg.OllamaHost));
+    Rewrites Rewrites => rewrites ??= new Rewrites(cfg, store, Jobs);
+
+    static IResult RewriteResult(Func<RewriteInfo> run)
+    {
+        try
+        {
+            return AiJson(run());
+        }
+        catch (RewriteRefusedException e)
+        {
+            return Http.Detail(e.Status, e.Message);
+        }
+    }
 
     async Task<AiOverview> AiOverviewAsync() =>
         (await Engines.StatusAsync(AiSettings.Load(cfg.Home), cfg, Jobs.Checks)) with { Pulling = Jobs.Pulling };
@@ -145,5 +159,24 @@ public sealed partial class LibraryWeb
                 return Http.Detail(503, e.Message);
             }
         })));
+
+        app.MapGet("/api/v2/ai/rewrite/{lecture}", Http.Handle(ctx => ApiAsync(ctx, () =>
+            Task.FromResult(RewriteResult(() => Rewrites.Get((string)ctx.Request.RouteValues["lecture"]!))))));
+
+        app.MapPost("/api/v2/ai/rewrite/{lecture}", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            string? engine = Str(await Http.JsonBodyAsync(ctx.Request), "engine");
+            if (engine is null || !Engines.Order.Contains(engine)) return Http.Detail(400, $"there's no AI called {engine}");
+            return RewriteResult(() => Rewrites.Start((string)ctx.Request.RouteValues["lecture"]!, engine));
+        })));
+
+        app.MapPost("/api/v2/ai/rewrite/{lecture}/cancel", Http.Handle(ctx => ApiAsync(ctx, () =>
+            Task.FromResult(RewriteResult(() => Rewrites.Cancel((string)ctx.Request.RouteValues["lecture"]!))))));
+
+        app.MapPost("/api/v2/ai/rewrite/{lecture}/keep", Http.Handle(ctx => ApiAsync(ctx, () =>
+            Task.FromResult(RewriteResult(() => Rewrites.Keep((string)ctx.Request.RouteValues["lecture"]!))))));
+
+        app.MapPost("/api/v2/ai/rewrite/{lecture}/use", Http.Handle(ctx => ApiAsync(ctx, () =>
+            Task.FromResult(RewriteResult(() => Rewrites.Use((string)ctx.Request.RouteValues["lecture"]!))))));
     }
 }

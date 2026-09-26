@@ -129,6 +129,40 @@ public sealed class AiJobs(string home, Func<string>? ollamaHost = null)
             chat: (_, _, prompt, _) => AnswerAsync("notes", prompt),
             show: (_, _) => Task.FromResult<int?>(200_000));
 
+    /// <summary>Rewrite a lecture's notes with a chosen engine — the "Rewrite notes with" menu's own choice, not
+    /// ai.json's "notes" pick. Real Ollama with no test hooks keeps <see cref="SummarizeAsync"/>'s own direct path;
+    /// every other engine (and a faked Ollama, in tests) goes through the same chat wrapper, but with
+    /// <paramref name="engine"/> itself, and <paramref name="ct"/> in the closure since a chat call takes none of
+    /// its own. <paramref name="progress"/> hears a running count as each chat call finishes, against a first
+    /// estimate of how many parts the transcript needs (long lectures may need a few more, to merge them). Cancelling
+    /// a real Ollama run is best-effort only — Ollama's own call has no way to stop mid-generation — so the caller
+    /// marks that job cancelled itself and drops whatever this returns.</summary>
+    public Task<string> WriteNotesAsync(Meeting m, Config cfg, string engine, Action<int, int>? progress, CancellationToken ct)
+    {
+        if (engine == "ollama" && Providers is null)
+            return Core.Summarize.SummarizeTranscriptAsync(m, cfg);
+        string model = Settings.Models.GetValueOrDefault(engine, "");
+        const int ctx = 200_000; // other models read a whole lecture at once: tell the splitter their context is large
+        string text = Py.Strip(TimedText.Plain(m.Transcript));
+        int budget = Core.Summarize.TranscriptBudget(ctx);
+        int parts = text.Length <= budget ? 1 : Core.Summarize.SplitTranscript(text, budget).Count;
+        int done = 0;
+        async Task<string> ChatAsync(Config c, string mdl, string prompt, int numCtx)
+        {
+            string result = await AnswerWithAsync(engine, model, prompt, ct);
+            progress?.Invoke(++done, Math.Max(done, parts));
+            return result;
+        }
+        return Core.Summarize.SummarizeTranscriptAsync(m, cfg, chat: ChatAsync, show: (_, _) => Task.FromResult<int?>(ctx));
+    }
+
+    /// <summary>The name of what wrote something with a specific engine, not ai.json's own pick for a job — the
+    /// rewrite job's choice, kept as the note's <c>summary_model</c> so <see cref="Engines.WhoWrote"/> maps it back
+    /// to a display name later, the same way it does for the notes ai.json actually picked.</summary>
+    public string DescribeChoice(string engine, Config cfg) => engine == "ollama"
+        ? cfg.EffectiveSummaryModel
+        : Provider(engine).Name + (Settings.Models.GetValueOrDefault(engine, "") is { Length: > 0 } model ? " " + model : "");
+
     /// <summary>Sorting into classes.</summary>
     public Task<string> SortAsync(Config cfg, string prompt, JsonObject schema) => Settings.Local("sort")
         ? Classify.OllamaChatAsync(cfg, prompt, schema)
