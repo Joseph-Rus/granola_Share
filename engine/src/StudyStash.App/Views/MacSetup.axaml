@@ -203,7 +203,7 @@
               </Button>
               <c:Spinner IsVisible="{Binding Connecting}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
               <TextBlock IsVisible="{Binding HasLibraryResult}" Text="{Binding LibraryResult}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300"
-                         Foreground="{Binding LibraryOk, Converter={x:Static c:Converters.OkText}}" />
+                         Classes="result" Classes.bad="{Binding !LibraryOk}" />
             </StackPanel>
           </StackPanel>
 

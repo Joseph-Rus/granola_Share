@@ -86,7 +86,7 @@
           </StackPanel>
         </Grid>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="20,0,20,14">
-          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <Ellipse Width="6" Height="6" Classes="status" Classes.warn="{Binding !StatusGood}" VerticalAlignment="Center" />
           <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Fg2}" />
         </StackPanel>
         <StackPanel Margin="10,0">

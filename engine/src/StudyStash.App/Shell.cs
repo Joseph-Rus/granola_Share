@@ -54,6 +54,7 @@ public static partial class Shell
         Func<IAudioSource>? mic = Environment.GetEnvironmentVariable("STUDYSTASH_MIC_FILE") is { Length: > 0 } wav && File.Exists(wav)
             ? () => new FileMicrophone(wav) : null;
         host = new AppHost(home, mic, laptop: new LaptopHost(), log: Program.Log);
+        Skin.UseTheme(ColourThemes.Find(host.Settings.Theme));
         host.Changed += () => Dispatcher.UIThread.Post(Refresh);
         host.Heard += (l, lines) => Dispatcher.UIThread.Post(() => AddHeard(l, lines));
         host.Filed += l => Dispatcher.UIThread.Post(() => Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",

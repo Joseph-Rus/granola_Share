@@ -117,7 +117,7 @@
       <StackPanel Spacing="12">
         <Border Height="1" Background="{DynamicResource Sep}" Margin="4,0" />
         <Grid ColumnDefinitions="Auto,8,*,Auto" Margin="4,0,4,2">
-          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <Ellipse Width="6" Height="6" Classes="status" Classes.warn="{Binding !StatusGood}" VerticalAlignment="Center" />
           <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
           <Button Grid.Column="3" Theme="{StaticResource Surface}" CornerRadius="4" Padding="4,1" Margin="0,-1,-4,-1" Command="{Binding OpenAppCommand}">
             <TextBlock Text="Open Study Stash" FontSize="12" FontWeight="Medium" />

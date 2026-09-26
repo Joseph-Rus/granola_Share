@@ -78,4 +78,19 @@
   <Style Selector="TextBlock.num">
     <Setter Property="FontFeatures" Value="+tnum" />
   </Style>
+
+  <!-- Status by class, so it follows the look, light and dark: a dot that's green when all is well and amber when
+       something needs you, and a result line that says whether it worked. -->
+  <Style Selector="Ellipse.status">
+    <Setter Property="Fill" Value="{DynamicResource Good}" />
+  </Style>
+  <Style Selector="Ellipse.status.warn">
+    <Setter Property="Fill" Value="{DynamicResource Warn}" />
+  </Style>
+  <Style Selector="TextBlock.result">
+    <Setter Property="Foreground" Value="{DynamicResource Ok}" />
+  </Style>
+  <Style Selector="TextBlock.result.bad">
+    <Setter Property="Foreground" Value="{DynamicResource Warn}" />
+  </Style>
 </Styles>

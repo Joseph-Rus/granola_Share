@@ -36,8 +36,10 @@ public static class Shot
         }
     }
 
-    public static Bitmap Take(string name, SkinKind skin, ThemeVariant theme, Func<Control> build, double width, double height)
+    public static Bitmap Take(string name, SkinKind skin, ThemeVariant theme, Func<Control> build, double width, double height, ColourTheme? colours = null)
     {
+        // The colour theme every time too, so one test's theme never shows up in another's picture.
+        Skin.UseTheme(colours ?? ColourThemes.Default);
         ((StudyStash.App.App)Application.Current!).UseSkin(skin);
         var content = build();
         content.HorizontalAlignment = HorizontalAlignment.Left;
@@ -165,6 +167,41 @@ public class SurfaceShots
                     m.Classes.Add(new SetupClass { Name = "BIO 110", When = "Tue 11:00–12:30", Dot = Skin.ClassDot(1) });
                     return skin == SkinKind.Mac ? new MacSetup { DataContext = m, DrawChrome = true } : new WinSetup { DataContext = m, DrawChrome = true };
                 }, 850, 608);
+    }
+
+    /// <summary>The idle dropdown (or flyout) in every colour theme, five to a row: each cell gets its own theme's
+    /// tokens, so all ten sit in one picture.</summary>
+    static StackPanel ThemeSheet(SkinKind skin, Func<Control> view)
+    {
+        var sheet = new StackPanel { Spacing = 40, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        StackPanel? row = null;
+        foreach (var theme in ColourThemes.All)
+        {
+            if (row is null || row.Children.Count == 5) sheet.Children.Add(row = Shot.Side());
+            row.Spacing = 40;
+            var cell = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Top };
+            cell.Resources.MergedDictionaries.Add(Skin.Build(skin, theme));
+            var name = new TextBlock { Text = theme.Name, FontSize = 13, FontWeight = FontWeight.SemiBold };
+            name.Bind(TextBlock.ForegroundProperty, name.GetResourceObservable("Fg"));
+            cell.Children.Add(name);
+            cell.Children.Add(view());
+            row.Children.Add(cell);
+        }
+        return sheet;
+    }
+
+    [AvaloniaFact]
+    public void Mac_themes()
+    {
+        foreach (var t in Themes)
+            Shot.Take("mac-themes", SkinKind.Mac, t, () => ThemeSheet(SkinKind.Mac, () => new MacPanel { DataContext = Demo.Panel(recording: false) }), 2090, 1040);
+    }
+
+    [AvaloniaFact]
+    public void Win_themes()
+    {
+        foreach (var t in Themes)
+            Shot.Take("win-themes", SkinKind.Win, t, () => ThemeSheet(SkinKind.Win, () => new WinPanel { DataContext = Demo.Panel(recording: false) }), 2090, 1120);
     }
 
     [AvaloniaFact]

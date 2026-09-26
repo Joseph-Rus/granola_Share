@@ -111,7 +111,7 @@
           </StackPanel>
         </Button>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,0,16,8">
-          <Ellipse Width="6" Height="6" Fill="{Binding StatusGood, Converter={x:Static c:Converters.GoodOrWarn}}" VerticalAlignment="Center" />
+          <Ellipse Width="6" Height="6" Classes="status" Classes.warn="{Binding !StatusGood}" VerticalAlignment="Center" />
           <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Fg2}" />
         </StackPanel>
         <StackPanel Spacing="4">
