@@ -100,13 +100,13 @@ public sealed partial class LibraryWeb
             });
             return Http.Json(CanvasJson());
         })));
-        app.MapGet("/api/v2/canvas/state", (HttpContext ctx) => Api(ctx, () => Http.Json(CanvasView.State(Canvas, DateTimeOffset.Now))));
+        app.MapGet("/api/v2/canvas/state", (HttpContext ctx) => Api(ctx, () => Http.Json(CanvasView.State(Canvas, Canvas.Clock()))));
         app.MapGet("/api/v2/canvas/classes", (HttpContext ctx) => Api(ctx, () =>
-            Http.Json(CanvasView.Classes(cfg.ClassNames(), Canvas.Settings, cfg.Home, ScoutOf, DateTimeOffset.Now))));
+            Http.Json(CanvasView.Classes(cfg.ClassNames(), Canvas.Settings, cfg.Home, ScoutOf, Canvas.Clock()))));
         app.MapGet("/api/v2/canvas/due", (HttpContext ctx) => Api(ctx, () =>
         {
             var s = Canvas.Settings;
-            return Http.Json(CanvasView.Due(Assignments.Load(cfg.Home), s.LastDone, DateTimeOffset.Now, Canvas.Zone, Canvas.Crawl.AssignmentFolder));
+            return Http.Json(CanvasView.Due(Assignments.Load(cfg.Home), s.LastDone, Canvas.Clock(), Canvas.Zone, Canvas.Crawl.AssignmentFolder));
         }));
         app.MapGet("/api/v2/canvas/assignments", (HttpContext ctx, string? @class) => Api(ctx, () =>
         {
@@ -117,7 +117,7 @@ public sealed partial class LibraryWeb
         app.MapGet("/api/v2/canvas/assignment", (HttpContext ctx, string? @class, long? id) => Api(ctx, () =>
         {
             if (@class is null || id is null || !cfg.ClassNames().Contains(@class)) return Http.Detail(404, "no such assignment");
-            var found = CanvasView.Assignment(CourseIndex.Load(cfg.Home, @class), id.Value, DateTimeOffset.Now, Canvas.Crawl.AssignmentFolder(@class, id.Value));
+            var found = CanvasView.Assignment(CourseIndex.Load(cfg.Home, @class), id.Value, Canvas.Clock(), Canvas.Crawl.AssignmentFolder(@class, id.Value));
             return found is null ? Http.Detail(404, "no such assignment") : Http.Json(found);
         }));
         app.MapGet("/api/v2/canvas/modules", (HttpContext ctx, string? @class) => Api(ctx, () =>
@@ -142,7 +142,8 @@ public sealed partial class LibraryWeb
         })));
         app.MapGet("/api/v2/canvas/notifications", (HttpContext ctx, long? after) => Api(ctx, () =>
         {
-            CanvasNotifications.EnsureDueSoon(cfg.Home, Assignments.Upcoming(Assignments.Load(cfg.Home), DateTime.Now, 1), DateTimeOffset.Now, Canvas.Zone);
+            var soonNow = Canvas.Clock();
+            CanvasNotifications.EnsureDueSoon(cfg.Home, Assignments.Upcoming(Assignments.Load(cfg.Home), TimeZoneInfo.ConvertTime(soonNow, Canvas.Zone).DateTime, 1), soonNow, Canvas.Zone);
             var (last, items) = CanvasNotifications.Since(cfg.Home, after ?? 0);
             return Http.Json(CanvasView.Notifications(last, items));
         }));
@@ -284,7 +285,7 @@ public sealed partial class LibraryWeb
             ["needs_login"] = s.NeedsLogin, ["extension_seen"] = s.ExtensionSeen, ["extension_version"] = s.ExtensionVersion,
             ["extension_latest"] = Extension.Version(), ["extension_outdated"] = s.ExtensionOutdated,
             ["extension_update"] = s.ExtensionUpdate is { Dismissed: false } up ? new JsonObject { ["from"] = up.From, ["to"] = up.To, ["at"] = up.At } : null,
-            ["state"] = CanvasView.State(Canvas, DateTimeOffset.Now), ["course_info"] = courseInfo,
+            ["state"] = CanvasView.State(Canvas, Canvas.Clock()), ["course_info"] = courseInfo,
             ["syncing"] = Canvas.Crawl.Active, ["left"] = waiting + inflight,
             ["exploring"] = options.Scout?.Running, ["scouts"] = new JsonObject(s.Scouts.Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)new JsonObject
             {

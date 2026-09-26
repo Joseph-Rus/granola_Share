@@ -1,0 +1,33 @@
+[
+    {
+        "id": 9301,
+        "name": "Osmosis lab report",
+        "description": "<p>Write up your osmosis lab: hypothesis, method, results, and what you'd change next time.</p>",
+        "course_id": 4202,
+        "due_at": "2025-09-26T06:59:00Z",
+        "unlock_at": null,
+        "lock_at": null,
+        "points_possible": 25.0,
+        "grading_type": "points",
+        "submission_types": ["online_upload"],
+        "allowed_attempts": -1,
+        "published": true,
+        "has_submitted_submissions": true,
+        "html_url": "https://canvas.test/courses/4202/assignments/9301",
+        "submission": {
+            "id": 89301,
+            "assignment_id": 9301,
+            "user_id": 5501,
+            "workflow_state": "submitted",
+            "submitted_at": "2025-09-25T03:15:00Z",
+            "graded_at": null,
+            "score": null,
+            "grade": null,
+            "attempt": 1,
+            "late": false,
+            "missing": false,
+            "excused": false,
+            "points_deducted": null
+        }
+    }
+]

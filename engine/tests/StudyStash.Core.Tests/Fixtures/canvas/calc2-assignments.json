@@ -1,0 +1,34 @@
+[
+    {
+        "id": 9201,
+        "name": "Quiz 3 practice",
+        "description": "<p>Practice quiz for related rates. Doesn't count toward your grade.</p>",
+        "course_id": 4203,
+        "due_at": "2025-09-26T16:00:00Z",
+        "unlock_at": null,
+        "lock_at": null,
+        "points_possible": 10.0,
+        "grading_type": "points",
+        "submission_types": ["online_quiz"],
+        "allowed_attempts": -1,
+        "published": true,
+        "has_submitted_submissions": false,
+        "quiz_id": 7101,
+        "html_url": "https://canvas.test/courses/4203/assignments/9201",
+        "submission": {
+            "id": 89201,
+            "assignment_id": 9201,
+            "user_id": 5501,
+            "workflow_state": "unsubmitted",
+            "submitted_at": null,
+            "graded_at": null,
+            "score": null,
+            "grade": null,
+            "attempt": null,
+            "late": false,
+            "missing": false,
+            "excused": false,
+            "points_deducted": null
+        }
+    }
+]

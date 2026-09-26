@@ -1,0 +1,33 @@
+[
+    {
+        "id": 9101,
+        "name": "Reading response: Treaty of Versailles",
+        "description": "<p>750 words on how the treaty's terms set up the next twenty years.</p>",
+        "course_id": 4204,
+        "due_at": "2025-09-23T06:59:00Z",
+        "unlock_at": null,
+        "lock_at": null,
+        "points_possible": 10.0,
+        "grading_type": "points",
+        "submission_types": ["online_text_entry"],
+        "allowed_attempts": -1,
+        "published": true,
+        "has_submitted_submissions": false,
+        "html_url": "https://canvas.test/courses/4204/assignments/9101",
+        "submission": {
+            "id": 89101,
+            "assignment_id": 9101,
+            "user_id": 5501,
+            "workflow_state": "unsubmitted",
+            "submitted_at": null,
+            "graded_at": null,
+            "score": null,
+            "grade": null,
+            "attempt": null,
+            "late": false,
+            "missing": true,
+            "excused": false,
+            "points_deducted": null
+        }
+    }
+]
