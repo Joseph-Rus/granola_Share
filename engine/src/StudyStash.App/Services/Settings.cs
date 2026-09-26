@@ -62,6 +62,15 @@ public sealed class ClaudeConnection
     public string Detail { get; init; } = "";
 }
 
+/// <summary>One row in the settings sidebar: its section id, icon and label, and whether it's the one showing.</summary>
+public sealed partial class NavItem : ObservableObject
+{
+    public required string Id { get; init; }
+    public required string Glyph { get; init; }
+    public required string Label { get; init; }
+    [ObservableProperty] public partial bool On { get; set; }
+}
+
 /// <summary>
 /// Settings: Library (where it is; this computer's own), Recording (the model, language, the computer's sound, how
 /// long audio stays), Classes (the timetable), Claude (Claude Code, Claude Desktop, and Claude on the web) and General.
@@ -72,6 +81,26 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     readonly ClaudeSetup claude;
 
     [ObservableProperty] public partial string Section { get; set; } = "Library";
+
+    /// <summary>The sidebar's rows, in the design's order: General, Appearance, then the rest as they were.</summary>
+    public IReadOnlyList<NavItem> NavItems { get; } =
+    [
+        new() { Id = "General", Glyph = "tune", Label = "General" },
+        new() { Id = "Appearance", Glyph = "palette", Label = "Appearance" },
+        new() { Id = "Recording", Glyph = "mic", Label = "Recording" },
+        new() { Id = "Library", Glyph = "dns", Label = "Library" },
+        new() { Id = "Classes", Glyph = "schedule", Label = "Classes" },
+        new() { Id = "AI", Glyph = "hub", Label = "AI" },
+        new() { Id = "Claude", Glyph = "auto_awesome", Label = "Claude" },
+        new() { Id = "Canvas", Glyph = "school", Label = "Canvas" },
+    ];
+
+    /// <summary>Whether this window draws the Mac's round swatches or Windows' squared ones.</summary>
+    public bool ShowMacSwatch => Skin.Current == SkinKind.Mac;
+
+    // Appearance
+    public IReadOnlyList<ThemeSwatch> Themes { get; } = [.. ColourThemes.All.Select(t => new ThemeSwatch(t))];
+    [ObservableProperty] public partial string ColourTheme { get; set; } = "";
 
     // Library
     [ObservableProperty] public partial string LibraryLine { get; set; } = "";
@@ -132,6 +161,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     public bool OnCanvas => Section == "Canvas";
     public bool OnClaude => Section == "Claude";
     public bool OnGeneral => Section == "General";
+    public bool OnAppearance => Section == "Appearance";
     public bool HasWebUrl => !string.IsNullOrEmpty(WebUrl);
     public bool HasConnections => Connections.Count > 0;
 
@@ -151,6 +181,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         Shortcuts = host.Settings.Shortcuts;
         StartAtLogin = Desktop.StartsAtLogin();
         ClaudeCommand = claude.ClaudeCodeCommand;
+        ColourTheme = host.Settings.Theme;
         foreach (var m in WhisperModels.All.Where(m => m.Id != WhisperModels.Tiny.Id))
             Models.Add(new ModelChoice { Model = m, Chosen = m.Id == host.Model.Id, Here = WhisperModels.IsDownloaded(host.Home, m) });
         foreach (var c in host.Timetable.Classes)
@@ -161,6 +192,8 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         host.Changed += OnHostChanged;
         AiModels.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAiModels));
         CanvasLinks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasCanvasLinks));
+        foreach (var n in NavItems) n.On = n.Id == Section;
+        foreach (var t in Themes) t.Chosen = t.Name == ColourTheme;
         _ = LoadCanvasAsync();
         Refresh();
         _ = LoadClaudeAsync();
@@ -192,8 +225,19 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
 
     partial void OnSectionChanged(string value)
     {
-        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnAi), nameof(OnCanvas), nameof(OnClaude), nameof(OnGeneral) }) OnPropertyChanged(p);
+        foreach (string p in new[] { nameof(OnLibrary), nameof(OnRecording), nameof(OnClasses), nameof(OnAi), nameof(OnCanvas), nameof(OnClaude), nameof(OnGeneral), nameof(OnAppearance) })
+            OnPropertyChanged(p);
+        foreach (var n in NavItems) n.On = n.Id == value;
     }
+
+    partial void OnColourThemeChanged(string value)
+    {
+        host.Save(s => s.Theme = value);
+        Skin.UseTheme(ColourThemes.Find(value));
+        foreach (var t in Themes) t.Chosen = t.Name == value;
+    }
+
+    [RelayCommand] void PickTheme(string name) => ColourTheme = name;
 
     partial void OnWebUrlChanged(string? value) => OnPropertyChanged(nameof(HasWebUrl));
     partial void OnLanguageChanged(string value) => host.Save(s => s.Language = value.Trim());
