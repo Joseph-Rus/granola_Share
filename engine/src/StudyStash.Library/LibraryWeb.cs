@@ -771,8 +771,7 @@ public sealed partial class LibraryWeb
             + $"<span class=\"grow\">Rewrite all summaries with {Ui.Esc(NotesWriter)}</span>"
             + "<button>Rewrite all</button></form></div>"
             + "<p class=\"group-foot\">Useful after switching models. Lectures stay readable while they are "
-            + "rewritten, one at a time.</p>"
-            + "<p class=\"group-foot\" style=\"margin-top:2.4rem\">Study Stash is an independent project, not affiliated with or endorsed by Granola. Granola is a trademark of its owner.</p>";
+            + "rewritten, one at a time.</p>";
         // Canvas shows once it's set up or asked about, so a library without it looks as it always has.
         string canvasGroup = CanvasOn || canvas is not null || Canvas.Settings.On ? CanvasSettingsGroup(canvas)
             : "<div class=\"group-head\" id=\"canvas\">Canvas</div><div class=\"group\"><form class=\"row\" method=\"get\" action=\"/settings#canvas\">"
@@ -850,7 +849,7 @@ public sealed partial class LibraryWeb
         Meeting m;
         try
         {
-            m = Granola.MeetingFromJson(payload);
+            m = Wire.MeetingFromJson(payload);
         }
         catch (PayloadException e)
         {

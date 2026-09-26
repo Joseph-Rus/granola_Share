@@ -189,8 +189,7 @@ public static class SetupWeb
         ];
         return "<header><h1>Set up your library</h1><p class=\"sub\">This computer keeps your lectures: it writes their study "
             + "notes with a model that runs here, sorts them by class, and serves them to your laptop and phone. Your "
-            + "answers are kept as you go.</p></header>" + string.Concat(steps)
-            + "<p class=\"group-foot\">Study Stash is an independent project, not affiliated with or endorsed by Granola.</p>";
+            + "answers are kept as you go.</p></header>" + string.Concat(steps);
     }
 
     // --- the routes -----------------------------------------------------------------------------------------------

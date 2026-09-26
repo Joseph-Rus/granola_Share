@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace StudyStash.Core.Tests;
@@ -33,6 +34,15 @@ public class PyTests
         foreach (var c in Golden.Cases("dumps"))
             Assert.Equal(c![1].S(), PyJson.Dumps(JsonNode.Parse(c[0].S())));
         Assert.Equal("[\"a\", \"\\u00e9\"]", PyJson.Dumps(["a", "é"]));
+    }
+
+    [Fact]
+    public void Json_columns_parse_in_both_directions()
+    {
+        // Numbers Python keeps exactly (a 20-digit int) and floats it rewrites (2.50 → 2.5) stay valid JSON here too.
+        var raw = (JsonObject)JsonNode.Parse("""{"big": 12345678901234567890, "f": 2.50}""")!;
+        Assert.Equal("{\"big\": 12345678901234567890, \"f\": 2.5}", PyJson.Dumps(raw));
+        Assert.Equal(JsonValueKind.Object, JsonDocument.Parse(PyJson.Dumps(raw)).RootElement.ValueKind);
     }
 
     [Fact]

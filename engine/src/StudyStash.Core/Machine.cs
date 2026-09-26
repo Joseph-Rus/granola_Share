@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace StudyStash.Core;
 
-/// <summary>This build's version: granola_share/__init__.py's, so both engines report the same one.</summary>
+/// <summary>This build's version, from engine/Directory.Build.props.</summary>
 public static class Engine
 {
     public static string Version { get; } =

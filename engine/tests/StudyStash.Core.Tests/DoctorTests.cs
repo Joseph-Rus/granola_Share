@@ -46,7 +46,6 @@ public class DoctorTests
             {
                 if (over["classes"] is JsonArray none) cfg.Classes = none.Select(c => new ClassDef(c!["name"].S())).ToList();
                 if (over["pool_password"] is JsonNode pw) cfg.PoolPassword = pw.S();
-                if (over["server_sync"] is JsonNode sync) cfg.ServerSync = sync.GetValue<bool>();
                 if (over["ollama_enabled"] is JsonNode ai) cfg.OllamaEnabled = ai.GetValue<bool>();
                 if (over["summary_enabled"] is JsonNode sum) cfg.SummaryEnabled = sum.GetValue<bool>();
             }
@@ -73,50 +72,6 @@ public class DoctorTests
                 HostName = () => "library-pc",
             };
             Matches(name, want, await Doctor.ServerChecksAsync(cfg, host), dir.Path);
-        }
-    }
-
-    [Fact]
-    public async Task The_laptop_checks_match_python_in_every_scenario()
-    {
-        foreach (var (name, want) in P["client"]!.AsObject())
-        {
-            var g = want!["given"]!;
-            using var dir = new TempDir();
-            var cc = new ClientConfig(dir["home"]) { ServerUrl = "http://mini:8787", PoolKey = "pw", PoolName = "Fall" };
-            if (g["cfg"] is JsonObject over)
-            {
-                if (over["copy_transcripts"] is JsonNode copy) cc.CopyTranscripts = copy.GetValue<bool>();
-                if (over["mode"] is JsonNode mode) cc.Mode = mode.S();
-                if (over["server_url"] is JsonNode url) cc.ServerUrl = url.S();
-            }
-            Configs.SaveClient(cc);
-            if (g["tokens"]?.GetValue<bool>() ?? true) File.WriteAllText(cc.TokensPath, "{}");
-            if (g["status"] is JsonNode status)
-            {
-                Directory.CreateDirectory(Path.Combine(cc.Home, "transcripts"));
-                File.WriteAllText(Path.Combine(cc.Home, "transcripts", "status.json"), status.ToJsonString());
-            }
-            if (g["log"] is JsonNode log)
-            {
-                Directory.CreateDirectory(cc.LogDir);
-                File.WriteAllText(Path.Combine(cc.LogDir, "client.log"), log.S());
-            }
-            var server = g["server"]!;
-            var probe = g["probe"] ?? new JsonObject { ["ok"] = new JsonArray(0, null) };
-            var laptop = g["laptop"] ?? new JsonObject { ["granola"] = null, ["granola_here"] = false, ["tailscale"] = new JsonObject { ["running"] = true } };
-            var host = new DoctorHost
-            {
-                System = g["system"].S(),
-                CheckServer = (_, _) => server["error"] is JsonNode e ? throw new InvalidOperationException(e.S())
-                    : Task.FromResult(server["ok"]!.DeepClone().AsObject()),
-                Probe = _ => probe["error"] is JsonNode e ? throw new InvalidOperationException(e.S())
-                    : Task.FromResult((probe["ok"]![0]!.GetValue<int>(), probe["ok"]![1]?.GetValue<bool>())),
-                ServiceStatus = _ => g["service"].S(),
-                Latest = Latest(g["latest"]),
-                Laptop = () => new LaptopInfo(laptop["granola"]?.S(), laptop["granola_here"]!.GetValue<bool>(), Ts(laptop["tailscale"])),
-            };
-            Matches(name, want, await Doctor.ClientChecksAsync(cc, host), dir.Path);
         }
     }
 
@@ -154,18 +109,66 @@ public class DoctorTests
     }
 
     [Fact]
-    public async Task Asking_granola_is_off_unless_this_computer_asks()
+    public async Task The_laptop_checks_say_whats_connected_and_whats_waiting()
     {
         using var dir = new TempDir();
-        var cc = new ClientConfig(dir.Path) { ServerUrl = "http://mini:8787", PoolKey = "pw" };
-        Configs.SaveClient(cc);
-        File.WriteAllText(cc.TokensPath, "{}");
-        var checks = await Doctor.ClientChecksAsync(cc, new DoctorHost
+        var cc = new ClientConfig(dir.Path) { ServerUrl = "http://mini:8787", PoolKey = "pw", PoolName = "Fall" };
+        DoctorHost Host(Func<Task<JsonObject>>? library = null, TailscaleInfo? ts = null) => new()
         {
-            System = "Linux", CheckServer = (_, _) => Task.FromResult(new JsonObject()), ServiceStatus = _ => "running",
-            Latest = () => Task.FromResult<Release?>(null), Laptop = () => new LaptopInfo(null, false, new TailscaleInfo(true, true)),
-        });
-        Assert.Equal("signed in, but Granola refused: Asking Granola is off for this check.", checks.Single(c => c.Name == "Granola").Detail);
+            System = "Darwin", CheckServer = (_, _) => (library ?? (() => Task.FromResult(new JsonObject { ["pool_name"] = "Fall" })))(),
+            Tailscale = () => ts ?? new TailscaleInfo(true, true, "Running", "sams-laptop.example.ts.net"), Latest = () => Task.FromResult<Release?>(null),
+            ServiceStatus = _ => throw new InvalidOperationException("a laptop has no background service to check"), Unicode = false,
+        };
+        const string connect = "open Study Stash and connect it to your library";
+
+        // Not connected to a library yet: that's the one thing to do.
+        Assert.Equal([new Check("Config", Doctor.Fail, $"no {cc.ConfigPath}", connect)], await Doctor.ClientChecksAsync(cc, Host()));
+        var blank = new ClientConfig(dir.Path);
+        Configs.SaveClient(blank);
+        Assert.Equal([new Check("Config", Doctor.Fail, $"{cc.ConfigPath} names no library", connect)], await Doctor.ClientChecksAsync(blank, Host()));
+
+        // Connected, nothing recorded yet: all good, and looking made no recordings folder.
+        Configs.SaveClient(cc);
+        var fine = await Doctor.ClientChecksAsync(cc, Host());
+        Assert.Equal(["Config", "Library", "Tailscale", "Recordings", "Version"], fine.Select(c => c.Name));
+        Assert.All(fine, c => Assert.Equal(Doctor.Ok, c.State));
+        Assert.Equal(("'Fall' at http://mini:8787", "connected as sams-laptop.example.ts.net", "nothing recorded yet"),
+            (fine[1].Detail, fine[2].Detail, fine[3].Detail));
+        Assert.False(Directory.Exists(Path.Combine(dir.Path, "recordings")));
+
+        // The library doesn't answer, and Tailscale is signed out.
+        var down = await Doctor.ClientChecksAsync(cc, Host(() => throw new InvalidOperationException("could not reach http://mini:8787/api/health: refused"),
+            new TailscaleInfo(true, false, "NeedsLogin")));
+        var library = down.Single(c => c.Name == "Library");
+        Assert.Equal((Doctor.Fail, "http://mini:8787: could not reach http://mini:8787/api/health: refused"), (library.State, library.Detail));
+        Assert.Equal("is Tailscale on on both computers, and is the library's computer awake? Wrong address or password: " + connect + " again", library.Fix);
+        Assert.Equal(new Check("Tailscale", Doctor.Warn, "installed, but signed out; this computer reaches the library only on the same Wi-Fi",
+            "open Tailscale and sign in with the same account as your library's computer"), down.Single(c => c.Name == "Tailscale"));
+
+        // Two lectures on their way (one tried and couldn't get there), one already filed.
+        var store = new LectureStore(dir.Path);
+        store.Add(new Lecture { Id = "rec-1", Started = "2026-09-21T10:00:00-07:00", State = LectureState.Filed, FiledClass = "CS 101" });
+        store.Add(new Lecture { Id = "rec-2", Started = "2026-09-22T10:00:00-07:00", State = LectureState.Sending, Error = "Can't reach your library. Lectures wait here until it's back." });
+        store.Add(new Lecture { Id = "rec-3", Started = "2026-09-23T10:00:00-07:00", State = LectureState.Transcribing });
+        async Task<Check> Recordings() => (await Doctor.ClientChecksAsync(cc, Host())).Single(c => c.Name == "Recordings");
+        Assert.Equal(new Check("Recordings", Doctor.Warn, "2 lectures waiting to reach Fall",
+            "last try: Can't reach your library. Lectures wait here until it's back."), await Recordings());
+        store.Update("rec-2", l => l.Error = "");
+        Assert.Equal("they go on their own while Study Stash is open and the library answers", (await Recordings()).Fix);
+
+        // Sent, but Whisper couldn't write one down.
+        store.Update("rec-2", l => l.State = LectureState.Filed);
+        store.Update("rec-3", l => (l.State, l.Error) = (LectureState.Failed, "its recording is missing"));
+        Assert.Equal(new Check("Recordings", Doctor.Warn, "1 lecture couldn't be written down: its recording is missing", "open Study Stash to see which"), await Recordings());
+        store.Delete("rec-3");
+        Assert.Equal(new Check("Recordings", Doctor.Ok, "2 lectures filed in Fall"), await Recordings());
+
+        // Doctor prints them as the laptop's, and warnings alone don't fail it.
+        var said = new List<string>();
+        Assert.Equal(0, await Doctor.RunAsync(dir.Path, null, Host(ts: new TailscaleInfo()), said.Add));
+        Assert.Contains($": laptop ({dir.Path})\n", said[0]);
+        Assert.Contains("! Tailscale   not installed; this computer reaches the library only on the same Wi-Fi", said[0]);
+        Assert.Equal("All good.", said[^1]);
     }
 
     [Fact]

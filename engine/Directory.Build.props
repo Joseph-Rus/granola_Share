@@ -4,13 +4,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <!-- Numbers, dates and casing work the same on every computer, the way the Python engine wrote them. -->
+    <!-- Numbers, dates and casing work the same on every computer, so the library's files read the same everywhere. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <PropertyGroup>
-    <!-- One version for both engines: granola_share/__init__.py's. The laptop and setup check it. -->
-    <StudyStashVersion>$([System.Text.RegularExpressions.Regex]::Replace($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../granola_share/__init__.py')), '(?s).*__version__ = "([^"]+)".*', '$1'))</StudyStashVersion>
+    <!-- The one place Study Stash's version lives: CI publishes v<version> when it changes on main. The laptop and
+         setup check it. -->
+    <StudyStashVersion>0.4.4</StudyStashVersion>
     <Version>$(StudyStashVersion)</Version>
     <InformationalVersion>$(StudyStashVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

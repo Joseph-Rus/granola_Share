@@ -12,11 +12,11 @@
     <InternalsVisibleTo Include="StudyStash.Core.Tests" />
   </ItemGroup>
 
-  <!-- The Study Stash icon: the same files the Python engine serves. -->
+  <!-- The Study Stash icon, from assets/ at the repo's root: each page's favicon and home-screen icon. -->
   <ItemGroup>
-    <EmbeddedResource Include="..\..\..\granola_share\assets\study-stash.ico" LogicalName="study-stash.ico" />
-    <EmbeddedResource Include="..\..\..\granola_share\assets\icon.png" LogicalName="icon.png" />
-    <EmbeddedResource Include="..\..\..\granola_share\assets\apple-touch-icon.png" LogicalName="apple-touch-icon.png" />
+    <EmbeddedResource Include="..\..\..\assets\study-stash.ico" LogicalName="study-stash.ico" />
+    <EmbeddedResource Include="..\..\..\assets\icon.png" LogicalName="icon.png" />
+    <EmbeddedResource Include="..\..\..\assets\apple-touch-icon.png" LogicalName="apple-touch-icon.png" />
   </ItemGroup>
 
 </Project>

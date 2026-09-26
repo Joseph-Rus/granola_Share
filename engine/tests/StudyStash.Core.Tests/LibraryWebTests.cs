@@ -419,11 +419,13 @@ public class LibraryWebTests
         Assert.Equal((HttpStatusCode.NotFound, "{\"detail\":\"Not Found\"}"), (missing.StatusCode, await missing.Content.ReadAsStringAsync()));
     }
 
+    /// <summary>The repo's assets/ folder. It looks for the icon file, not the folder: on a case-insensitive disk
+    /// StudyStash.App/Assets would pass for it.</summary>
     static string RepoAssets()
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d is not null; d = d.Parent)
-            if (Directory.Exists(Path.Combine(d.FullName, "granola_share", "assets"))) return Path.Combine(d.FullName, "granola_share", "assets");
-        throw new DirectoryNotFoundException("granola_share/assets");
+            if (File.Exists(Path.Combine(d.FullName, "assets", "study-stash.ico"))) return Path.Combine(d.FullName, "assets");
+        throw new FileNotFoundException("assets/study-stash.ico");
     }
 
     [Fact]

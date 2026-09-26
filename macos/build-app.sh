@@ -9,7 +9,7 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ARCH=${1:-$(uname -m | sed 's/x86_64/x64/')}
 OUT=${2:-"$HERE/../dist/app"}
-VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$HERE/../granola_share/__init__.py")
+VERSION=$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' "$HERE/../engine/Directory.Build.props")
 APP="$OUT/Study Stash.app"
 
 rm -rf "$OUT"

@@ -1,14 +1,10 @@
-# The update pipeline.
-#   Every push and pull request: tests on macOS, Linux, and Windows, then the real one-line
-#   installer on each, then a server that boots and answers.
-#   Push to main with a new version in granola_share/__init__.py: once all of that passes,
-#   publish release v<version>, with four installers for people who download them (a laptop and a
-#   library one each for Mac and Windows), and the zips the installer and auto-update use.
-#   Installed copies pick it up within a few hours (auto_update), or right away with
-#   `granola-share update`.
-#   The C# engine and the new app built on it ride along: every push builds and checks them (engine zips for
-#   each computer, the Mac and Windows apps), and a release carries them too: the engine zips are what a C#
-#   install updates from, and the apps are a preview until they replace the Python-engine ones (stage 7).
+# The build and release pipeline for Study Stash (C# on .NET 10).
+#   Every push and pull request: the engine's tests on macOS, Linux and Windows, the engine zips for each computer
+#   (each run on a computer of its kind), and the Mac and Windows apps, each started once to show it opens.
+#   Push to main with a new StudyStashVersion in engine/Directory.Build.props: once all of that passes, publish
+#   release v<version> with the apps, their installers, and the engine zips the updater downloads. Installed
+#   copies pick it up within a few hours (auto_update), or right away with `studystash update`. A version that
+#   is already released is never published again.
 name: ci
 
 on:
@@ -25,29 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: tests (${{ matrix.os }}, py${{ matrix.python }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.12"]
-        include:
-          - os: ubuntu-latest
-            python: "3.11"
-          - os: windows-latest  # the Python the Windows download (windows/bundle.ps1) ships
-            python: "3.13"
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Run tests
-        run: uv run --python ${{ matrix.python }} --extra dev pytest -q
-
-  # The C# engine that is replacing the Python one (engine/). It must read and write every file exactly as the
-  # Python engine does, so both run here: golden files from Python, and a library passed from one to the other.
-  # Not part of the release yet: Python keeps shipping until the C# engine takes over.
+  # The C# engine (engine/): every test on each system. Golden/ holds fixed expectations the tests compare byte
+  # for byte.
   engine:
     name: C# engine (${{ matrix.os }})
     strategy:
@@ -59,20 +34,11 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      STUDYSTASH_REQUIRE_PYTHON: "1"  # the cross-engine test may not skip itself here
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
-      - name: The Python engine, in .venv, for the cross-engine test
-        run: uv sync --python 3.12
-      - name: Golden files and page text still match the Python engine
-        if: runner.os == 'Linux'
-        run: |
-          uv run python engine/tests/golden.py
-          git diff --exit-code -- engine/tests/StudyStash.Core.Tests/Golden engine/src/StudyStash.Library/PageText.cs
       # Whisper's smallest model, so the live tests hear real speech on each system (the app uses large-v3).
       - uses: actions/cache@v4
         with:
@@ -90,118 +56,6 @@ jobs:
         env:
           # Windows: also run the library as a real background service, from the Startup folder with no window.
           STUDYSTASH_LIVE_SERVICE: ${{ runner.os == 'Windows' && '1' || '' }}
-
-  install:
-    name: installer (${{ matrix.os }})
-    needs: [test, windows-helper]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    timeout-minutes: 20  # a hang fails fast instead of holding everything up for hours
-    runs-on: ${{ matrix.os }}
-    env:
-      GRANOLA_SHARE_SRC: ${{ github.workspace }}
-      GRANOLA_SHARE_NO_SETUP: "1"
-    steps:
-      - uses: actions/checkout@v4
-      # No setup-uv here on purpose: the installer has to fetch uv itself, as on a fresh laptop.
-      - name: Install (macOS / Linux)
-        if: runner.os != 'Windows'
-        run: |
-          sh install.sh client
-          sh install.sh server   # a second run must update in place
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - uses: actions/download-artifact@v4
-        if: runner.os == 'Windows'
-        with:
-          name: windows-helper
-          path: ${{ runner.temp }}/helper
-      - name: Install (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        env:
-          GRANOLA_SHARE_BUNDLE: ${{ runner.temp }}\helper\Study-Stash-helper-windows.zip  # this commit's, not a release's
-        run: |
-          .\install.ps1
-          .\install.ps1   # a second run swaps in a fresh copy of the folder
-          Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.local\bin"
-          & "$env:USERPROFILE\.local\bin\granola-share.cmd" --version
-      - name: Set up a pool without a keyboard and boot it
-        shell: bash
-        run: |
-          H="$RUNNER_TEMP/gs"
-          granola-share --version
-          granola-share --home "$H" setup --yes --pool-name CI --password pw --pool-dir "$RUNNER_TEMP/pool" \
-            --port 8799 --class "CS 101=cs101" --no-server-sync --no-autostart --no-pull < /dev/null
-          granola-share --home "$H" serve > "$RUNNER_TEMP/server.log" 2>&1 &
-          for i in $(seq 1 30); do
-            curl -fsS -H "Authorization: Bearer pw" http://127.0.0.1:8799/api/health && break
-            sleep 2
-          done
-          curl -fsS -X POST -H "Authorization: Bearer pw" -H "Content-Type: application/json" \
-            -d '{"id":"ci-1","title":"CS101 lecture 1","notes_markdown":"loops"}' http://127.0.0.1:8799/api/ingest
-          # the note is filed in the background; wait for it (no /dev/stderr on Windows)
-          for i in $(seq 1 30); do
-            S=$(curl -fsS http://127.0.0.1:8799/api/status); echo "$S"
-            case "$S" in *'"done":1'*) break;; esac
-            sleep 2
-          done
-          echo "$S" | grep -q '"done":1'
-          curl -fsS http://127.0.0.1:8799/ | grep -q "CS101 lecture 1"
-          granola-share --home "$H" doctor --role server || true
-          # the laptop's Study Stash page comes up before any setup
-          granola-share --home "$RUNNER_TEMP/laptop" client run > "$RUNNER_TEMP/client.log" 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8765/healthz && break; sleep 2; done
-          curl -fsS http://127.0.0.1:8765/healthz | grep -q granola-share
-      - name: "Windows: the library runs in the background, keeps its log, and the app gets its icon"
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          H="$RUNNER_TEMP/gs2"
-          granola-share --home "$H" setup --yes --pool-name CI2 --password pw --pool-dir "$RUNNER_TEMP/pool2" \
-            --port 8798 --no-autostart --no-pull < /dev/null
-          granola-share --home "$H" autostart install --role server
-          for i in $(seq 1 30); do curl -fsS -H "Authorization: Bearer pw" http://127.0.0.1:8798/api/health && break; sleep 2; done
-          curl -fsS -o /dev/null http://127.0.0.1:8798/favicon.ico
-          test "$(granola-share --home "$H" autostart status --role server)" = running
-          grep -q "pool 'CI2' on port 8798" "$H/logs/server.log"   # pythonw has no console: keep_alive writes it
-          granola-share --home "$H" doctor --role server || true
-          granola-share --home "$H" autostart uninstall --role server
-          granola-share --home "$RUNNER_TEMP/laptop2" client open --install --no-browser
-          # the Start Menu entry opens the Windows app (fetched from the newest release), or the page with our icon
-          powershell -NoProfile -Command '$s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Study Stash.lnk")); Write-Host "$($s.TargetPath) | $($s.IconLocation)"; if (-not ($s.TargetPath -like "*\Study Stash.exe" -or $s.IconLocation -like "*study-stash.ico*")) { exit 1 }'
-      - name: Server log
-        if: failure()
-        shell: bash
-        run: cat "$RUNNER_TEMP/server.log" "$RUNNER_TEMP/client.log" "$RUNNER_TEMP/gs2/logs/server.log" || true
-
-  windows-helper:
-    name: Windows download (granola-share with its own Python)
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"  # builds the packages for the embeddable Python 3.13 it ships
-      - name: Build Study-Stash-helper-windows.zip
-        shell: pwsh
-        run: ./windows/bundle.ps1 -Out dist
-      - name: It runs by itself, with every package it needs
-        shell: pwsh
-        run: |
-          $t = Join-Path $env:RUNNER_TEMP "unpacked"
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path dist\Study-Stash-helper-windows.zip), $t)
-          $py = Join-Path $t "python\python.exe"
-          & $py -m granola_share.cli --version
-          & $py -c "import granola_share.cli, granola_share.web, granola_share.granola, granola_share.client_app, mcp.client.streamable_http, uvicorn, win32api; print('imports ok')"
-          if ($LASTEXITCODE -ne 0) { throw "it doesn't run on its own" }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-helper
-          path: dist/Study-Stash-helper-windows.zip
 
   mac-app:
     name: Mac apps (DMGs)
@@ -310,7 +164,7 @@ jobs:
       - name: Publish the engine
         shell: bash
         run: |
-          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' granola_share/__init__.py)
+          V=$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' engine/Directory.Build.props)
           OUT="$RUNNER_TEMP/engine"
           dotnet publish engine/src/StudyStash.Engine -c Release -r ${{ matrix.rid }} --self-contained true -p:DebugType=None -o "$OUT"
           printf '%s\n' "$V" > "$OUT/study-stash-engine.txt"
@@ -325,8 +179,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cd "$RUNNER_TEMP/engine" && python3 -c "import os,sys,zipfile; z=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(r,f), os.path.relpath(os.path.join(r,f))) for r,_,fs in os.walk('.') for f in fs]; z.close()" "$GITHUB_WORKSPACE/dist/Study-Stash-engine-${{ matrix.asset }}.zip" \
-            || python -c "import os,sys,zipfile; z=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(r,f), os.path.relpath(os.path.join(r,f))) for r,_,fs in os.walk('.') for f in fs]; z.close()" "$GITHUB_WORKSPACE/dist/Study-Stash-engine-${{ matrix.asset }}.zip"
+          # Windows has no zip command; the updater sets the program's exec bit itself, so either archive works.
+          if [ "$RUNNER_OS" = Windows ]; then
+            pwsh -NoProfile -Command "Compress-Archive -Path '$RUNNER_TEMP/engine/*' -DestinationPath 'dist/Study-Stash-engine-${{ matrix.asset }}.zip'"
+          else
+            command -v zip >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zip; }   # a slim Linux image may lack it
+            (cd "$RUNNER_TEMP/engine" && zip -qr "$GITHUB_WORKSPACE/dist/Study-Stash-engine-${{ matrix.asset }}.zip" .)
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: engine-${{ matrix.asset }}
@@ -418,7 +277,7 @@ jobs:
 
   release:
     name: publish release
-    needs: [test, install, mac-app, windows-app, windows-helper, engine-zips, new-app-mac, new-app-windows]
+    needs: [engine, mac-app, windows-app, engine-zips, new-app-mac, new-app-windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -438,10 +297,6 @@ jobs:
           path: dist
       - uses: actions/download-artifact@v4
         with:
-          name: windows-helper
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
           pattern: engine-*
           merge-multiple: true
           path: dist
@@ -457,14 +312,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' granola_share/__init__.py)
-          if [ -z "$V" ]; then echo "no __version__ found"; exit 1; fi
-          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
-            echo "v$V is already released; bump __version__ to publish a new one."
+          V=$(sed -n 's:.*<StudyStashVersion>\(.*\)</StudyStashVersion>.*:\1:p' engine/Directory.Build.props)
+          if [ -z "$V" ]; then echo "no StudyStashVersion in engine/Directory.Build.props"; exit 1; fi
+          # Never publish a version twice: its tag, or a release by that name, means it is out already.
+          if git rev-parse -q --verify "refs/tags/v$V" >/dev/null || gh release view "v$V" >/dev/null 2>&1; then
+            echo "v$V is already released; bump StudyStashVersion in engine/Directory.Build.props to publish a new one."
             exit 0
           fi
           gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
             dist/Study-Stash-Laptop.dmg dist/Study-Stash-Library.dmg dist/Study-Stash-Laptop-Setup.exe \
             dist/Study-Stash-Library-Setup.exe dist/Study-Stash-mac.zip dist/Study-Stash-Library-mac.zip \
-            dist/Study-Stash-windows.zip dist/Study-Stash-helper-windows.zip \
+            dist/Study-Stash-windows.zip \
             dist/Study-Stash-engine-*.zip dist/Study-Stash-App-preview-*

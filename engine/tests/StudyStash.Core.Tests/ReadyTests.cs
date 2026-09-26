@@ -2,8 +2,8 @@ using System.Text;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_ready.py: getting the library's computer ready (Tailscale, Ollama, Windows' firewall and sleep),
-/// and finding Granola on the laptop. Every install here is a fake: nothing is downloaded or installed.</summary>
+/// <summary>tests/test_ready.py: getting the library's computer ready (Tailscale, Ollama, Windows' firewall and sleep).
+/// Every install here is a fake: nothing is downloaded or installed.</summary>
 public class ReadyTests
 {
     const string Powercfg = """
@@ -175,27 +175,6 @@ public class ReadyTests
         Assert.Equal(["open", "-a", "Tailscale"], run.Calls.Single());
         Assert.False(Ready.OpenTailscale("Darwin", (_, _, _) => new ProcResult(1, "")));
         Assert.False(Ready.OpenTailscale("Linux", run.Run));
-    }
-
-    [Fact]
-    public void Granola_is_found_where_its_installers_put_it()
-    {
-        using var dir = new TempDir();
-        var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"], dir["Roaming"], dir["userhome"]);
-        var spotlight = new FakeRunner((_, _) => new ProcResult(0, "/Volumes/Apps/Granola.app\n"));
-        Assert.Equal("/Volumes/Apps/Granola.app", Ready.GranolaApp("Darwin", spotlight.Run, at));
-        Assert.Contains("com.granola.app", spotlight.Calls.Single()[^1]);
-        Directory.CreateDirectory(Path.Combine(dir["mine"], "Granola.app"));
-        Assert.Equal(Path.Combine(dir["mine"], "Granola.app"), Ready.GranolaApp("Darwin", spotlight.Run, at));
-        Assert.Null(Ready.GranolaApp("Darwin", (_, _, _) => null, new AppPlaces(dir["none"], dir["none"], dir["none"], dir["none"], dir["none"])));
-        string exe = Path.Combine(dir["Local"], "Programs", "@granolaelectron", "Granola.exe");
-        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
-        File.WriteAllText(exe, "");
-        Assert.Equal(exe, Ready.GranolaApp("Windows", null, at));
-        Assert.Null(Ready.GranolaApp("Linux"));
-        var linux = Ready.LaptopChecks("Linux", _ => throw new InvalidOperationException("Granola has no Linux app"), () => new TailscaleInfo(true, true));
-        Assert.Equal((null, false, true), (linux.Granola, linux.GranolaHere, linux.Tailscale.Running));
-        Assert.Equal("/G.app", Ready.LaptopChecks("Darwin", _ => "/G.app", () => new TailscaleInfo()).Granola);
     }
 
     [Fact]
