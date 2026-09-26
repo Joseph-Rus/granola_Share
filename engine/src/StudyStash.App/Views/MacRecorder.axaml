@@ -96,11 +96,11 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ChatMessage">
                   <Panel>
-                    <!-- Yours: at most 78% of the width; the answer: 88% -->
-                    <Border Classes="tint" IsVisible="{Binding Mine}" HorizontalAlignment="Right" MaxWidth="262" CornerRadius="18" Padding="14,8">
+                    <!-- Yours: text at most 78% of the 336 across, the answer's 88%, each plus its padding (as the design's CSS) -->
+                    <Border Classes="tint" IsVisible="{Binding Mine}" HorizontalAlignment="Right" MaxWidth="290" CornerRadius="18" Padding="14,8">
                       <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.2" TextWrapping="Wrap" Foreground="{DynamicResource OnAccent}" />
                     </Border>
-                    <Border Classes="fill" IsVisible="{Binding !Mine}" HorizontalAlignment="Left" MaxWidth="296" CornerRadius="18" Padding="14,10">
+                    <Border Classes="fill" IsVisible="{Binding !Mine}" HorizontalAlignment="Left" MaxWidth="324" CornerRadius="18" Padding="14,10">
                       <StackPanel Spacing="8">
                         <c:Spinner IsVisible="{Binding Thinking}" Width="14" Height="14" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
                         <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.85" TextWrapping="Wrap" />

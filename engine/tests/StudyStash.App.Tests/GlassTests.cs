@@ -25,7 +25,7 @@ public class GlassTests
     }
 
     /// <summary>Draws <paramref name="content"/> in a plain light window and hands back the picture.</summary>
-    static WriteableBitmap Draw(Control content, double width, double height)
+    internal static WriteableBitmap Draw(Control content, double width, double height)
     {
         var window = new Window { Width = width, Height = height, RequestedThemeVariant = ThemeVariant.Light, Content = content };
         window.Show();
@@ -35,7 +35,7 @@ public class GlassTests
         return frame;
     }
 
-    static Color Pixel(WriteableBitmap bitmap, int x, int y)
+    internal static Color Pixel(WriteableBitmap bitmap, int x, int y)
     {
         using var fb = bitmap.Lock();
         int v = Marshal.ReadInt32(fb.Address, y * fb.RowBytes + x * 4);

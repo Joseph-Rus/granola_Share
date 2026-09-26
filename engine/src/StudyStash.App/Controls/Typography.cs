@@ -23,7 +23,10 @@ public static class Typography
     // Apple's tracking for SF Pro Text, in points by size (6 to 19 pt). SF Pro Display (20 pt and up) sets its own.
     static readonly double[] SfText = [0.24, 0.23, 0.21, 0.17, 0.12, 0.06, 0, -0.08, -0.15, -0.23, -0.31, -0.43, -0.44, -0.45];
 
-    public static bool SfInstalled { get; } = FontManager.Current.SystemFonts.Any(f => f.Name == "SF Pro Text");
+    // Asked the first time it's needed: the font manager only exists once Avalonia is running.
+    static readonly Lazy<bool> Sf = new(() => FontManager.Current.SystemFonts.Any(f => f.Name == "SF Pro Text"));
+
+    public static bool SfInstalled => Sf.Value;
 
     public static double Tracking(double size, bool sf)
     {
