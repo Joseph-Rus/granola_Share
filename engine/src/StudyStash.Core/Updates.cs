@@ -5,20 +5,59 @@ using System.Text.RegularExpressions;
 
 namespace StudyStash.Core;
 
-/// <summary>A published release, and where its downloads are. Assets has every download by file name: this engine's
-/// own come for each system (<see cref="Updates.EngineAsset"/>).</summary>
-public sealed record Release(string Tag, int[] Version, string Url, string Page, string MacApp = "", string WindowsApp = "",
-    string MacLibraryApp = "", string WindowsHelper = "", IReadOnlyDictionary<string, string>? Assets = null);
+/// <summary>A published release: where its page is, and every asset it holds by file name (the four installers and
+/// SHA256SUMS.txt - see <see cref="Updates.Installers"/>).</summary>
+public sealed record Release(string Tag, int[] Version, string Url, string Page, IReadOnlyDictionary<string, string>? Assets = null);
 
-/// <summary>New releases on GitHub (update.py): finding them here, installing them in Updater.cs.</summary>
+/// <summary>Reading a checksums file (`shasum -a 256` format: `<hex>  name`, or `<hex> *name` for a binary-mode
+/// entry): file name to lowercase hex digest.</summary>
+public static class Checksums
+{
+    public static IReadOnlyDictionary<string, string> Parse(string text)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0) continue;
+            int sp = line.IndexOf(' ');
+            if (sp < 0) continue;
+            string hex = line[..sp].Trim().ToLowerInvariant();
+            string name = line[(sp + 1)..].TrimStart(' ', '*').Trim();
+            if (hex.Length > 0 && name.Length > 0) map[name] = hex;
+        }
+        return map;
+    }
+}
+
+/// <summary>New releases on GitHub, and finding the right installer by name (D2); installing one is Updater.cs.</summary>
 public static partial class Updates
 {
     public const string RepoSlug = "Joseph-Rus/study-stash";
     public const string LatestApi = $"https://api.github.com/repos/{RepoSlug}/releases/latest";
-    public const string MacAppAsset = "Study-Stash-mac.zip";
-    public const string MacLibraryAppAsset = "Study-Stash-Library-mac.zip";
-    public const string WindowsAppAsset = "Study-Stash-windows.zip";
-    public const string WindowsHelperAsset = "Study-Stash-helper-windows.zip";
+
+    // D2's four installers, plus the checksums that cover them.
+    public const string MacLaptopAsset = "Study-Stash-Laptop.dmg";
+    public const string MacLibraryAsset = "Study-Stash-Library.dmg";
+    public const string WindowsLaptopAsset = "Study-Stash-Laptop-Setup.exe";
+    public const string WindowsLibraryAsset = "Study-Stash-Library-Setup.exe";
+    public const string ChecksumsAsset = "SHA256SUMS.txt";
+
+    public static readonly IReadOnlyList<string> Installers = [MacLaptopAsset, MacLibraryAsset, WindowsLaptopAsset, WindowsLibraryAsset];
+
+    /// <summary>The installer this computer's role downloads, or null when this system doesn't update itself (Linux)
+    /// or the role isn't laptop or library.</summary>
+    public static string? Installer(string system, string? role) => (system, role) switch
+    {
+        ("Darwin", "laptop") => MacLaptopAsset,
+        ("Darwin", "library") => MacLibraryAsset,
+        ("Windows", "laptop") => WindowsLaptopAsset,
+        ("Windows", "library") => WindowsLibraryAsset,
+        _ => null,
+    };
+
+    public static string ArchiveUrl(string reference, bool branch = false) =>
+        $"https://github.com/{RepoSlug}/archive/refs/{(branch ? "heads" : "tags")}/{reference}.tar.gz";
 
     [GeneratedRegex(@"\d+")]
     private static partial Regex Digits();
@@ -38,9 +77,6 @@ public static partial class Updates
             if (a[i] != b[i]) return a[i].CompareTo(b[i]);
         return a.Length.CompareTo(b.Length);
     }
-
-    public static string ArchiveUrl(string reference, bool branch = false) =>
-        $"https://github.com/{RepoSlug}/archive/refs/{(branch ? "heads" : "tags")}/{reference}.tar.gz";
 
     static readonly HttpClient Http = CreateHttp();
 
@@ -64,9 +100,7 @@ public static partial class Updates
         var assets = new Dictionary<string, string>();
         foreach (var a in data["assets"] as JsonArray ?? new JsonArray())
             if (a is JsonObject o) assets[Py.Str(o["name"])] = Py.Truthy(o["browser_download_url"]) ? Py.Str(o["browser_download_url"]) : "";
-        string Asset(string name) => assets.GetValueOrDefault(name, "");
-        return new Release(tag, ParseVersion(tag), ArchiveUrl(tag), Py.Truthy(data["html_url"]) ? Py.Str(data["html_url"]) : "",
-            Asset(MacAppAsset), Asset(WindowsAppAsset), Asset(MacLibraryAppAsset), Asset(WindowsHelperAsset), assets);
+        return new Release(tag, ParseVersion(tag), ArchiveUrl(tag), Py.Truthy(data["html_url"]) ? Py.Str(data["html_url"]) : "", assets);
     }
 
     static readonly SemaphoreSlim CacheGate = new(1, 1);
