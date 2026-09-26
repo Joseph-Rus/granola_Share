@@ -55,7 +55,7 @@ public static class Autostart
 
     public static List<string> RoleArgs(string role, string home, IReadOnlyList<string>? engine = null)
     {
-        if (!Roles.TryGetValue(role, out var command)) throw new ArgumentException("role must be one of ['client', 'server']");
+        if (!Roles.TryGetValue(role, out var command)) throw new ArgumentException("role must be 'server'");
         return [.. engine ?? EngineCommand(), "--home", home, .. command];
     }
 
