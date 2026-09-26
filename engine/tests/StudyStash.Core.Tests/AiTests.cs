@@ -28,6 +28,18 @@ public class AiTests
     }
 
     [Fact]
+    public void An_ai_json_from_before_fallback_and_limits_still_loads()
+    {
+        using var dir = new TempDir();
+        File.WriteAllText(AiSettings.PathIn(dir.Path), """{"provider": "claude", "models": {"claude": "sonnet"}}""");
+        var s = AiSettings.Load(dir.Path);
+        Assert.Equal("claude", s.Provider);
+        Assert.True(s.Fallback);
+        Assert.Empty(s.Limits);
+        Assert.Empty(s.Dismissed);
+    }
+
+    [Fact]
     public void Json_is_found_inside_a_chatty_answer()
     {
         Assert.Equal("""{"a": "}"}""", AiJobs.FirstObject("Sure! ```json\n{\"a\": \"}\"}\n```"));

@@ -30,6 +30,12 @@ public sealed class AiSettings
     public Dictionary<string, string> Tests { get; set; } = [];
     /// <summary>The terminal "Open in Claude Code" uses (ghostty, terminal, iterm, warp).</summary>
     public string Terminal { get; set; } = "ghostty";
+    /// <summary>Whether a question goes to Ollama when the engine asked (or picked as a default) can't answer.</summary>
+    public bool Fallback { get; set; } = true;
+    /// <summary>Per provider: until when its usage limit lasts (ISO 8601), while still in the future.</summary>
+    public Dictionary<string, string> Limits { get; set; } = [];
+    /// <summary>Problem ids the student has closed, hidden until the problem changes (a new usage limit, say).</summary>
+    public List<string> Dismissed { get; set; } = [];
 
     public static string PathIn(string home) => System.IO.Path.Combine(home, "ai.json");
 
