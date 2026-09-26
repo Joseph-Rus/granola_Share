@@ -279,6 +279,40 @@ public class CanvasSyncTests
         Assert.True(File.Exists(Path.Combine(root, "assignments", "Problem set 4", "feedback.md")));
     }
 
+    [Fact]
+    public void Instructions_linking_another_assignment_keep_each_in_its_own_folder()
+    {
+        using var dir = new TempDir();
+        // Canvas sends links in instructions as full addresses; Lab 2 (listed before Problem set 4) links Problem set 4.
+        var list = JsonNode.Parse(FakeCanvas.Fixture("cs101-assignments.json"))!.AsArray();
+        list.Single(a => a!["id"]!.GetValue<long>() == 9004)!["description"] = "<p>Trace the three loops on the handout and say what each one prints. "
+            + "You'll trace frames again in <a href=\"https://canvas.test/courses/4201/assignments/9002\">Problem set 4</a>.</p>";
+        var canvas = FakeCanvas.Cs101().Json(AssignmentsPath, list.ToJsonString());
+        var sync = FakeCanvas.Library(dir, () => FakeCanvas.DesignNow);
+        Assert.True(canvas.Run(sync));
+
+        string root = FakeCanvas.CanvasRoot(dir);
+        Assert.Equal("Canvas/assignments/Problem set 4", sync.Crawl.AssignmentFolder("CS 101", 9002));
+        Assert.Equal("Canvas/assignments/Lab 2- tracing loops", sync.Crawl.AssignmentFolder("CS 101", 9004));
+        string lab2 = File.ReadAllText(Path.Combine(root, "assignments", "Lab 2- tracing loops", "spec.md"));
+        Assert.Contains("canvas_id: 9004\n", lab2);
+        Assert.Contains("https://canvas.test/courses/4201/assignments/9002", lab2);
+        Assert.Contains("canvas_id: 9002\n", File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "spec.md")));
+        Assert.True(File.Exists(Path.Combine(root, "assignments", "Problem set 4", "submission", "ps4-answers.pdf")));
+        Assert.False(File.Exists(Path.Combine(root, "assignments", "Lab 2- tracing loops", "submission", "ps4-answers.pdf")));
+
+        // Synced again, and again with the folders found from their specs alone (the sync's state lost): nothing is rewritten.
+        var files = Snapshot(dir["pool"]);
+        Assert.True(canvas.Run(sync));
+        Assert.Equal(files, Snapshot(dir["pool"]));
+        File.Delete(Path.Combine(dir.Path, "crawl.json"));
+        var fresh = FakeCanvas.Library(dir, () => FakeCanvas.DesignNow);
+        Assert.True(canvas.Run(fresh));
+        Assert.Equal(files, Snapshot(dir["pool"]));
+        Assert.Equal("Canvas/assignments/Problem set 4", fresh.Crawl.AssignmentFolder("CS 101", 9002));
+        Assert.Equal("Canvas/assignments/Lab 2- tracing loops", fresh.Crawl.AssignmentFolder("CS 101", 9004));
+    }
+
     /// <summary>Every file under a folder, with its bytes and when it was written.</summary>
     static Dictionary<string, (string Bytes, DateTime Written)> Snapshot(string dir) =>
         Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)

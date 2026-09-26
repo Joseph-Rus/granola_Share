@@ -511,17 +511,30 @@ public sealed partial class Crawl
         return new string(buf, 0, reader.ReadBlock(buf, 0, buf.Length));
     }
 
-    /// <summary>An assignment's folder: the one already made for its Canvas id, one whose spec.md names it (its
-    /// Canvas id, or its Canvas address in one written by hand), else a new one named after it.</summary>
+    /// <summary>A spec's front matter, from its opening "---" to the closing one; "" when it has none.</summary>
+    static string FrontMatter(string head)
+    {
+        if (!head.StartsWith("---", StringComparison.Ordinal)) return "";
+        int end = head.IndexOf("\n---", 3, StringComparison.Ordinal);
+        return end < 0 ? head : head[..end];
+    }
+
+    /// <summary>An assignment's folder: the one already made for its Canvas id, one whose spec.md names it, else a new
+    /// one named after it. A spec the sync wrote names its assignment only by the canvas_id in its front matter; one
+    /// written by hand may name it by its Canvas id or its Canvas address anywhere.</summary>
     string AssignmentDir(string cls, JsonObject a)
     {
         string key = $"asgdir:{cls}:{D(a["id"]):0}";
         if (S(Manifest[key]) is { Length: > 0 } known) return Path.Combine(classDir(cls), known);
         string root = Path.Combine(CanvasDir(cls), "assignments"), id = Num(D(a["id"])), url = S(a["html_url"]);
+        var byId = new Regex($"(?m)^canvas_id: {id}\\r?$");
         // ".../assignments/900" must not claim the spec of ".../assignments/9001".
-        var names = new Regex($"canvas_id: {id}\\n" + (url.Length > 0 ? $"|{Regex.Escape(url)}(?![0-9])" : ""));
+        var byHand = new Regex($"canvas_id: {id}(?![0-9])" + (url.Length > 0 ? $"|{Regex.Escape(url)}(?![0-9])" : ""));
+        // Instructions the sync copied into a spec link other assignments by their full Canvas address, and a link
+        // must not hand the linking assignment's folder to the one it links.
+        bool Names(string head) => head.Contains(Generated, StringComparison.Ordinal) ? byId.IsMatch(FrontMatter(head)) : byHand.IsMatch(head);
         string? dir = Directory.Exists(root)
-            ? Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal).FirstOrDefault(d => SpecHead(d) is { } head && names.IsMatch(head))
+            ? Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal).FirstOrDefault(d => SpecHead(d) is { } head && Names(head))
             : null;
         if (dir is null)
         {
