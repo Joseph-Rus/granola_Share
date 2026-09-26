@@ -1,0 +1,340 @@
+{
+  "count": 8,
+  "modules": [
+    {
+      "id": "m1",
+      "name": "Week 1 · Getting started",
+      "position": 1,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w1-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 1 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w1-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m2",
+      "name": "Week 2",
+      "position": 2,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w2-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 2 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w2-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m3",
+      "name": "Week 3 · Scope",
+      "position": 3,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 5,
+      "items": [
+        {
+          "id": "w3-1",
+          "type": "File",
+          "kind": "file",
+          "title": "scope-note-1.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 100001,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/w3-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "w3-2",
+          "type": "File",
+          "kind": "file",
+          "title": "scope-note-2.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 100002,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/w3-2",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "w3-3",
+          "type": "File",
+          "kind": "file",
+          "title": "scope-note-3.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 100003,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/w3-3",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "w3-4",
+          "type": "File",
+          "kind": "file",
+          "title": "scope-note-4.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 100004,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/w3-4",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "w3-5",
+          "type": "File",
+          "kind": "file",
+          "title": "scope-note-5.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 100005,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/w3-5",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m4",
+      "name": "Week 4 · Recursion",
+      "position": 4,
+      "state": "started",
+      "unlock_at": null,
+      "items_count": 4,
+      "items": [
+        {
+          "id": "mi1",
+          "type": "File",
+          "kind": "file",
+          "title": "recursion-slides.pdf",
+          "indent": 0,
+          "format": "pdf",
+          "size": 850000,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/files/mi1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "mi2",
+          "type": "Page",
+          "kind": "page",
+          "title": "Lab 3 instructions",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/mi2",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "mi3",
+          "type": "ExternalUrl",
+          "kind": "link",
+          "title": "Tracing worksheet",
+          "indent": 0,
+          "format": "pdf",
+          "size": 200000,
+          "local": true,
+          "saved": true,
+          "source": "box",
+          "url": null,
+          "external_url": "https://app.box.com/s/tracing-worksheet",
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        },
+        {
+          "id": "mi4",
+          "type": "ExternalUrl",
+          "kind": "link",
+          "title": "Stack diagrams handout",
+          "indent": 0,
+          "format": "pdf",
+          "size": 300000,
+          "local": true,
+          "saved": true,
+          "source": "drive",
+          "url": null,
+          "external_url": "https://drive.google.com/file/d/stack-diagrams",
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m5",
+      "name": "Week 5",
+      "position": 5,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w5-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 5 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w5-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m6",
+      "name": "Week 6",
+      "position": 6,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w6-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 6 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w6-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m7",
+      "name": "Week 7",
+      "position": 7,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w7-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 7 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w7-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    },
+    {
+      "id": "m8",
+      "name": "Week 8",
+      "position": 8,
+      "state": "completed",
+      "unlock_at": null,
+      "items_count": 1,
+      "items": [
+        {
+          "id": "w8-1",
+          "type": "Page",
+          "kind": "page",
+          "title": "Week 8 overview",
+          "indent": 0,
+          "format": null,
+          "size": null,
+          "local": true,
+          "saved": true,
+          "source": null,
+          "url": "https://school.instructure.com/pages/w8-1",
+          "external_url": null,
+          "assignment_id": null,
+          "locked": false,
+          "skipped": false
+        }
+      ]
+    }
+  ]
+}

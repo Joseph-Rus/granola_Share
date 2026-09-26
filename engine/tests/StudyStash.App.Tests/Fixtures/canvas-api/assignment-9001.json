@@ -1,0 +1,101 @@
+{
+  "class": "CS 101",
+  "id": "9001",
+  "name": "Lab 3: recursion traces",
+  "kind": "assignment",
+  "due": "2025-09-30T23:59",
+  "due_at": "2025-10-01T06:59:00Z",
+  "points": 20,
+  "status": "to_hand_in",
+  "label": "To do",
+  "score": null,
+  "grade": null,
+  "score_text": null,
+  "late": false,
+  "missing": false,
+  "excused": false,
+  "submitted": null,
+  "graded_at": null,
+  "marked_done": null,
+  "url": "https://school.instructure.com/courses/4201/assignments/9001",
+  "folder": "Lab 3",
+  "instructions": "Write three functions that trace their own recursion, then submit your traces alongside the code.",
+  "unlock_at": "2025-09-23T06:59:00Z",
+  "lock_at": null,
+  "submission_types": [
+    "online_upload"
+  ],
+  "allowed_attempts": -1,
+  "grading_type": "points",
+  "files": [],
+  "rubric": [
+    {
+      "id": "r1",
+      "criterion": "Correctness",
+      "description": "Each function returns the right trace.",
+      "points": 10,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 10
+        },
+        {
+          "label": "Partial",
+          "points": 5
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": null
+    },
+    {
+      "id": "r2",
+      "criterion": "Style",
+      "description": "Names read clearly and the trace format matches the handout.",
+      "points": 6,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 6
+        },
+        {
+          "label": "Partial",
+          "points": 3
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": null
+    },
+    {
+      "id": "r3",
+      "criterion": "Write-up",
+      "description": "The short write-up explains what each trace shows.",
+      "points": 4,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 4
+        },
+        {
+          "label": "Partial",
+          "points": 2
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": null
+    }
+  ],
+  "submission": null,
+  "comments": [],
+  "quiz": null,
+  "spec": null,
+  "feedback": null
+}

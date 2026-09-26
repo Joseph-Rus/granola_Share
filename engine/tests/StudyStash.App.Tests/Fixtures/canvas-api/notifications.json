@@ -1,0 +1,38 @@
+{
+  "last": "2025-09-25T17:20:00Z",
+  "items": [
+    {
+      "id": "n1",
+      "kind": "new_assignment",
+      "title": "CS 101",
+      "text": "CS 101 · Lab 3 · due Tue 11:59 PM",
+      "class": "CS 101",
+      "assignment_id": "9001",
+      "announcement_id": null,
+      "at": "2025-09-23T18:00:00Z",
+      "seen": true
+    },
+    {
+      "id": "n2",
+      "kind": "due_moved",
+      "title": "CALC II",
+      "text": "CALC II · Quiz 3 practice · now Fri 9:00 AM",
+      "class": "CALC II",
+      "assignment_id": "8102",
+      "announcement_id": null,
+      "at": "2025-09-24T15:00:00Z",
+      "seen": true
+    },
+    {
+      "id": "n3",
+      "kind": "new_score",
+      "title": "CS 101",
+      "text": "CS 101 · Problem set 4 · 18/20",
+      "class": "CS 101",
+      "assignment_id": "9002",
+      "announcement_id": null,
+      "at": "2025-09-25T17:20:00Z",
+      "seen": false
+    }
+  ]
+}

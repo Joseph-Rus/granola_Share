@@ -1,0 +1,27 @@
+{
+  "state": "syncing",
+  "school": "school.instructure.com",
+  "url": "https://school.instructure.com",
+  "extension": {
+    "seen": "2025-09-25T17:24:00Z",
+    "version": "1.4",
+    "latest": "1.4",
+    "outdated": false,
+    "updated": null
+  },
+  "last_sync": "2025-09-25T16:24:00Z",
+  "next_sync": null,
+  "poll_minutes": 60,
+  "syncing": {
+    "left": 3,
+    "total": 5,
+    "classes": [
+      "BIO 110",
+      "CALC II",
+      "HIST 210"
+    ]
+  },
+  "paused_until": null,
+  "error": null,
+  "warnings": []
+}

@@ -1,0 +1,13 @@
+{
+  "state": "not_set_up",
+  "school": "",
+  "url": "",
+  "extension": null,
+  "last_sync": null,
+  "next_sync": null,
+  "poll_minutes": 60,
+  "syncing": null,
+  "paused_until": null,
+  "error": null,
+  "warnings": []
+}

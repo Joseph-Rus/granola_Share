@@ -1,0 +1,39 @@
+{
+  "allowed": true,
+  "count": 23,
+  "files": [
+    {
+      "id": "cf1",
+      "folder": "Slides",
+      "name": "week1-intro.pdf",
+      "size": 512000,
+      "content_type": "application/pdf",
+      "format": "pdf",
+      "updated_at": "2025-09-02T18:00:00Z",
+      "local": true,
+      "skipped": false
+    },
+    {
+      "id": "cf2",
+      "folder": "Slides",
+      "name": "week2-variables.pdf",
+      "size": 480000,
+      "content_type": "application/pdf",
+      "format": "pdf",
+      "updated_at": "2025-09-09T18:00:00Z",
+      "local": true,
+      "skipped": false
+    },
+    {
+      "id": "cf3",
+      "folder": "Handouts",
+      "name": "syllabus.pdf",
+      "size": 128000,
+      "content_type": "application/pdf",
+      "format": "pdf",
+      "updated_at": "2025-08-25T18:00:00Z",
+      "local": true,
+      "skipped": false
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "url": "https://school.instructure.com",
+  "courses": {
+    "CS 101": 4201,
+    "BIO 110": 4202,
+    "CALC II": 4203,
+    "HIST 210": 0
+  },
+  "available": {
+    "4201": "COMP 101 · Intro to Programming",
+    "4202": "BIO 110 · General Biology",
+    "4203": "MATH 142 · Calculus II",
+    "4204": "HIST 210 · Modern World History"
+  },
+  "course_info": [
+    {
+      "id": "4201",
+      "code": "COMP 101",
+      "name": "COMP 101 · Intro to Programming",
+      "term": "Fall 2025",
+      "url": "https://school.instructure.com/courses/4201"
+    }
+  ],
+  "last_changes": [
+    {
+      "kind": "new",
+      "text": "CS 101 · Lab 3 · due Tue 11:59 PM",
+      "at": "2025-09-23T18:00:00Z"
+    }
+  ],
+  "poll_minutes": 60,
+  "extension_seen": "2025-09-25T17:22:00Z",
+  "extension_version": "1.4",
+  "needs_login": false,
+  "syncing": false,
+  "left": 0,
+  "error": "",
+  "last_sync": "2025-09-25T17:24:00Z",
+  "extension_update": null
+}

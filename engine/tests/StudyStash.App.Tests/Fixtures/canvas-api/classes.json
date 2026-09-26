@@ -1,0 +1,108 @@
+[
+  {
+    "class": "CS 101",
+    "linked": true,
+    "canvas": {
+      "id": "4201",
+      "code": "COMP 101",
+      "name": "COMP 101 · Intro to Programming",
+      "term": "Fall 2025",
+      "url": "https://school.instructure.com/courses/4201"
+    },
+    "suggested": null,
+    "last_sync": "2025-09-25T17:24:00Z",
+    "counts": {
+      "to_hand_in": 1,
+      "done": 4,
+      "modules": 8,
+      "files": 23,
+      "announcements": 4,
+      "announcements_new": 1
+    },
+    "files_hidden": false,
+    "scout": {
+      "state": "done",
+      "files": 14,
+      "when": "2025-09-20T18:00:00Z",
+      "report": null
+    }
+  },
+  {
+    "class": "BIO 110",
+    "linked": true,
+    "canvas": {
+      "id": "4202",
+      "code": "BIO 110",
+      "name": "BIO 110 · General Biology",
+      "term": "Fall 2025",
+      "url": "https://school.instructure.com/courses/4202"
+    },
+    "suggested": null,
+    "last_sync": "2025-09-25T17:24:00Z",
+    "counts": {
+      "to_hand_in": 0,
+      "done": 1,
+      "modules": 5,
+      "files": 9,
+      "announcements": 2,
+      "announcements_new": 0
+    },
+    "files_hidden": false,
+    "scout": {
+      "state": "exploring",
+      "files": 0,
+      "when": null,
+      "report": null
+    }
+  },
+  {
+    "class": "CALC II",
+    "linked": true,
+    "canvas": {
+      "id": "4203",
+      "code": "MATH 142",
+      "name": "MATH 142 · Calculus II",
+      "term": "Fall 2025",
+      "url": "https://school.instructure.com/courses/4203"
+    },
+    "suggested": null,
+    "last_sync": "2025-09-25T17:24:00Z",
+    "counts": {
+      "to_hand_in": 1,
+      "done": 0,
+      "modules": 3,
+      "files": 11,
+      "announcements": 1,
+      "announcements_new": 0
+    },
+    "files_hidden": false,
+    "scout": {
+      "state": "failed",
+      "files": 0,
+      "when": "2025-09-20T18:00:00Z",
+      "report": "Couldn’t reach Canvas."
+    }
+  },
+  {
+    "class": "HIST 210",
+    "linked": false,
+    "canvas": null,
+    "suggested": "4204",
+    "last_sync": null,
+    "counts": {
+      "to_hand_in": 1,
+      "done": 0,
+      "modules": 0,
+      "files": 0,
+      "announcements": 0,
+      "announcements_new": 0
+    },
+    "files_hidden": false,
+    "scout": {
+      "state": "never",
+      "files": 0,
+      "when": null,
+      "report": null
+    }
+  }
+]

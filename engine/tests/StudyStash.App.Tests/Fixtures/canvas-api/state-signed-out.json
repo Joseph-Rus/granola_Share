@@ -1,0 +1,19 @@
+{
+  "state": "signed_out",
+  "school": "school.instructure.com",
+  "url": "https://school.instructure.com",
+  "extension": {
+    "seen": "2025-09-25T17:20:00Z",
+    "version": "1.4",
+    "latest": "1.4",
+    "outdated": false,
+    "updated": null
+  },
+  "last_sync": null,
+  "next_sync": null,
+  "poll_minutes": 60,
+  "syncing": null,
+  "paused_until": null,
+  "error": null,
+  "warnings": []
+}

@@ -1,0 +1,13 @@
+{
+  "state": "no_extension",
+  "school": "school.instructure.com",
+  "url": "https://school.instructure.com",
+  "extension": null,
+  "last_sync": null,
+  "next_sync": null,
+  "poll_minutes": 60,
+  "syncing": null,
+  "paused_until": null,
+  "error": null,
+  "warnings": []
+}

@@ -1,0 +1,50 @@
+{
+  "count": 4,
+  "new": 1,
+  "items": [
+    {
+      "id": "an1",
+      "title": "Office hours moved this week",
+      "posted_at": "2025-09-24T20:00:00Z",
+      "author": "Dr. Okafor",
+      "new": true,
+      "read_on_canvas": false,
+      "body": "Office hours move to Thursday 2–4 PM this week only.",
+      "files": [],
+      "url": "https://school.instructure.com/courses/4201/discussion_topics/an1"
+    },
+    {
+      "id": "an2",
+      "title": "Lab 3 posted",
+      "posted_at": "2025-09-23T18:00:00Z",
+      "author": "Dr. Okafor",
+      "new": false,
+      "read_on_canvas": true,
+      "body": "Lab 3 is up, due next Tuesday.",
+      "files": [],
+      "url": "https://school.instructure.com/courses/4201/discussion_topics/an2"
+    },
+    {
+      "id": "an3",
+      "title": "Problem set 4 grades posted",
+      "posted_at": "2025-09-22T18:30:00Z",
+      "author": "Dr. Okafor",
+      "new": false,
+      "read_on_canvas": true,
+      "body": "Grades and comments for problem set 4 are posted.",
+      "files": [],
+      "url": "https://school.instructure.com/courses/4201/discussion_topics/an3"
+    },
+    {
+      "id": "an4",
+      "title": "Welcome to CS 101",
+      "posted_at": "2025-08-25T16:00:00Z",
+      "author": "Dr. Okafor",
+      "new": false,
+      "read_on_canvas": true,
+      "body": "Welcome! Office hours and the syllabus are posted below.",
+      "files": [],
+      "url": "https://school.instructure.com/courses/4201/discussion_topics/an4"
+    }
+  ]
+}

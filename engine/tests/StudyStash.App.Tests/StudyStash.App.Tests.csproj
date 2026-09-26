@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" LinkBase="Fixtures" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\StudyStash.App\StudyStash.App.csproj" />
   </ItemGroup>
 

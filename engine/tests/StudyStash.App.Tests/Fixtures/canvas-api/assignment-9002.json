@@ -1,0 +1,167 @@
+{
+  "class": "CS 101",
+  "id": "9002",
+  "name": "Problem set 4",
+  "kind": "assignment",
+  "due": "2025-09-16T23:59",
+  "due_at": "2025-09-17T06:59:00Z",
+  "points": 20,
+  "status": "graded",
+  "label": "Graded",
+  "score": 18,
+  "grade": null,
+  "score_text": "18/20",
+  "late": false,
+  "missing": false,
+  "excused": false,
+  "submitted": "2025-09-17T04:41:00Z",
+  "graded_at": "2025-09-22T18:00:00Z",
+  "marked_done": null,
+  "url": "https://school.instructure.com/courses/4201/assignments/9002",
+  "folder": "Problem set 4",
+  "instructions": "Prove the closed form for the recurrence, then implement and test it.",
+  "unlock_at": "2025-09-09T06:59:00Z",
+  "lock_at": "2025-09-17T06:59:00Z",
+  "submission_types": [
+    "online_upload"
+  ],
+  "allowed_attempts": 2,
+  "grading_type": "points",
+  "files": [
+    {
+      "id": "f9002a",
+      "name": "ps4-answers.pdf",
+      "size": 1258291,
+      "content_type": "application/pdf",
+      "format": "pdf",
+      "local": true,
+      "skipped": false,
+      "url": "https://school.instructure.com/files/f9002a"
+    },
+    {
+      "id": "f9002b",
+      "name": "ps4.py",
+      "size": 4096,
+      "content_type": "text/x-python",
+      "format": "py",
+      "local": true,
+      "skipped": false,
+      "url": "https://school.instructure.com/files/f9002b"
+    }
+  ],
+  "rubric": [
+    {
+      "id": "r1",
+      "criterion": "Base case",
+      "description": "The base case is proved.",
+      "points": 5,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 5
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": {
+        "points": 5,
+        "rating": "Full marks",
+        "comment": null
+      }
+    },
+    {
+      "id": "r2",
+      "criterion": "Recursive case",
+      "description": "The inductive step is proved for every n.",
+      "points": 10,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 10
+        },
+        {
+          "label": "Partial",
+          "points": 8
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": {
+        "points": 8,
+        "rating": "Partial",
+        "comment": "The frame for n = 1 is missing in 3b."
+      }
+    },
+    {
+      "id": "r3",
+      "criterion": "Helper functions",
+      "description": "Helpers are named for what they return.",
+      "points": 5,
+      "ratings": [
+        {
+          "label": "Full marks",
+          "points": 5
+        },
+        {
+          "label": "No marks",
+          "points": 0
+        }
+      ],
+      "mark": {
+        "points": 5,
+        "rating": "Full marks",
+        "comment": "Name helpers after what they return."
+      }
+    }
+  ],
+  "submission": {
+    "state": "graded",
+    "attempt": 1,
+    "submitted_at": "2025-09-17T04:41:00Z",
+    "graded_at": "2025-09-22T18:00:00Z",
+    "score": 18,
+    "grade": null,
+    "late": false,
+    "points_deducted": null,
+    "body": null,
+    "files": [
+      {
+        "id": "f9002a",
+        "name": "ps4-answers.pdf",
+        "size": 1258291,
+        "content_type": "application/pdf",
+        "format": "pdf",
+        "local": true,
+        "skipped": false,
+        "url": "https://school.instructure.com/files/f9002a"
+      },
+      {
+        "id": "f9002b",
+        "name": "ps4.py",
+        "size": 4096,
+        "content_type": "text/x-python",
+        "format": "py",
+        "local": true,
+        "skipped": false,
+        "url": "https://school.instructure.com/files/f9002b"
+      }
+    ],
+    "attempts": 1
+  },
+  "comments": [
+    {
+      "author": "Dr. Okafor",
+      "at": "2025-09-22T18:00:00Z",
+      "text": "Good work overall. Watch the last frame in 3b, it’s the one people drop.",
+      "files": [],
+      "media_url": null
+    }
+  ],
+  "quiz": null,
+  "spec": null,
+  "feedback": null
+}
