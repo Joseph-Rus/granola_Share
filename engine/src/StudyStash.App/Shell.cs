@@ -706,7 +706,9 @@ public static partial class Shell
         var (status, good) = host.Status();
         panel.Status = status;
         panel.StatusGood = good;
-        library.Status = host.Library switch
+        library.Status = host.Settings.Role != AppRole.Laptop && host.LocalLibrary?.State == LibraryServiceState.Running
+            ? $"Library running on this {(OperatingSystem.IsMacOS() ? "Mac" : "PC")}"
+            : host.Library switch
         {
             LibraryState.Connected => "Library connected",
             LibraryState.Starting => "Starting your library…",

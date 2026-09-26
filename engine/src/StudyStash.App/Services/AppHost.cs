@@ -415,7 +415,9 @@ public sealed class AppHost : IDisposable
     /// <summary>"Library connected · Model ready", or what needs doing, and whether all is well.</summary>
     public (string Text, bool Good) Status()
     {
-        string lib = Library switch
+        string lib = Settings.Role != AppRole.Laptop && LocalLibrary?.State == LibraryServiceState.Running
+            ? $"Library running on this {(OperatingSystem.IsMacOS() ? "Mac" : "PC")}"
+            : Library switch
         {
             LibraryState.Connected => "Library connected",
             LibraryState.Starting => "Starting your library…",
