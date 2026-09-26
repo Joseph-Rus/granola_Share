@@ -222,6 +222,10 @@ public static partial class Shell
         Item("Quit Study Stash", () => Quit());
         if (OperatingSystem.IsWindows()) tray.Menu = menu;
         TrayIcon.SetIcons(app, new TrayIcons { tray });
+        // Windows' tray ink is black or white depending on the theme; redraw it when that changes (a Mac's menu bar
+        // tints its own template image, so its icon needs no redraw).
+        if (OperatingSystem.IsWindows())
+            app.ActualThemeVariantChanged += (_, _) => tray.Icon = TrayImage(trayRecording);
     }
 
     // --- what the buttons do ---------------------------------------------------------------------------------------
@@ -659,12 +663,10 @@ public static partial class Shell
             run?.Invoke();
         };
         view.Dismissed += w.Close;
-        var (area, scale) = w.WorkArea();
+        var (_, scale) = w.WorkArea();
         var size = w.Measured(scale);
         int room = (int)(Floating.ShadowRoom * scale);
-        w.Position = OperatingSystem.IsMacOS()
-            ? new PixelPoint(area.Right - size.Width - (int)(12 * scale) + room, area.Y + (int)(12 * scale) - room)
-            : new PixelPoint(area.Right - size.Width - (int)(12 * scale) + room, area.Bottom - size.Height - (int)(12 * scale) + room);
+        w.Position = Placement.ToastSpot(w.ScreenList(), 0, size, OperatingSystem.IsMacOS(), room);
         w.Show();
         DispatcherTimer.RunOnce(() =>
         {
