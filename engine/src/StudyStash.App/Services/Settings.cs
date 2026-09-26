@@ -90,6 +90,8 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool ComputerAudio { get; set; }
     [ObservableProperty] public partial string KeepAudio { get; set; } = "30";
     [ObservableProperty] public partial bool Shortcuts { get; set; }
+    /// <summary>Which shortcut (if either) another app already has, once the toggle's had a moment to try them.</summary>
+    [ObservableProperty] public partial string? ShortcutsSay { get; set; }
     public bool CanRecordComputerAudio => host.CanRecordComputerAudio;
 
     // Classes
@@ -208,6 +210,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         };
         OnPropertyChanged(nameof(CanStartLibrary));
         OnPropertyChanged(nameof(CanStopLibrary));
+        ShortcutsSay = Shell.ShortcutsSay();
         ModelLine = ModelWords(host);
         foreach (var m in Models)
         {

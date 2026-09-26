@@ -53,6 +53,8 @@ public static partial class Shell
     /// <summary>What's wrong right now (from <see cref="Problems"/>), so the panel's Fix button knows what to do.</summary>
     static AppProblem? currentProblem;
     static LibraryState lastLibraryState = LibraryState.NotSetUp;
+    static bool hotkeysOn;
+    static HotkeyResult hotkeys;
 
     public static AppHost Host => host;
 
@@ -97,7 +99,7 @@ public static partial class Shell
         Wire();
         host.Start();
         MakeTray();
-        if (host.Settings.Shortcuts && !Hotkeys.Register(OnShortcut)) Program.Log("[app] the shortcuts are taken by another app");
+        ApplyShortcutsSetting(force: true);
         ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => Tick());
         ticker.Start();
         Refresh();
@@ -151,8 +153,43 @@ public static partial class Shell
 
     static void OnShortcut(Shortcut s)
     {
+        if (!host.Settings.SetupDone)
+        {
+            ShowSetup();
+            return;
+        }
         if (s == Shortcut.Quick) ToggleQuick();
         else ToggleRecording();
+    }
+
+    /// <summary>The Shortcuts toggle in Settings applies at once, without restarting: turned off, both let go;
+    /// turned back on, they're asked for again (and the app says if either is taken).</summary>
+    static void ApplyShortcutsSetting(bool force = false)
+    {
+        bool wanted = host.Settings.Shortcuts;
+        if (!force && wanted == hotkeysOn) return;
+        hotkeysOn = wanted;
+        if (wanted)
+        {
+            hotkeys = Hotkeys.Register(OnShortcut);
+            if (!hotkeys.All) Program.Log("[app] a shortcut is taken by another app");
+        }
+        else
+        {
+            Hotkeys.Unregister();
+            hotkeys = new HotkeyResult(true, true);
+        }
+    }
+
+    /// <summary>Settings' words about the shortcuts: which one (if any) another app already has.</summary>
+    public static string? ShortcutsSay()
+    {
+        if (!hotkeysOn) return null;
+        string quick = Skin.Current == SkinKind.Mac ? "⌥Space" : "Alt+Shift+Space";
+        string record = Skin.Current == SkinKind.Mac ? "⌥⇧R" : "Ctrl+Alt+R";
+        if (!hotkeys.Quick) return $"{quick} is taken by another app, so search from the menu bar.";
+        if (!hotkeys.Record) return $"{record} is taken by another app, so record from the menu bar.";
+        return null;
     }
 
     /// <summary>Quit Study Stash, with an exit code (the self-test's pass or fail). Only the first call counts.</summary>
@@ -765,6 +802,7 @@ public static partial class Shell
     static void Refresh()
     {
         if (quitting) return;
+        ApplyShortcutsSetting();
         var live = host.Recorder.Current;
         liveId = live?.Id;
         bool recording = live is not null;

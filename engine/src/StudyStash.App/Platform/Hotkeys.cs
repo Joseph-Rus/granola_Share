@@ -12,15 +12,22 @@ public enum Shortcut
     Record = 2,
 }
 
+/// <summary>Whether each shortcut is registered, so Settings can say which one (if any) is taken by another app.</summary>
+public readonly record struct HotkeyResult(bool Quick, bool Record)
+{
+    public bool All => Quick && Record;
+}
+
 /// <summary>
 /// The app's shortcuts, working from any app: Carbon's hot keys on a Mac (no permission needed), RegisterHotKey on
-/// Windows. Pressed, they call back on the UI thread.
+/// Windows. Pressed, they call back on the UI thread. <see cref="Register"/> can be called again after
+/// <see cref="Unregister"/> (the Shortcuts toggle in Settings turns them on and off without restarting).
 /// </summary>
 public static class Hotkeys
 {
     static Action<Shortcut>? pressed;
 
-    public static bool Register(Action<Shortcut> onPressed)
+    public static HotkeyResult Register(Action<Shortcut> onPressed)
     {
         pressed = onPressed;
         try
@@ -31,7 +38,20 @@ public static class Hotkeys
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
         {
         }
-        return false;
+        return new HotkeyResult(false, false);
+    }
+
+    /// <summary>Let both shortcuts go: another app (or nobody) can have them until <see cref="Register"/> again.</summary>
+    public static void Unregister()
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS()) Mac.Unregister();
+            else if (OperatingSystem.IsWindows()) Win.Unregister();
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
     }
 
     static void Fire(Shortcut s) => Avalonia.Threading.Dispatcher.UIThread.Post(() => pressed?.Invoke(s));
@@ -69,24 +89,37 @@ public static class Hotkeys
         static extern int RegisterEventHotKey(uint keyCode, uint modifiers, HotKeyId id, IntPtr target, uint options, IntPtr* outRef);
 
         [DllImport(Carbon)]
+        static extern int UnregisterEventHotKey(IntPtr hotKeyRef);
+
+        [DllImport(Carbon)]
         static extern int GetEventParameter(IntPtr evt, uint name, uint type, IntPtr outType, nuint size, IntPtr outSize, void* data);
 
         static bool installed;
+        static IntPtr quickRef, recordRef;
 
-        public static bool Register()
+        public static HotkeyResult Register()
         {
             IntPtr target = GetApplicationEventTarget();
             if (!installed)
             {
                 var spec = new EventTypeSpec { Class = KeyboardClass, Kind = HotKeyPressed };
                 IntPtr handler;
-                if (InstallEventHandler(target, &OnHotKey, 1, &spec, IntPtr.Zero, &handler) != 0) return false;
+                if (InstallEventHandler(target, &OnHotKey, 1, &spec, IntPtr.Zero, &handler) != 0) return new HotkeyResult(false, false);
                 installed = true;
             }
             IntPtr a, b;
             bool quick = RegisterEventHotKey(KeySpace, Option, new HotKeyId { Signature = Signature, Id = (uint)Shortcut.Quick }, target, 0, &a) == 0;
             bool record = RegisterEventHotKey(KeyR, Option | Shift, new HotKeyId { Signature = Signature, Id = (uint)Shortcut.Record }, target, 0, &b) == 0;
-            return quick && record;
+            quickRef = quick ? a : IntPtr.Zero;
+            recordRef = record ? b : IntPtr.Zero;
+            return new HotkeyResult(quick, record);
+        }
+
+        public static void Unregister()
+        {
+            if (quickRef != IntPtr.Zero) UnregisterEventHotKey(quickRef);
+            if (recordRef != IntPtr.Zero) UnregisterEventHotKey(recordRef);
+            quickRef = recordRef = IntPtr.Zero;
         }
 
         [UnmanagedCallersOnly]
@@ -130,12 +163,15 @@ public static class Hotkeys
         [DllImport("user32.dll")]
         static extern bool RegisterHotKey(IntPtr hwnd, int id, uint mods, uint vk);
 
+        [DllImport("user32.dll")]
+        static extern bool UnregisterHotKey(IntPtr hwnd, int id);
+
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         static extern IntPtr GetModuleHandleW(string? name);
 
         static IntPtr window;
 
-        public static bool Register()
+        public static HotkeyResult Register()
         {
             if (window == IntPtr.Zero)
             {
@@ -143,11 +179,18 @@ public static class Hotkeys
                 var cls = new WndClass { Size = (uint)sizeof(WndClass), Proc = &Proc, Instance = GetModuleHandleW(null), ClassName = name };
                 RegisterClassExW(&cls);
                 window = CreateWindowExW(0, "StudyStashHotkeys", "Study Stash", 0, 0, 0, 0, 0, MessageOnly, IntPtr.Zero, cls.Instance, IntPtr.Zero);
-                if (window == IntPtr.Zero) return false;
+                if (window == IntPtr.Zero) return new HotkeyResult(false, false);
             }
             bool quick = RegisterHotKey(window, (int)Shortcut.Quick, ModAlt | ModShift | ModNoRepeat, VkSpace);
             bool record = RegisterHotKey(window, (int)Shortcut.Record, ModControl | ModAlt | ModNoRepeat, VkR);
-            return quick && record;
+            return new HotkeyResult(quick, record);
+        }
+
+        public static void Unregister()
+        {
+            if (window == IntPtr.Zero) return;
+            UnregisterHotKey(window, (int)Shortcut.Quick);
+            UnregisterHotKey(window, (int)Shortcut.Record);
         }
 
         [UnmanagedCallersOnly]
