@@ -15,12 +15,12 @@ namespace StudyStash.Library;
 public static class Cli
 {
     /// <summary>The words that make the app the engine instead of opening its windows.</summary>
-    public static readonly string[] Commands = ["run", "serve", "setup", "init", "login", "logout", "sync", "tools", "client", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
+    public static readonly string[] Commands = ["run", "serve", "setup", "init", "login", "logout", "sync", "tools", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
 
     /// <summary>True when these arguments name a command (options may come first: <c>--home DIR run</c>).</summary>
     public static bool IsCommand(IReadOnlyList<string> args)
     {
-        string[] valued = ["--home", "--role", "--server", "--key"];
+        string[] valued = ["--home", "--role"];
         for (int i = 0; i < args.Count; i++)
         {
             if (valued.Contains(args[i])) { i++; continue; }
@@ -34,9 +34,8 @@ public static class Cli
     {
         // The C# engine. The Study Stash apps still start the Python one: these commands are for trying this one out.
         //   The library:  run | serve | setup --page | init | login | logout | sync | tools
-        //   The laptop:   client run | client open | client once | client login
         //   Both:         doctor | update | autostart | config-check | version
-        string[] valued = ["--home", "--role", "--server", "--key"];
+        string[] valued = ["--home", "--role"];
         string? Option(string name) => Array.IndexOf(args, name) is int i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         bool Flag(string name) => args.Contains(name);
         // The command and its words, wherever the options are: a service runs `studystash --home DIR run`.
@@ -58,7 +57,7 @@ public static class Cli
             stop.Cancel();
         });
 
-        string command = string.Join(" ", words.Take(words.FirstOrDefault() == "client" ? 2 : 1));
+        string command = words.FirstOrDefault() ?? "";
         if (command is not ("version" or "")) Directory.CreateDirectory(home);
         try
         {
@@ -74,10 +73,6 @@ public static class Cli
                 "tools" => await Tools(),
                 "mcp" => await Mcp(),
                 "ai" => await AiCommand(),
-                "client run" => await ClientRun(),
-                "client open" => await ClientOpen(),
-                "client once" => await ClientOnce(),
-                "client login" => await SignIn(GranolaOAuth.For(Configs.LoadClient(home))),
                 "doctor" => await Doctor.RunAsync(home, Option("--role"), DoctorHost.ThisComputer()),
                 "update" => await Update(),
                 "autostart" => AutostartCommand(),
@@ -85,8 +80,6 @@ public static class Cli
                 "version" => Print(Engine.Version),
                 _ => Print("usage: studystash run | serve | setup --page [--no-browser] | init | login [--no-browser] | logout\n"
                     + "       | sync [--once] [--no-ollama] | tools [--probe]\n"
-                    + "       | client run [--no-ui] | client open [--install] [--server URL] [--key KEY] [--no-browser]\n"
-                    + "       | client once [--auto] | client login [--no-browser]\n"
                     + "       | doctor [--role server|client] | update [--check] [--force]\n"
                     + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
                     + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
@@ -346,49 +339,6 @@ public static class Cli
             }
             string transcript = await client.GetTranscriptAsync(s, stubs[0].Id, stop.Token);
             Console.WriteLine($"\n== transcript: {transcript.Length} chars ==" + (transcript.Length > 0 ? "" : " (none: free Granola plans don't share transcripts)"));
-            return 0;
-        }
-
-        // --- the laptop -------------------------------------------------------------------------------------------------
-
-        // The background service: the watcher, plus the Study Stash page for setup and status.
-        async Task<int> ClientRun()
-        {
-            if (UnderWindowsKeepAlive("client")) return 0;
-            var rt = new LaptopRuntime(home, LaptopHost.ThisComputer(restart: stop.Cancel), stop);
-            var cc = rt.Config();
-            Console.WriteLine($"studystash {Engine.Version}: "
-                + (rt.Configured() ? $"watching Granola for '{cc.PoolName}'" : "waiting for setup in the Study Stash page"));
-            if (rt.Configured()) rt.StartWatching();
-            else if (Flag("--no-ui")) return Print("Not set up yet: open Study Stash, or run `granola-share client setup`.", 1);
-            if (Flag("--no-ui")) await Until(stop.Token);
-            else await LaptopWeb.ServeAsync(rt, stop: stop.Token);
-            return 0;
-        }
-
-        // What the Study Stash icon and the installer run: start the service if needed, then open its page.
-        async Task<int> ClientOpen()
-        {
-            LaptopWeb.WritePrefill(home, Option("--server") ?? Env("GRANOLA_SHARE_SERVER"), Option("--key") ?? Env("GRANOLA_SHARE_KEY"));
-            bool install = Flag("--install");
-            string? url = await LaptopApp.OpenAsync(home, install, browser: !Flag("--no-browser"));
-            if (url is null) return 1;
-            if (Flag("--no-browser")) return Print(url);
-            Console.WriteLine("Study Stash is open." + (install ? " Finish setting up there." : ""));
-            return Print($"If nothing opened, go to: {url}");
-        }
-
-        async Task<int> ClientOnce()
-        {
-            var cc = Configs.LoadClient(home);
-            if (cc.ServerUrl.Length == 0) return Print("Not set up yet: run `granola-share client setup`.", 1);
-            if (Flag("--auto")) cc.Mode = "auto";
-            var host = LaptopHost.ThisComputer();
-            var client = new ShareClient(cc, host.Granola(cc), host, cc.CopyTranscripts ? new TranscriptStore(home) : null);
-            var rep = await client.PollOnceAsync(ct: stop.Token);
-            Console.WriteLine($"listed={rep.Listed} considered={rep.Considered} shared={rep.Shared.Count} skipped={rep.Skipped.Count} "
-                + $"pending={rep.Pending.Count} errors={rep.Errors.Count}");
-            foreach (string e in rep.Errors) Console.WriteLine("  error: " + e);
             return 0;
         }
 

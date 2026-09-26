@@ -2,16 +2,12 @@ using System.Text;
 
 namespace StudyStash.Core;
 
-/// <summary>What the laptop has: the Granola app (null when it isn't there), whether Granola makes one for this
-/// system, and Tailscale.</summary>
-public sealed record LaptopInfo(string? Granola, bool GranolaHere, TailscaleInfo Tailscale);
-
 /// <summary>Downloads `url` to `dest`, calling progress(done, total) as it goes; returns dest.</summary>
 public delegate Task<string> Fetch(string url, string dest, Action<long, long>? progress);
 
 /// <summary>
-/// Get each computer ready (ready.py). The library's: Tailscale, so your laptop and phone reach it from anywhere, and
-/// Ollama, which writes the study notes. The laptop's: Granola, which records the lectures, and Tailscale.
+/// Get the library's computer ready (ready.py): Tailscale, so your laptop and phone reach it from anywhere, and Ollama,
+/// which writes the study notes.
 ///
 /// Installs use each app's official download, the way you'd install it by hand: the Ollama app and Tailscale's own
 /// installer. Nothing here takes admin rights by itself. When an installer needs them, the system asks you (macOS for
@@ -26,7 +22,6 @@ public static class Ready
     public const string TailscaleWindows = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe";
     public const string TailscaleLinux = "curl -fsSL https://tailscale.com/install.sh | sh";
     public const string TailscaleDownload = "https://tailscale.com/download";
-    public const string GranolaDownload = "https://www.granola.ai/download";
     /// <summary>Every Tailscale address is in this range.</summary>
     public const string Tailnet = "100.64.0.0/10";
 
@@ -241,70 +236,6 @@ public static class Ready
         {
         }
         return false;
-    }
-
-    // --- the laptop: Granola ---------------------------------------------------------------------------------------
-
-    /// <summary>Where the Granola app is, or null. Granola has apps for macOS and Windows only.</summary>
-    public static string? GranolaApp(string? system = null, Runner? run = null, AppPlaces? at = null)
-    {
-        system ??= Machine.Platform;
-        at ??= AppPlaces.Default;
-        if (system == "Darwin")
-        {
-            foreach (string app in new[] { Path.Combine(at.SystemApps, "Granola.app"), Path.Combine(at.PersonalApps, "Granola.app") })
-                if (Directory.Exists(app)) return app;
-            // anywhere else Spotlight knows about
-            var p = (run ?? Machine.Run)("mdfind", ["kMDItemCFBundleIdentifier == \"com.granola.app\""], TimeSpan.FromSeconds(5));
-            return Py.SplitLines(p?.Stdout ?? "").FirstOrDefault(line => line.EndsWith(".app", StringComparison.Ordinal));
-        }
-        if (system == "Windows")
-        {
-            // Its installer puts it in your account, in a folder named after the project (@granolaelectron).
-            var roots = new List<string> { Path.Combine(at.LocalAppData, "Programs") };
-            foreach (string name in new[] { "ProgramFiles", "ProgramW6432" })
-                if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } root && !roots.Contains(root)) roots.Add(root);
-            foreach (string root in roots)
-                foreach (string folder in new[] { "@granolaelectron", "Granola" })
-                    if (File.Exists(Path.Combine(root, folder, "Granola.exe"))) return Path.Combine(root, folder, "Granola.exe");
-            return GranolaFromRegistry();
-        }
-        return null;
-    }
-
-    /// <summary>Granola's entry in Windows' installed apps, wherever it went. (A power-saving app from MiserWare is
-    /// also called Granola: not that one.)</summary>
-    static string? GranolaFromRegistry()
-    {
-        if (!OperatingSystem.IsWindows()) return null;
-        foreach (var root in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
-        {
-            try
-            {
-                using var apps = root.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall");
-                if (apps is null) continue;
-                foreach (string name in apps.GetSubKeyNames())
-                {
-                    using var app = apps.OpenSubKey(name);
-                    string Value(string key) => app?.GetValue(key)?.ToString() ?? "";
-                    if (Value("DisplayName").StartsWith("Granola", StringComparison.Ordinal)
-                        && !Value("Publisher").Contains("miserware", StringComparison.OrdinalIgnoreCase))
-                        return Value("InstallLocation") is { Length: > 0 } where ? where
-                            : Value("DisplayIcon").Split(',')[0] is { Length: > 0 } icon ? icon : Value("DisplayName");
-                }
-            }
-            catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-            {
-            }
-        }
-        return null;
-    }
-
-    public static LaptopInfo LaptopChecks(string? system = null, Func<string, string?>? granola = null, Func<TailscaleInfo>? tailscale = null)
-    {
-        system ??= Machine.Platform;
-        bool here = system is "Darwin" or "Windows";
-        return new LaptopInfo(here ? (granola ?? (s => GranolaApp(s)))(system) : null, here, (tailscale ?? (() => HostInfo.Tailscale()))());
     }
 
     // --- Windows: the firewall -----------------------------------------------------------------------------------
