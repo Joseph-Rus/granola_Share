@@ -170,4 +170,18 @@
     <Setter Property="HorizontalContentAlignment" Value="Left" />
   </Style>
 
+  <!-- The course/interval picker, restyled as Fluent's ctrl pill (a Button + Flyout: the ComboBox template fights
+       a custom look harder than it's worth). -->
+  <Style Selector="Button.cv-select">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
 </Styles>
