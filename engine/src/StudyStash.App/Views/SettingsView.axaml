@@ -20,25 +20,18 @@
              xmlns:c="using:StudyStash.App.Controls"
              x:Class="StudyStash.App.Views.SettingsView"
              x:DataType="s:SettingsModel"
+             Classes="mac"
              ClipToBounds="False">
   <UserControl.Styles>
-    <Style Selector="UserControl.mac">
-      <Setter Property="Width" Value="900" />
-      <Setter Property="Height" Value="780" />
-    </Style>
-    <Style Selector="UserControl.win">
-      <Setter Property="Width" Value="900" />
-      <Setter Property="Height" Value="860" />
-    </Style>
-
     <!-- The window's own frame: Mac a rounded, shadowed slab of Win; Windows Mica behind a hairline border. -->
     <Style Selector="Border.chrome">
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
     <Style Selector="UserControl.mac Border.chrome">
       <Setter Property="Background" Value="{DynamicResource Win}" />
-      <Setter Property="CornerRadius" Value="26" />
-      <Setter Property="BoxShadow" Value="{DynamicResource WindowShadow}" />
+    </Style>
+    <Style Selector=".mac Grid#Cols">
+      <Setter Property="Background" Value="Magenta" />
     </Style>
     <Style Selector="UserControl.win Border.chrome">
       <Setter Property="Background" Value="{DynamicResource Mica}" />

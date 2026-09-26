@@ -18,6 +18,9 @@ public partial class SettingsView : UserControl
         // shape as a by-look DynamicResource pair and would otherwise treat "mac"/"win" as token names.
         if (mac) Classes.Add("mac"); else Classes.Add("win");
         Cols.ColumnDefinitions[0].Width = new GridLength(mac ? 220 : 240);
+        // Fixed, like the design's canvas: set here (not by a style on the root matching itself) so it always wins.
+        Width = 900;
+        Height = mac ? 780 : 860;
     }
 
     /// <summary>A real window has the system's traffic lights (Mac) or caption buttons (Windows); screenshots draw

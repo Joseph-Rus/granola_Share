@@ -248,4 +248,49 @@ public partial class ThemeTests
             Skin.UseTheme(ColourThemes.Default);
         }
     }
+
+    /// <summary>Settings → Appearance: picking a swatch swaps the live accent and saves the choice, no restart.</summary>
+    [AvaloniaFact]
+    public void Picking_a_theme_in_settings_saves_it_and_repaints()
+    {
+        var app = (App)Application.Current!;
+        app.UseSkin(SkinKind.Mac);
+        Skin.UseTheme(ColourThemes.Default);
+        string home = Path.Combine(Path.GetTempPath(), "studystash-picktheme-" + Guid.NewGuid().ToString("N"));
+        var host = new AppHost(home);
+        var model = SettingsModel.Make(host);
+        try
+        {
+            var swatch = new Border { Width = 20, Height = 20, [!Border.BackgroundProperty] = new DynamicResourceExtension("Accent") };
+            var window = new Window { Width = 40, Height = 40, RequestedThemeVariant = ThemeVariant.Light, Content = swatch };
+            window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(ColourThemes.Default.O(0.58, 0.12), ((ISolidColorBrush)swatch.Background!).Color);
+
+                model.PickThemeCommand.Execute("Plum");
+                Dispatcher.UIThread.RunJobs();
+                var plum = ColourThemes.Find("Plum");
+                Assert.Same(plum, Skin.Theme);
+                Assert.Equal("Plum", model.ColourTheme);
+                Assert.True(model.Themes.Single(t => t.Name == "Plum").Chosen);
+                Assert.False(model.Themes.Single(t => t.Name == "Lagoon").Chosen);
+                Assert.Equal(plum.O(plum.L, plum.C), ((ISolidColorBrush)swatch.Background!).Color);
+                Assert.Contains("\"theme\": \"Plum\"", File.ReadAllText(AppSettings.PathIn(home)));
+                Assert.Equal("Plum", AppSettings.Load(home).Theme);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            model.Dispose();
+            host.Dispose();
+            Skin.UseTheme(ColourThemes.Default);
+            if (Directory.Exists(home)) Directory.Delete(home, recursive: true);
+        }
+    }
 }

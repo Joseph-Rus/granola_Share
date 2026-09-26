@@ -471,4 +471,40 @@ public class SurfaceShots
         foreach (var t in Themes)
             Shot.Take("win-themes", SkinKind.Win, t, () => ThemeSheet(SkinKind.Win, () => new WinPanel { DataContext = Demo.Panel(recording: false) }), size: new Size(2090, 1120));
     }
+
+    /// <summary>A settings window over a temp home (never a real one), for a section's shot; disposed after.</summary>
+    static (Services.SettingsModel Model, Services.AppHost Host, string Home) MakeSettings(string section)
+    {
+        string home = Path.Combine(Path.GetTempPath(), "studystash-settings-" + Guid.NewGuid().ToString("N"));
+        var host = new Services.AppHost(home);
+        var model = Services.SettingsModel.Make(host);
+        model.Section = section;
+        return (model, host, home);
+    }
+
+    static void SettingsShots(SkinKind skin, Size size)
+    {
+        foreach (string section in new[] { "General", "Appearance" })
+        {
+            var (model, host, home) = MakeSettings(section);
+            try
+            {
+                foreach (var t in Themes)
+                    Shot.Take($"{(skin == SkinKind.Mac ? "mac" : "win")}-settings-{section.ToLowerInvariant()}", skin, t,
+                        () => new SettingsView { DataContext = model, DrawChrome = true }, size: size);
+            }
+            finally
+            {
+                model.Dispose();
+                host.Dispose();
+                if (Directory.Exists(home)) Directory.Delete(home, recursive: true);
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Mac_settings() => SettingsShots(SkinKind.Mac, new Size(1700, 908));
+
+    [AvaloniaFact]
+    public void Win_settings() => SettingsShots(SkinKind.Win, new Size(1700, 988));
 }
