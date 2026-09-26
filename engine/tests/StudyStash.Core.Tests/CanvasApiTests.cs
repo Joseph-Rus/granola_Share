@@ -286,6 +286,72 @@ public class CanvasApiTests
     }
 
     [Fact]
+    public void State_says_syncing_with_how_many_classes_are_left()
+    {
+        var dir = new TempDir();
+        var now = FakeCanvas.DesignNow;
+        var sync = FakeCanvas.Library(dir, () => now, ("CS 101", 4201L), ("BIO 110", 4202L));
+        var canvas = FakeCanvas.Cs101()
+            .Json("/api/v1/courses/4202/assignments", "bio110-assignments.json").Json("/api/v1/courses/4202/students/submissions", "[]")
+            .Json("/api/v1/courses/4202/modules", "[]").Json("/api/v1/courses/4202/discussion_topics", "[]");
+        var initial = sync.Work(force: true).Jobs; // starts the sync; nothing answered yet, so both classes are still "reading"
+        Assert.True(sync.Crawl.Active);
+        var state = CanvasView.State(sync, now);
+        Assert.Equal("syncing", state["state"]!.GetValue<string>());
+        Assert.Equal((2, 2), (state["syncing"]!["left"]!.GetValue<int>(), state["syncing"]!["total"]!.GetValue<int>()));
+        var left = state["syncing"]!["classes"]!.AsArray().Select(c => c!.GetValue<string>()).ToList();
+        Assert.Contains("CS 101", left);
+        Assert.Contains("BIO 110", left);
+
+        // Answer what's already out, then let the rest of the sync run to completion: "syncing" is gone.
+        sync.Results(initial.Select(canvas.Answer).ToList());
+        Assert.True(canvas.Run(sync, force: false));
+        Assert.Null(CanvasView.State(sync, now)["syncing"]);
+    }
+
+    [Fact]
+    public async Task Notifications_after_a_second_sync_carry_a_new_assignment_and_a_new_score()
+    {
+        var dir = new TempDir();
+        var now = FakeCanvas.DesignNow;
+        var sync = FakeCanvas.Library(dir, () => now, ("CS 101", 4201L));
+        var canvas = FakeCanvas.Cs101();
+        Assert.True(canvas.Run(sync));
+
+        // A new assignment appears, and Problem set 4's score changes (the submissions listing is what the
+        // promoted index's submission comes from once it's read "ok": T3's CanvasIndex.Submissions).
+        var updated = JsonNode.Parse(FakeCanvas.Fixture("cs101-submissions.json"))!.AsArray();
+        var ps4 = updated.First(a => a!["assignment_id"]!.GetValue<long>() == 9002)!.AsObject();
+        ps4["score"] = 19.0;
+        ps4["grade"] = "19";
+        canvas.Json("/api/v1/courses/4201/students/submissions", updated.ToJsonString());
+        var assignments = JsonNode.Parse(FakeCanvas.Fixture("cs101-assignments.json"))!.AsArray();
+        assignments.Add(JsonNode.Parse("""
+            {"id":9010,"name":"Lab 4: dynamic programming","description":"<p>Coming soon.</p>","course_id":4201,
+             "due_at":"2025-10-08T06:59:00Z","points_possible":20.0,"grading_type":"points","submission_types":["online_upload"],
+             "allowed_attempts":-1,"published":true,"has_submitted_submissions":false,
+             "html_url":"https://canvas.test/courses/4201/assignments/9010",
+             "submission":{"id":89010,"assignment_id":9010,"user_id":5501,"workflow_state":"unsubmitted","submitted_at":null,
+                 "graded_at":null,"score":null,"grade":null,"attempt":null,"late":false,"missing":false,"excused":false,"points_deducted":null}}
+            """));
+        canvas.Json("/api/v1/courses/4201/assignments", assignments.ToJsonString());
+        Assert.True(canvas.Run(sync));
+
+        var (cfg, store, options) = LibraryFor(dir, sync);
+        await using var site = await TestSite.StartAsync(b => LibraryWeb.Build(b, cfg, store, new Pipeline(cfg, store, log: _ => { }), options));
+        using var _ = store;
+        var notes = await GetAsync(site, "/api/v2/canvas/notifications");
+        var kinds = notes["items"]!.AsArray().Select(i => i!["kind"]!.GetValue<string>()).ToList();
+        Assert.Contains("new_assignment", kinds);
+        Assert.Contains("new_score", kinds);
+        Assert.Contains(notes["items"]!.AsArray(), i => i!["kind"]!.GetValue<string>() == "new_score" && i["text"]!.GetValue<string>().Contains("19"));
+
+        long last = notes["last"]!.GetValue<long>();
+        Assert.True((await PostAsync(site, "/api/v2/canvas/notifications/seen", $$"""{"up_to":{{last}}}""")).IsSuccessStatusCode);
+        Assert.Empty((await GetAsync(site, "/api/v2/canvas/notifications?after=" + last))["items"]!.AsArray());
+    }
+
+    [Fact]
     public async Task Raw_file_serves_a_saved_file_and_refuses_a_path_that_leaves_the_class_folder()
     {
         var (dir, site, _) = await SyncedAsync();
