@@ -142,7 +142,7 @@ public class SummarizeTests
             seen = prompt;
             return Task.FromResult("""{"class_name": "Calc 1", "confidence": 0.9, "lecture_title": "Derivatives", "topics": ["derivatives"]}""");
         }, Notes("## Overview\nOur own notes on derivatives."), Quiet);
-        store.Enqueue(new Meeting("m1") { Title = "Lecture", Owner = "Sam", NotesMarkdown = "Granola's weaker summary", Transcript = Lines(40) });
+        store.Enqueue(new Meeting("m1") { Title = "Lecture", Owner = "Sam", NotesMarkdown = "The notes it came with", Transcript = Lines(40) });
         Assert.Equal(1, await p.RunPendingAsync());
         var row = store.Get("m1")!;
         Assert.StartsWith("## Overview", row.SummaryMd);
@@ -152,29 +152,24 @@ public class SummarizeTests
         string text = Py.ReadText(row.MdPath!);
         Assert.Contains("### Overview", text);
         Assert.Contains("Written by big:35b", text);
-        Assert.DoesNotContain("Granola's weaker summary", text);
+        Assert.DoesNotContain("The notes it came with", text); // our notes replace them
         Assert.Contains("## Transcript", text);
-
-        cfg.KeepGranolaNotes = true;
-        store.Requeue("m1");
-        await p.RunPendingAsync();
-        Assert.Contains("Granola's weaker summary", Py.ReadText(store.Get("m1")!.MdPath!));
     }
 
     [Fact]
-    public async Task Pipeline_falls_back_to_granola_when_model_fails()
+    public async Task Pipeline_keeps_the_notes_a_lecture_came_with_when_the_model_fails()
     {
         using var dir = new TempDir();
         var cfg = CfgFor(dir);
         cfg.Classes = [];
         using var store = new Store(cfg.DbPath, cfg.PoolDir);
         var p = new Pipeline(cfg, store, summarize: (_, _) => throw new InvalidOperationException("model 'big:35b' not found"), log: Quiet);
-        store.Enqueue(new Meeting("m2") { Title = "Lecture", NotesMarkdown = "Granola notes", Transcript = Lines(40) });
+        store.Enqueue(new Meeting("m2") { Title = "Lecture", NotesMarkdown = "Notes typed in class", Transcript = Lines(40) });
         await p.RunPendingAsync();
         var row = store.Get("m2")!;
         Assert.Equal(("done", Configs.Unsorted, (string?)null), (row.Status, row.ClassName, row.SummaryMd));
         Assert.Contains("not found", row.Error);
-        Assert.Contains("Granola notes", Py.ReadText(row.MdPath!));
+        Assert.Contains("Notes typed in class", Py.ReadText(row.MdPath!));
     }
 
     [Fact]
@@ -333,7 +328,7 @@ public class SummarizeTests
     {
         // A small model once looped for 39,000 tokens on a short transcript (Ollama shifts its context and keeps
         // going). Notes are capped at MaxNotesTokens, and hitting the cap or repeating lines fails the summary, so
-        // the lecture keeps Granola's notes instead of the loop.
+        // the lecture keeps its transcript (and any notes it came with) instead of the loop.
         var cfg = new Config(".", ".");
         string reason = "stop";
         var ollama = new FakeOllama((_, _) => new JsonObject

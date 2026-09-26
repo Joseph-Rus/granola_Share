@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 
 namespace StudyStash.Core;
 
@@ -13,11 +12,9 @@ public sealed record TailscaleInfo(bool Installed = false, bool Running = false,
     public List<string> Ips { get; init; } = Ips ?? [];
 }
 
-/// <summary>Where this computer can be reached (Tailscale), and the one-line install for your laptop.</summary>
-public static partial class HostInfo
+/// <summary>Where this computer can be reached (Tailscale), and whether a library already answers on a port.</summary>
+public static class HostInfo
 {
-    public const string Raw = "https://raw.githubusercontent.com/Joseph-Rus/study-stash/main";
-
     public static readonly string[] TailscalePaths =
         ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", @"C:\Program Files\Tailscale\tailscale.exe"];
 
@@ -81,20 +78,6 @@ public static partial class HostInfo
         return urls;
     }
 
-    [GeneratedRegex(@"[^\w@%+=:,./-]", RegexOptions.ECMAScript)]
-    private static partial Regex ShellUnsafe();
-
-    /// <summary>shlex.quote: as it is when it's safe for a shell, else in single quotes.</summary>
-    public static string ShQuote(string s) =>
-        s.Length == 0 ? "''" : !ShellUnsafe().IsMatch(s) ? s : "'" + s.Replace("'", "'\"'\"'") + "'";
-
-    static string PsQuote(string s) => "'" + s.Replace("'", "''") + "'";
-
-    /// <summary>One-liners that install the laptop side with this library's address and password filled in.</summary>
-    public static (string Mac, string Windows) InviteCommands(string url, string key) => (
-        $"curl -fsSL {Raw}/install.sh | GRANOLA_SHARE_SERVER={ShQuote(url)} GRANOLA_SHARE_KEY={ShQuote(key)} sh",
-        $"$env:GRANOLA_SHARE_SERVER={PsQuote(url)}; $env:GRANOLA_SHARE_KEY={PsQuote(key)}; irm {Raw}/install.ps1 | iex");
-
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(3) };
 
     /// <summary>"free", "ours" (a Study Stash library already answers there), or "busy" (something else has it).</summary>
@@ -117,11 +100,12 @@ public static partial class HostInfo
         try
         {
             using var r = await (http ?? Http).GetAsync($"http://127.0.0.1:{port}/api/health");
-            if (r.Headers.Contains("x-granola-share")) return "ours";
-            // 0.1 didn't send that header, but its health check answers in a recognizable way.
+            if (r.Headers.Contains("x-study-stash")) return "ours";
+            // Libraries before this one sent another header (0.1 none), but their health check answers in a
+            // recognizable way: the library's details, or its password refusal.
             var body = r.Content.Headers.ContentType?.MediaType == "application/json"
                 ? Py.JsonLoads(await r.Content.ReadAsStringAsync()) as JsonObject : null;
-            if ((r.StatusCode == HttpStatusCode.Unauthorized && Py.AsString(body?["detail"]) == "bad pool password")
+            if ((r.StatusCode == HttpStatusCode.Unauthorized && Py.AsString(body?["detail"]) is "bad pool password" or "wrong password")
                 || (r.StatusCode == HttpStatusCode.OK && body is not null && body.ContainsKey("pool_name") && body.ContainsKey("classes")))
                 return "ours";
         }

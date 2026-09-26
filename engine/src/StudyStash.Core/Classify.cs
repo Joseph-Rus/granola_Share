@@ -9,8 +9,8 @@ namespace StudyStash.Core;
 public delegate Task<string> SortChatFn(Config cfg, string prompt, JsonObject schema);
 
 /// <summary>
-/// Decide which class a note belongs in. The student's own Granola folder or title wins; otherwise a local
-/// Ollama model answers against a strict JSON schema; otherwise Unsorted.
+/// Decide which class a lecture belongs in. The class it was recorded for, or a title that matches a class, wins;
+/// otherwise the AI answers against a strict JSON schema; otherwise Unsorted.
 /// </summary>
 public static partial class Classify
 {
@@ -82,7 +82,7 @@ public static partial class Classify
             "",
             $"Title: {m.Title}",
             $"Date: {m.Date}",
-            $"Granola folder: {(m.Folder.Length > 0 ? m.Folder : "(none)")}",
+            $"Recorded for: {(m.Folder.Length > 0 ? m.Folder : "(none)")}",
             $"Attendees: {(m.Attendees.Count > 0 ? string.Join(", ", m.Attendees) : "(none)")}",
             "",
             "Notes:",

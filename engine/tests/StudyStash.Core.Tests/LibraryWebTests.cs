@@ -201,7 +201,11 @@ public class LibraryWebTests
         string s = await c.Text("/settings");
         Assert.Contains("qwen3:1.7b", s);
         Assert.Contains("Connect your laptop", s);
-        Assert.Contains("GRANOLA_SHARE_SERVER=http://mini.tail.ts.net:8787", s);
+        Assert.Contains("<span class=\"value\">http://mini.tail.ts.net:8787</span>", s);
+        Assert.Contains("<span class=\"value\">pw</span>", s);
+        Assert.Contains("/Study-Stash-Laptop.dmg\">Mac</a>", s);
+        Assert.Contains("/Study-Stash-Laptop-Setup.exe\">Windows</a>", s);
+        Assert.DoesNotContain("GRANOLA", s);
         Assert.Contains("Rewrite summary", await c.Text("/note/n1"));
 
         var r = await c.PostForm("/settings",
@@ -213,7 +217,7 @@ public class LibraryWebTests
             ("class_name_3", ""), ("class_aliases_3", ""), ("class_desc_3", ""));
         Assert.Equal((HttpStatusCode.SeeOther, "/settings?saved=1"), (r.StatusCode, r.Headers.Location!.OriginalString));
         var back = Configs.Load(cfg.Home);
-        Assert.Equal(("qwen3:1.7b", 0.7, false), (back.SummaryModel, back.MinConfidence, back.KeepGranolaNotes));
+        Assert.Equal(("qwen3:1.7b", 0.7), (back.SummaryModel, back.MinConfidence));
         Assert.Equal(["CS 101", "Chem 1A"], back.ClassNames());
         Assert.Equal(["cs101", "intro"], back.Classes[0].Aliases);
         Assert.Equal(["CS 101", "Chem 1A"], cfg.ClassNames()); // the running app sees it right away
@@ -334,7 +338,7 @@ public class LibraryWebTests
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse($$"""{"ok": true, "pool_name": "Fall pool", "classes": ["CS 101", "Bio 110"], "notes": 0, "version": "{{Engine.Version}}"}"""),
             JsonNode.Parse(await r.Content.ReadAsStringAsync())));
-        Assert.Equal(Engine.Version, r.Headers.GetValues("X-Granola-Share").Single());
+        Assert.Equal(Engine.Version, r.Headers.GetValues("X-Study-Stash").Single());
     }
 
     [Fact]

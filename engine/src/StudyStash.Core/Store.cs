@@ -85,8 +85,7 @@ public static partial class Notes
         return string.Join("\n", output);
     }
 
-    public static string Render(Meeting m, Classification c, string summaryMd = "", string summaryModel = "",
-        bool keepGranola = false)
+    public static string Render(Meeting m, Classification c, string summaryMd = "", string summaryModel = "")
     {
         var topicList = c.Topics ?? [];
         string topics = string.Join(", ", topicList);
@@ -100,12 +99,12 @@ public static partial class Notes
             $"class: {PyJson.Dumps(c.ClassName)}",
             $"date: {PyJson.Dumps(m.Date)}",
             $"source: {PyJson.Dumps(m.Owner)}",
-            $"granola_id: {PyJson.Dumps(m.Id)}",
-            $"granola_folder: {PyJson.Dumps(m.Folder)}",
+            $"id: {PyJson.Dumps(m.Id)}",
+            $"folder: {PyJson.Dumps(m.Folder)}",
             $"attendees: {PyJson.Dumps(m.Attendees)}",
             $"topics: {PyJson.Dumps(topicList)}",
             $"classified_by: {c.By} ({Py.FormatFixed(c.Confidence, 2)})",
-            $"summary_by: {PyJson.Dumps(summarized ? summaryModel : "granola")}",
+            $"summary_by: {PyJson.Dumps(summarized ? summaryModel : "")}",
             "---",
             "",
             $"# {lectureTitle}",
@@ -117,8 +116,6 @@ public static partial class Notes
         {
             lines.AddRange(["## Summary", "", DemoteHeadings(Py.Strip(summaryMd)), "",
                 $"_Written by {summaryModel} from the transcript._", ""]);
-            if (keepGranola && Py.Strip(m.NotesMarkdown).Length > 0)
-                lines.AddRange(["## Granola's notes", "", DemoteHeadings(Py.Strip(m.NotesMarkdown)), ""]);
         }
         else
         {
@@ -361,7 +358,7 @@ public sealed class Store : IDisposable
     /// dropped (a re-queued note simply runs again). If a person moved the note meanwhile, their class wins.
     /// </summary>
     public string? Finish(NoteRow claimed, Meeting m, Classification c, string summaryMd = "", string summaryModel = "",
-        string error = "", bool keepGranola = false)
+        string error = "")
     {
         lock (gate)
         {
@@ -369,7 +366,7 @@ public sealed class Store : IDisposable
             if (row is null || row.Status != Working || row.UpdatedAt != claimed.UpdatedAt) return null;
             if (row.ClassifiedBy == "human" && !string.IsNullOrEmpty(row.ClassName))
                 c = new Classification(row.ClassName, 1.0, "human", c.LectureTitle, c.Topics);
-            return Save(m, c, summaryMd, summaryModel, error, keepGranola);
+            return Save(m, c, summaryMd, summaryModel, error);
         }
     }
 
@@ -429,13 +426,12 @@ public sealed class Store : IDisposable
     }
 
     /// <summary>Write the Markdown file and mark the note done.</summary>
-    public string Save(Meeting m, Classification c, string summaryMd = "", string summaryModel = "", string error = "",
-        bool keepGranola = false)
+    public string Save(Meeting m, Classification c, string summaryMd = "", string summaryModel = "", string error = "")
     {
         lock (gate)
         {
             string path = TargetPath(m, c.ClassName);
-            Py.WriteText(path, Notes.Render(m, c, summaryMd, summaryModel, keepGranola));
+            Py.WriteText(path, Notes.Render(m, c, summaryMd, summaryModel));
             string now = Now();
             string? oldPath = null, firstSeen = null;
             bool known = false;
@@ -661,7 +657,7 @@ public sealed class Store : IDisposable
         }
     }
 
-    public string? SetClass(string noteId, string className, string by = "human", bool keepGranola = false)
+    public string? SetClass(string noteId, string className, string by = "human")
     {
         lock (gate)
         {
@@ -676,7 +672,7 @@ public sealed class Store : IDisposable
             string? old = string.IsNullOrEmpty(row.MdPath) ? null : row.MdPath;
             var m = Meeting(row);
             var c = new Classification(className, 1.0, by, row.LectureTitle ?? "", JsonList(row.Topics));
-            string newPath = Save(m, c, row.SummaryMd ?? "", row.SummaryModel ?? "", row.Error ?? "", keepGranola);
+            string newPath = Save(m, c, row.SummaryMd ?? "", row.SummaryModel ?? "", row.Error ?? "");
             DropEmptyDir(old, newPath);
             return newPath;
         }

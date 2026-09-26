@@ -128,7 +128,7 @@ public class StoreClassifyTests
         var c = new Classification("CS 101", 0.875, "ollama", "Recursion and trees", ["recursion", "trees", "base case"]);
         Assert.Equal(Golden.Text("note-notes.md"), Notes.Render(m, c));
         string summary = "## Overview\nWe met recursion.\n\n```\n## not a heading\n```\n\n#### Deep\n###### Six";
-        Assert.Equal(Golden.Text("note-summary.md"), Notes.Render(m, c, summary, "big:35b", keepGranola: true));
+        Assert.Equal(Golden.Text("note-summary.md"), Notes.Render(m, c, summary, "big:35b"));
         Assert.Equal(Golden.Text("note-bare.md"), Notes.Render(new Meeting("x") { Title = "Untitled" },
             new Classification("Unsorted", 0.125, "none")));
     }

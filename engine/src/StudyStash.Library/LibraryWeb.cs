@@ -117,7 +117,7 @@ public sealed partial class LibraryWeb
 {
     static readonly Dictionary<string, string> SortedBy = new()
     {
-        ["folder"] = "its Granola folder", ["rules"] = "its title", ["ollama"] = "AI", ["human"] = "a person", ["none"] = "nobody yet",
+        ["folder"] = "the class it was recorded for", ["rules"] = "its title", ["ollama"] = "AI", ["human"] = "a person", ["none"] = "nobody yet",
     };
     static readonly string[] ProxyHeaders = ["x-forwarded-for", "forwarded", "tailscale-user-login"];
 
@@ -302,7 +302,7 @@ public sealed partial class LibraryWeb
         {
             ctx.Response.OnStarting(() =>
             {
-                ctx.Response.Headers["X-Granola-Share"] = Engine.Version; // setup tells our server from another app on the port
+                ctx.Response.Headers["X-Study-Stash"] = Engine.Version; // setup tells our server from another app on the port
                 return Task.CompletedTask;
             });
             await next();
@@ -445,7 +445,7 @@ public sealed partial class LibraryWeb
         string lede = c.Total > 0
             ? $"{c.Total} lecture{Plural(c.Total, "", "s")} across {nClasses} class{Plural(nClasses, "", "es")}." : "";
         string empty = c.Processing > 0 ? ""
-            : "<div class=\"empty\"><strong>No lectures yet</strong>Lectures you record in Granola show up here "
+            : "<div class=\"empty\"><strong>No lectures yet</strong>Lectures you record with Study Stash show up here "
               + "once your laptop sends them. To connect it, see <a href=\"/settings\">Settings</a>.</div>";
         // Phones have no sidebar: the classes are a list here instead, like folders in Notes.
         string folders = string.Concat(c.Classes.Select(x =>
@@ -529,8 +529,10 @@ public sealed partial class LibraryWeb
             + $"<select name=\"class_name\" aria-label=\"Class (pick another to move this lecture)\">{options}</select>"
             + "<button class=\"js-hide\">Move</button></form>";
         var about = new List<(string, string)> { ("Class", picker), ("Date", Ui.Esc(Ui.LongDate(r.Date))) };
-        if (!string.IsNullOrEmpty(r.SummaryMd)) about.Add(("Summary", $"Notes by {Ui.Esc(r.SummaryModel)}, from the transcript"));
-        else about.Add(("Summary", "Granola's summary" + (r.HasTranscript is > 0 ? "" : " (no transcript shared)")));
+        bool cameWithNotes = Py.Strip(m.NotesMarkdown).Length > 0;
+        about.Add(("Summary", !string.IsNullOrEmpty(r.SummaryMd) ? $"Notes by {Ui.Esc(r.SummaryModel)}, from the transcript"
+            : cameWithNotes ? "The notes it came with"
+            : r.HasTranscript is > 0 ? "No study notes yet" : "No transcript, so no study notes"));
         if (!string.IsNullOrEmpty(r.ClassifiedBy))
         {
             string sure = r.ClassifiedBy == "ollama"
@@ -555,19 +557,18 @@ public sealed partial class LibraryWeb
         else if (!string.IsNullOrEmpty(r.Error))
         {
             string retry = role == "admin" ? $"<form method=\"post\" action=\"/note/{nid}/resummarize\"><button>Try again</button></form>" : "";
-            notice = $"<div class=\"notice bad\"><div>{Ui.Esc(Py.Head(r.Error, 300))}. Showing Granola's summary instead.{retry}</div></div>";
+            string shown = cameWithNotes ? " Showing the notes it came with." : "";
+            notice = $"<div class=\"notice bad\"><div>{Ui.Esc(Py.Head(r.Error, 300))}.{shown}{retry}</div></div>";
         }
 
         var docs = new List<(string Id, string Label, string Html)>();
         if (!string.IsNullOrEmpty(r.SummaryMd))
             docs.Add(("summary", "Summary", $"<div class=\"prose\">{Ui.RenderMd(r.SummaryMd)}</div>"
                 + $"<p class=\"byline\">Written by {Ui.Esc(r.SummaryModel)} from the transcript.</p>"));
-        if (Py.Strip(m.NotesMarkdown).Length > 0 && (string.IsNullOrEmpty(r.SummaryMd) || cfg.KeepGranolaNotes))
-            docs.Add(("granola", !string.IsNullOrEmpty(r.SummaryMd) ? "Granola's summary" : "Summary",
-                $"<div class=\"prose\">{Ui.RenderMd(m.NotesMarkdown)}</div>"));
+        else if (cameWithNotes) docs.Add(("notes", "Notes", $"<div class=\"prose\">{Ui.RenderMd(m.NotesMarkdown)}</div>"));
         if (Py.Strip(m.PrivateNotes).Length > 0) docs.Add(("typed", "Typed notes", $"<div class=\"prose\">{Ui.RenderMd(m.PrivateNotes)}</div>"));
         if (Py.Strip(m.Transcript).Length > 0) docs.Add(("transcript", "Transcript", $"<div class=\"transcript\">{Ui.Esc(Py.Strip(m.Transcript))}</div>"));
-        if (docs.Count == 0) docs.Add(("summary", "Summary", "<p class=\"muted\">Granola returned no notes for this lecture.</p>"));
+        if (docs.Count == 0) docs.Add(("summary", "Summary", "<p class=\"muted\">No notes for this lecture yet.</p>"));
         string tabs = string.Concat(docs.Select(d =>
             $"<button type=\"button\" role=\"tab\" data-for=\"{d.Id}\" aria-controls=\"{d.Id}\">{Ui.Esc(d.Label)}</button>"));
         string panes = string.Concat(docs.Select(d => $"<section id=\"{d.Id}\" role=\"tabpanel\">{d.Html}</section>"));
@@ -587,7 +588,7 @@ public sealed partial class LibraryWeb
     {
         string className = (await Http.FormAsync(ctx.Request)).Get("class_name");
         if (!cfg.ClassNames().Append(Configs.Unsorted).Contains(className)) return Http.Detail(400, "unknown class");
-        store.SetClass(noteId, className, keepGranola: cfg.KeepGranolaNotes);
+        store.SetClass(noteId, className);
         return Http.SeeOther($"/note/{Ui.Quote(noteId, "")}");
     });
 
@@ -694,14 +695,13 @@ public sealed partial class LibraryWeb
             + "models write better notes but take longer. Using the same model for both avoids reloading it between "
             + "the two steps.</p>"
             + "<div class=\"group-head\">Notes and sorting</div><div class=\"group\">"
-            + Switch("summary_enabled", cfg.SummaryEnabled, "Write our own summary when a transcript is shared")
-            + Switch("keep_granola_notes", cfg.KeepGranolaNotes, "Also keep Granola's summary next to ours")
+            + Switch("summary_enabled", cfg.SummaryEnabled, "Write study notes from each transcript")
             + Switch("ollama_enabled", cfg.OllamaEnabled, "Use AI to sort lectures into classes")
             + "<div class=\"row\"><label class=\"grow\" for=\"min_confidence\">Minimum confidence to file a lecture</label>"
             + "<input id=\"min_confidence\" name=\"min_confidence\" type=\"number\" min=\"0\" max=\"1\" step=\"0.05\" "
             + $"value=\"{Py.FloatRepr(cfg.MinConfidence)}\" style=\"width:5.5rem\"></div></div>"
             + "<p class=\"group-foot\">Below the minimum confidence, a lecture goes to Unsorted for you to file. With AI "
-            + "off, only Granola folder and title rules sort lectures.</p>";
+            + "off, only the class a lecture was recorded for, or its title, sorts it.</p>";
 
         var rows = new List<string>();
         var all = cfg.Classes.Append(new ClassDef("")).ToList();
@@ -719,22 +719,17 @@ public sealed partial class LibraryWeb
                 + "</div>");
         }
         string classes = $"<div class=\"group-head\">Classes</div><div class=\"group\">{string.Concat(rows)}</div>"
-            + "<p class=\"group-foot\">Lectures are sorted into these. A Granola folder or a title that matches a "
-            + "name here files the lecture without asking the AI. Removing a class keeps its lectures; move them "
+            + "<p class=\"group-foot\">Lectures are sorted into these. A lecture recorded for a class, or whose title "
+            + "matches a name here, is filed without asking the AI. Removing a class keeps its lectures; move them "
             + "from their pages. Fill in the last row to add a class.</p>";
         string form = $"<form method=\"post\" action=\"/settings\">{ai}{classes}"
             + "<div class=\"actions\"><button class=\"primary\">Save settings</button></div></form>";
 
         var ts = options.Tailscale();
         string url = HostInfo.ServerUrls(cfg.WebPort, ts, options.HostName())[0];
-        var (mac, windows) = HostInfo.InviteCommands(url, cfg.PoolPassword);
         string tsNote = ts.Running ? ""
             : "<div class=\"notice\"><div>Tailscale isn't running on this computer, so your laptop can only reach "
               + "it on the same Wi-Fi. Install Tailscale on both and sign in to the same account.</div></div>";
-        static string Command(string label, string cid, string text) =>
-            "<div class=\"fields\"><div class=\"toolbar\" style=\"justify-content:space-between\">"
-            + $"<strong>{label}</strong><button type=\"button\" class=\"link\" data-copy=\"{cid}\">Copy</button></div>"
-            + $"<pre class=\"code\" id=\"{cid}\">{Ui.Esc(text)}</pre></div>";
         const string dl = "https://github.com/Joseph-Rus/study-stash/releases/latest/download";
         string invite = $"<div class=\"group-head\">Connect your laptop</div>{tsNote}<div class=\"group\">"
             + $"<div class=\"row\"><span class=\"grow\">Address</span><span class=\"value\">{Ui.Esc(url)}</span></div>"
@@ -742,11 +737,7 @@ public sealed partial class LibraryWeb
             + "<div class=\"row\"><span class=\"grow\">Study Stash for the laptop</span><span class=\"value\">"
             + $"<a href=\"{dl}/Study-Stash-Laptop.dmg\">Mac</a> · <a href=\"{dl}/Study-Stash-Laptop-Setup.exe\">Windows</a>"
             + "</span></div></div><p class=\"group-foot\">On the computer you record lectures on, install Study Stash, "
-            + "open it, and enter this address and password.</p>"
-            + "<details class=\"help\"><summary>Or with one line in a terminal</summary><div class=\"group\">"
-            + Command("Mac or Linux", "inv-mac", mac) + Command("Windows", "inv-win", windows)
-            + "</div><p class=\"group-foot\">Paste one into Terminal (Mac) or PowerShell (Windows). It installs "
-            + "everything with this address and password filled in.</p></details>";
+            + "open it, and enter this address and password.</p>";
 
         var rel = await options.Latest(3600);
         string upd;
@@ -787,7 +778,6 @@ public sealed partial class LibraryWeb
         string sort = Py.Strip(f.Get("ollama_model", cfg.OllamaModel));
         if (sort.Length > 0) cfg.OllamaModel = sort;
         cfg.SummaryEnabled = f.Get("summary_enabled") == "1";
-        cfg.KeepGranolaNotes = f.Get("keep_granola_notes") == "1";
         cfg.OllamaEnabled = f.Get("ollama_enabled") == "1";
         if (double.TryParse(Py.Strip(f.Get("min_confidence", Py.FloatRepr(cfg.MinConfidence))), NumberStyles.Float,
                 CultureInfo.InvariantCulture, out double confidence) && !double.IsNaN(confidence))

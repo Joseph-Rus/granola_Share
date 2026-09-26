@@ -56,7 +56,7 @@ public class LibrarySetupTests
     static Task<HttpResponseMessage> Post(TestSite site, string path, object? body = null)
     {
         var r = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body ?? new { }) };
-        r.Headers.TryAddWithoutValidation("X-Granola-Share", "1");
+        r.Headers.TryAddWithoutValidation("X-Study-Stash", "1");
         return site.Client.SendAsync(r);
     }
 
@@ -329,6 +329,6 @@ public class LibrarySetupTests
         var (_, c) = await Client(dir, Fakes());
         await using var __ = c;
         var health = await Json(await c.Get("/healthz"));
-        Assert.Equal(("granola-share-setup", Engine.Version), (health["app"].S(), health["version"].S()));
+        Assert.Equal(("study-stash-setup", Engine.Version), (health["app"].S(), health["version"].S()));
     }
 }

@@ -124,9 +124,9 @@ public sealed class SetupHost
 public sealed record SetupChecks(double? Ram, double? Disk, TailscaleInfo Tailscale, List<(string Name, double SizeGb)>? Models, bool OllamaInstalled);
 
 /// <summary>
-/// The library's setup as a page, so nobody needs a terminal (library_setup.py): the six steps of `granola-share
-/// setup`, done with buttons and fields. Answers are kept in setup_draft.json as you go, and config.toml is written
-/// only when you finish: that's how the app knows the library exists.
+/// The library's setup as a page, so nobody needs a terminal: six steps, done with buttons and fields. Answers are
+/// kept in setup_draft.json as you go, and config.toml is written only when you finish: that's how the app knows the
+/// library exists.
 /// </summary>
 public sealed partial class LibrarySetup
 {
@@ -438,7 +438,7 @@ public sealed partial class LibrarySetup
         Cfg.OllamaEnabled = false;
         DraftModels = true;
         SaveDraft();
-        return "The library will sort by Granola folder and title only, and keep Granola's notes.";
+        return "The library will sort by class and title only, and keep each transcript without study notes.";
     }
 
     // --- step 5: keeping it running -------------------------------------------------------------------------------
@@ -492,10 +492,10 @@ public sealed partial class LibrarySetup
         return "Finishing...";
     }
 
-    public async Task<(List<string> Urls, string Password, string Name, (string Mac, string Windows) Commands)> ConnectInfoAsync()
+    public async Task<(List<string> Urls, string Password, string Name)> ConnectInfoAsync()
     {
         var urls = HostInfo.ServerUrls(Cfg.WebPort, (await ChecksAsync()).Tailscale, Host.HostName());
-        return (urls, Cfg.PoolPassword, Cfg.PoolName, HostInfo.InviteCommands(urls[0], Cfg.PoolPassword));
+        return (urls, Cfg.PoolPassword, Cfg.PoolName);
     }
 
     /// <summary>Changes whenever a step's look changes, so the page knows to reload.</summary>

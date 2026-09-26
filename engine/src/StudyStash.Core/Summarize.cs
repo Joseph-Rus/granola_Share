@@ -14,15 +14,14 @@ public delegate Task<int?> ShowFn(Config cfg, string model);
 public sealed class RunawayOutputException(string message) : Exception(message);
 
 /// <summary>
-/// Write lecture notes from the transcript with a local Ollama model. Granola's own summary comes from whatever
-/// model Granola runs; this writes the notes with the model you pick, from the raw transcript. Transcripts longer
-/// than the model's context are summarized in parts, then merged.
+/// Write study notes from a lecture's transcript with the model you pick (a local Ollama model here). Transcripts
+/// longer than the model's context are summarized in parts, then merged.
 /// </summary>
 public static partial class Summarize
 {
     public const double CharsPerToken = 3.5; // rough, for English speech
     // Below this (a couple of minutes of speech) there's too little to fill the notes: small models then pad and
-    // loop. Such lectures keep Granola's own summary.
+    // loop. Such lectures keep their transcript without study notes.
     public const int MinTranscriptChars = 1500;
     // Good notes are well under 2,000 tokens. Without a cap, a small model that starts repeating itself never
     // stops: Ollama keeps shifting its context and generating (39,000 tokens seen, from llama3.2:3b).
@@ -80,7 +79,7 @@ public static partial class Summarize
         var data = await Ollama.PostAsync(cfg.OllamaHost, "/api/chat", body, TimeSpan.FromSeconds(900), http);
         if (Py.AsString(data?["done_reason"]) == "length")
             throw new RunawayOutputException($"{model} kept writing past {numPredict} tokens without finishing "
-                + "(small models sometimes loop), so Granola's notes stay");
+                + "(small models sometimes loop), so no notes were written from it");
         return Py.AsString(data?["message"]?["content"]) ?? throw new InvalidDataException("Ollama sent no message");
     }
 
@@ -144,7 +143,7 @@ public static partial class Summarize
         var fence = Fenced().Match(t);
         t = Py.Strip(fence.Success ? fence.Groups[1].Value : t);
         if (Repetitive(t))
-            throw new RunawayOutputException("the model repeated itself instead of writing notes, so Granola's notes stay");
+            throw new RunawayOutputException("the model repeated itself instead of writing notes, so no notes were written from it");
         return t;
     }
 
@@ -208,7 +207,7 @@ public static partial class Summarize
     static string Header(Meeting m)
     {
         var lines = new List<string> { $"Lecture: {m.Title}", $"Date: {Py.Head(m.Date, 10)}" };
-        if (m.Folder.Length > 0) lines.Add($"Granola folder: {m.Folder}");
+        if (m.Folder.Length > 0) lines.Add($"Recorded for: {m.Folder}");
         return string.Join("\n", lines);
     }
 

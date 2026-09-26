@@ -43,18 +43,13 @@ public class UiTests
     }
 
     [Fact]
-    public void Hosts_and_install_lines_match_python()
+    public void Hosts_and_versions_match_python()
     {
         foreach (var c in L("tailscale_problem"))
         {
             var t = c![0]!.AsObject();
             var ts = new TailscaleInfo(t["installed"]?.GetValue<bool>() ?? false, t["running"]?.GetValue<bool>() ?? false, t["state"]?.S() ?? "");
             Assert.Equal(c[1].S(), HostInfo.TailscaleProblem(ts));
-        }
-        foreach (var c in L("invite"))
-        {
-            var (mac, windows) = HostInfo.InviteCommands(c![0].S(), c[1].S());
-            Assert.Equal((c[2]!["mac"].S(), c[2]!["windows"].S()), (mac, windows));
         }
         foreach (var c in L("parse_version"))
             Assert.Equal(c![1]!.AsArray().Select(n => n!.GetValue<int>()), Updates.ParseVersion(c[0].S()));

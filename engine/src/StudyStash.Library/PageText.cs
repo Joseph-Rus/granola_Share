@@ -277,7 +277,7 @@ internal static class PageText
     public const string AppJs =
         "\n" +
         "function post(url, data){\n" +
-        "  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Granola-Share':'1'},\n" +
+        "  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Study-Stash':'1'},\n" +
         "    body:JSON.stringify(data||{})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.detail||r.statusText);return j;});});\n" +
         "}\n" +
         "function say(id, text, kind){var el=document.getElementById(id);if(el){el.textContent=text;el.className='say '+(kind||'');}}\n" +
@@ -302,7 +302,7 @@ internal static class PageText
         "var watch=document.body.dataset.watch;\n" +
         "document.querySelectorAll('form[data-autosave]').forEach(function(f){\n" +
         "  f.addEventListener('change',function(){f.requestSubmit();});});\n" +
-        "if(watch){var seen=null;setInterval(function(){fetch('/api/state',{headers:{'X-Granola-Share':'1'}}).then(function(r){return r.json();})\n" +
+        "if(watch){var seen=null;setInterval(function(){fetch('/api/state',{headers:{'X-Study-Stash':'1'}}).then(function(r){return r.json();})\n" +
         "  .then(function(s){var key=JSON.stringify([s.signed_in,s.login.running,s.login.error,s.copy.allowed,s.watching,s.recent_key,s.problem,s.ready]);\n" +
         "    if(seen!==null&&key!==seen)location.reload();seen=key;});}, parseInt(watch,10)*1000);}\n";
 
@@ -321,7 +321,7 @@ internal static class PageText
 
     public const string SetupJs =
         "\n" +
-        "(function(){var seen=null;function tick(){fetch('/api/state',{headers:{'X-Granola-Share':'1'}}).then(function(r){return r.json();})\n" +
+        "(function(){var seen=null;function tick(){fetch('/api/state',{headers:{'X-Study-Stash':'1'}}).then(function(r){return r.json();})\n" +
         ".then(function(s){Object.keys(s.jobs).forEach(function(k){var j=s.jobs[k];\n" +
         "  var bar=document.querySelector('progress[data-job=\"'+k+'\"]');\n" +
         "  if(bar){if(j.running&&j.total){bar.max=j.total;bar.value=j.done;}else{bar.removeAttribute('value');}}\n" +

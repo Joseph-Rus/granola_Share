@@ -66,8 +66,8 @@ public static class SetupWeb
         if (!ollamaUp)
         {
             string label = c.OllamaInstalled ? "Start Ollama" : "Install Ollama";
-            fixes.Add("<p>Ollama is free, from ollama.com. Without it, lectures are still sorted by their Granola folder "
-                + "and title, and keep Granola’s own notes.</p>"
+            fixes.Add("<p>Ollama is free, from ollama.com. Without it, lectures are still sorted by their class "
+                + "and title, and keep their transcript without study notes.</p>"
                 + "<div class=\"toolbar\"><button class=\"primary\" data-action=\"/api/ollama\" data-out=\"ol-say\" "
                 + $"data-busy=\"Working…\"{Disabled("ollama")}>{label}</button></div>"
                 + $"<p class=\"say\" id=\"ol-say\"></p>{Job("ollama", jobs)}");
@@ -91,8 +91,8 @@ public static class SetupWeb
             $"<div class=\"row\"><span class=\"grow\">{Ui.Esc(k.Name)}<span class=\"subtitle\">{Ui.Esc(string.Join(", ", k.Aliases))}"
             + $"</span></span><form data-action=\"/api/classes\" data-out=\"cls-say\"><input type=\"hidden\" name=\"remove\" value=\"{i}\">"
             + "<button>Remove</button></form></div>"));
-        string classes = "<p>The folders lectures are sorted into. Other names are what you call it in Granola folder names or "
-            + "titles, like cs101.</p>"
+        string classes = "<p>The folders lectures are sorted into. Other names are what a lecture’s title might call it, "
+            + "like cs101.</p>"
             + (listed.Length > 0 ? $"<div class=\"group\" style=\"margin:0 -1rem .8rem\">{listed}</div>"
                 : "<p class=\"muted\">None yet: lectures land in Unsorted until you add some. You can add them later too.</p>")
             + "<form class=\"stack\" data-action=\"/api/classes\" data-out=\"cls-say\" data-busy=\"Adding…\">"
@@ -106,7 +106,7 @@ public static class SetupWeb
         if (!ollamaUp)
         {
             notes = "<p>Ollama isn’t running, so there’s no model to pick yet. Install or start it above, or go on "
-                + "without: lectures are sorted by folder and title, and keep Granola’s notes.</p>"
+                + "without: lectures are sorted by class and title, and keep their transcript without study notes.</p>"
                 + "<div class=\"toolbar\"><button data-action=\"/api/no-ai\" data-out=\"ai-say\">Go on without a model</button></div>"
                 + "<p class=\"say\" id=\"ai-say\"></p>";
         }
@@ -120,8 +120,8 @@ public static class SetupWeb
                 + string.Concat(choices.Select(n => $"<option value=\"{Ui.Esc(n)}\"{(n == pick ? " selected" : "")}>{Ui.Esc(n)}"
                     + $"{(names.Contains(n) ? "" : " (downloads it)")}</option>")) + "</select>";
             string sortPick = s.DraftModels && cfg.OllamaModel != chosen ? cfg.OllamaModel : "";
-            notes = $"<p>For this computer’s memory, {Ui.Esc(rec)} is a good fit. Notes are written from transcripts, "
-                + "which Granola shares on its paid plans; other lectures keep Granola’s own summary.</p>"
+            notes = $"<p>For this computer’s memory, {Ui.Esc(rec)} is a good fit. It writes study notes from each "
+                + "lecture’s transcript.</p>"
                 + "<form class=\"stack\" data-action=\"/api/models\" data-out=\"mod-say\" data-busy=\"Saving…\">"
                 + $"<label class=\"field\">Writes the study notes{Select("summary", chosen)}</label>"
                 + $"<label class=\"field\">Sorts lectures into classes{Select("sort", sortPick, same: true)}</label>"
@@ -163,10 +163,7 @@ public static class SetupWeb
                 + $"<div class=\"toolbar\"><a class=\"btn primary\" href=\"http://127.0.0.1:{cfg.WebPort}/\">Open your library</a></div>"
                 + "<h3 style=\"margin:1.2rem 0 .3rem\">Connect your laptop</h3>"
                 + $"<p>Install Study Stash on the laptop you record lectures on (<a href=\"{dmg}\">Mac</a> or "
-                + $"<a href=\"{exe}\">Windows</a>), open it, and enter the address and password above.</p>"
-                + "<details class=\"help\"><summary>Or with one line in a terminal</summary>"
-                + $"<p>Mac:</p><pre class=\"code\">{Ui.Esc(info.Commands.Mac)}</pre>"
-                + $"<p>Windows (PowerShell):</p><pre class=\"code\">{Ui.Esc(info.Commands.Windows)}</pre></details>";
+                + $"<a href=\"{exe}\">Windows</a>), open it, and enter the address and password above.</p>";
         }
         else
         {
@@ -219,7 +216,7 @@ public static class SetupWeb
 
         bool Authed(HttpContext ctx) => Same(ctx.Request.Cookies[AppPage.Cookie] ?? "", token);
 
-        IResult? Refused(HttpContext ctx) => Authed(ctx) && ctx.Request.Headers["x-granola-share"] == "1" ? null
+        IResult? Refused(HttpContext ctx) => Authed(ctx) && ctx.Request.Headers["x-study-stash"] == "1" ? null
             : Http.Detail(403, "Open the setup from the Study Stash Library app.");
 
         async Task<IResult> Act(HttpContext ctx, Func<JsonObject, Task<string>> step, bool reload = true)
@@ -275,7 +272,7 @@ public static class SetupWeb
         app.MapPost("/api/firewall", Http.Handle(ctx => Act(ctx, _ => Task.FromResult(s.FixFirewall()), reload: false)));
         app.MapPost("/api/awake", Http.Handle(ctx => Act(ctx, _ => Task.FromResult(s.StayAwake()))));
         app.MapPost("/api/finish", Http.Handle(ctx => Act(ctx, _ => Task.FromResult(s.Finish()), reload: false)));
-        app.MapGet("/healthz", () => Http.Json(new JsonObject { ["ok"] = true, ["app"] = "granola-share-setup", ["version"] = Engine.Version }));
+        app.MapGet("/healthz", () => Http.Json(new JsonObject { ["ok"] = true, ["app"] = "study-stash-setup", ["version"] = Engine.Version }));
         Icons.Map(app);
         return app;
     }

@@ -61,7 +61,7 @@ public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
                 }
             }
         }
-        string? path = store.Finish(row, m, c, summary, model, error, keepGranola: Cfg.KeepGranolaNotes);
+        string? path = store.Finish(row, m, c, summary, model, error);
         log(path is null
             ? $"[pipeline] '{m.Title}' changed while it was being written; not saving the old result"
             : $"[pipeline] filed '{m.Title}' \u2192 {c.ClassName} ({c.By} {Py.FormatFixed(c.Confidence, 2)})");

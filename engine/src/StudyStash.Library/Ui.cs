@@ -144,7 +144,7 @@ public static partial class Ui
     }
 
     /// <summary>
-    /// Markdown to HTML, with raw HTML off and math left as it is for KaTeX. Note text comes from Granola and the
+    /// Markdown to HTML, with raw HTML off and math left as it is for KaTeX. Note text comes from the laptop and the
     /// model's output: it may never inject HTML or scripts.
     /// </summary>
     public static string RenderMd(string? text)
