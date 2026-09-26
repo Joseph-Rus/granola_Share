@@ -81,6 +81,8 @@ jobs:
           [ -f "$RUNNER_TEMP/whisper/ggml-tiny.bin" ] || curl -fsSL -o "$RUNNER_TEMP/whisper/ggml-tiny.bin" \
             https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
           echo "STUDYSTASH_WHISPER_MODEL=$RUNNER_TEMP/whisper/ggml-tiny.bin" >> "$GITHUB_ENV"
+      - name: install.sh parses
+        run: sh -n install.sh
       - name: Build Study Stash.app (both roles) and both DMGs
         run: sh macos/build-app.sh dist/mac
       - name: Signed, universal, and reports its version on both architectures
@@ -191,6 +193,12 @@ jobs:
             Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" -OutFile $model
           }
           echo "STUDYSTASH_WHISPER_MODEL=$model" >> $env:GITHUB_ENV
+      - name: install.ps1 parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw "install.ps1 doesn't parse: $errors" }
       - name: Build win-x64 and win-arm64, and both Setup.exe
         shell: pwsh
         run: .\windows\build.ps1 -Out dist\windows

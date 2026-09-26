@@ -39,6 +39,18 @@ public class ReleaseNamesTests
     }
 
     [Fact]
+    public void The_install_scripts_name_every_installer_they_can_fetch()
+    {
+        string installSh = Read("install.sh");
+        Assert.Contains(Updates.MacLaptopAsset, installSh);
+        Assert.Contains(Updates.MacLibraryAsset, installSh);
+
+        string installPs1 = Read("install.ps1");
+        Assert.Contains(Updates.WindowsLaptopAsset, installPs1);
+        Assert.Contains(Updates.WindowsLibraryAsset, installPs1);
+    }
+
+    [Fact]
     public void Ci_mentions_none_of_the_retired_release_shapes()
     {
         string ci = Read(".github", "workflows", "ci.yml");

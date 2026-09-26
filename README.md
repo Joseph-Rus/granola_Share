@@ -30,129 +30,65 @@ your laptop                                        your Mac mini
 
 ## 1. Set up the library's computer
 
-On the Mac mini (or any Mac or Linux computer that stays on), in Terminal:
+On the computer that keeps your library (a Mac mini, or any Mac or Windows PC that stays on),
+download its installer from the [releases page](https://github.com/Joseph-Rus/study-stash/releases/latest):
+
+| | |
+|---|---|
+| **Mac** | [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg) |
+| **Windows** | [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) |
+
+Or, from a terminal, one line downloads and installs it for you:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- server
-```
-
-On a Windows PC, in PowerShell:
-
-```powershell
-$env:GRANOLA_SHARE_ROLE='server'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
-```
-
-The installer puts a `granola-share` command on that computer, with no admin rights needed. On a
-Mac or Linux it uses uv, which keeps its own Python, so a system upgrade can't break it. On Windows
-it downloads one ready-made folder, `AppData\Local\Programs\granola-share`, with its own Python
-(the python.org build) and everything it needs, so there's nothing else to install.
-Setup then walks through six steps:
-
-1. **Get this computer ready:** shows the memory and free disk space, then checks
-   [Tailscale](https://tailscale.com) (so your laptop and phone reach the library from anywhere)
-   and [Ollama](https://ollama.com) (which runs the model that writes your notes). If one is
-   missing, setup offers to install it from its official site. If it's closed or signed out,
-   setup starts it or connects it. Tailscale's installer asks for your password (Mac) or
-   permission (Windows), and you sign in to Tailscale in your browser. Over SSH, setup tells you
-   what to click on the Mac itself instead.
-2. **Your library:** a name, a password (your laptop and browser use it), the notes folder, and
-   the web port. It checks that the folder is writable and the port is free.
-3. **Classes:** the folders lectures are sorted into, plus any short names you use in Granola
-   folder names or titles.
-4. **Study notes:** lists your Ollama models and asks which model writes the study notes and
-   which sorts. It downloads a missing model with a progress bar, then has the model answer once,
-   so you know it works before the first lecture arrives.
-5. **Keep it running:** starts at login, restarts if it stops, and installs updates by itself. It
-   checks that the library actually answers. On Windows it also lets your laptop through Windows
-   Firewall (for Tailscale and your own network only; Windows asks first) and offers to keep the PC
-   awake while it's plugged in. On a Mac it tells you if the Mac will sleep.
-6. **Connect your laptop:** prints the address, the password, and a one-line install for your
-   laptop with both filled in.
-
-Rerunning setup is safe: your earlier answers become the defaults. `granola-share doctor`
-checks the whole setup at any time, and says what to fix.
-
-**Or with the Library app.** Download [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg)
-(Mac) or [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) (Windows) and
-open **Study Stash Library**. Click **Set Up**: it installs what it needs, then shows the same six
-steps as a page in the app, with a button for each install and a progress bar for each download.
-No Terminal or PowerShell. When you finish, the app shows your library, and after that it's this
-computer's window onto it. (`granola-share setup --page` opens the same page in a browser.)
-
-**Requirements:** Tailscale on both computers, signed in to the same account, so the laptop
-reaches the library away from home. Without it, the laptop reaches the library only on the same
-Wi-Fi. Ollama is needed for study notes and AI sorting. Without it, Granola folder and title
-rules still sort lectures. Setup installs both for you if you say yes. The library goes offline
-while its computer sleeps: on a Mac, turn on System Settings → Energy → "Prevent automatic
-sleeping when the display is off".
-
-**Which model?** Setup suggests one that fits your RAM. With 40 GB or more, use
-`qwen3.6:35b-a3b`: it's a mixture-of-experts model with 35B-class judgment but only about 3B
-active per token, so it's fast. With 16 GB, use `gemma4:e4b`; with 8 GB, `qwen3:1.7b`. Using
-the same model for both jobs avoids reloading it between the two steps.
-
-## 2. Connect your laptop
-
-This is the computer you record lectures on, a Mac or a Windows PC. It needs
-[Granola](https://www.granola.ai/download), since that's what records the lectures. (The library's
-computer doesn't need Granola.) Paste the line from the library's setup (it's also under
-**Settings → Connect your laptop** on the library's web page):
-
-```bash
-# Mac / Linux (Terminal)
-curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://mac-mini.tailnet.ts.net:8787 GRANOLA_SHARE_KEY=the-password sh
+# Mac (Terminal)
+curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh -s -- library
 ```
 ```powershell
 # Windows (PowerShell)
-$env:GRANOLA_SHARE_SERVER='http://mac-mini.tailnet.ts.net:8787'; $env:GRANOLA_SHARE_KEY='the-password'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
+$env:STUDYSTASH_ROLE='library'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
 ```
 
-That's the last time you touch the terminal on the laptop. The line installs granola-share,
-starts it in the background, adds the **Study Stash** app (in Applications on a Mac, in the Start
-Menu on Windows), and opens it on setup with the address and password filled in.
-
-At the top, **This computer** checks for Granola and Tailscale. If Granola is missing, **Get
-Granola** opens its download page. If Tailscale is missing, **Install Tailscale** downloads its
-installer and opens it; if it's signed out, **Open Tailscale** opens it to sign in. Then:
-
-1. **Connect to your library.** One click checks the address and password.
-2. **Sign in to Granola.** A browser tab opens for your Granola account.
-3. **How to send.** Every lecture automatically, or ask before each one. On a Mac there's also the
-   [optional transcript copying](#optional-copy-transcripts-from-the-granola-app), off unless you
-   turn it on.
-4. **Allow transcript copying** (only if you turned it on). A button opens the right page of System
-   Settings, where you turn on **python3.12**. The step turns green as soon as it's on. If
-   python3.12 isn't in the list, the page shows its exact path with a Copy button.
-5. **Finish.**
-
-<p align="center"><img src="docs/screenshots/setup.png" width="700" alt="Study Stash's setup: connected to the library, signed in to Granola, and choosing how to send, each step with a green check"></p>
-
-Each step turns into a green check when it's done. (`granola-share client setup` still works in
-the terminal if you prefer it.)
-
-### Or: download the app
-
-Every release has four installers, on the
-[releases page](https://github.com/Joseph-Rus/study-stash/releases/latest): one for each
-computer, on each system.
-
-| | The laptop you record on | The computer that keeps your library |
-|---|---|---|
-| **Mac** | [Study-Stash-Laptop.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop.dmg) | [Study-Stash-Library.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library.dmg) |
-| **Windows** | [Study-Stash-Laptop-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop-Setup.exe) | [Study-Stash-Library-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Library-Setup.exe) |
-
-The laptop's app installs its background helper with one click the first time you open it, then
-shows the same setup. The library's app shows the library's setup as a page (see above). The install lines
-skip the security questions below, because they fetch the app themselves.
-
-- **Mac:** open the DMG and drag the app into Applications. macOS asks once before opening an
-  app from the internet that isn't from the App Store: click **Done**, then **System Settings →
-  Privacy & Security → Open Anyway**.
-- **Windows:** run the Setup.exe. It installs for your account only, with no admin rights, and
-  adds the app to the Start Menu. The app isn't signed, so Windows may say "Windows protected your
+- **Mac:** open the DMG and drag **Study Stash** into Applications. macOS asks once before opening
+  an app from the internet that isn't from the App Store (Study Stash isn't signed with a paid
+  Apple Developer ID): click **Done**, then **System Settings → Privacy & Security → Open Anyway**.
+- **Windows:** run the Setup.exe. It installs for your account only, no admin rights, and adds
+  **Study Stash** to the Start Menu. Since it isn't signed, Windows may say "Windows protected your
   PC": click **More info**, then **Run anyway**.
 
-<p align="center"><img src="docs/screenshots/welcome.png" width="700" alt="The Study Stash app's first screen: Welcome to Study Stash, with an Install and Continue button"></p>
+Open **Study Stash** and click **Set Up**: it downloads the Whisper model that transcribes
+lectures, has you name your library and pick a password, and lets you add your classes (you can
+always add more later). When you finish, the app shows your library and the address and password
+to connect your laptop.
+
+**Coming from 0.4.x?** Install the new app the same way — your lectures and settings stay right
+where they are.
+
+## 2. Connect your laptop
+
+This is the computer you record lectures on. Download its installer the same way:
+
+| | |
+|---|---|
+| **Mac** | [Study-Stash-Laptop.dmg](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop.dmg) |
+| **Windows** | [Study-Stash-Laptop-Setup.exe](https://github.com/Joseph-Rus/study-stash/releases/latest/download/Study-Stash-Laptop-Setup.exe) |
+
+```bash
+# Mac (Terminal)
+curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | sh
+```
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex
+```
+
+Install it the same way as the library (Mac: drag into Applications, then **Open Anyway**;
+Windows: run the Setup.exe, then **Run anyway**). The first time it records, it asks for the
+microphone — say yes (it may ask again after an update, since an ad-hoc signed app can't remember
+across one). Open **Study Stash**, click **Set Up**, and type the library's address and password
+from step 1 (or find them again under **Settings → Connect a laptop** on the library's page).
+
+<p align="center"><img src="docs/screenshots/setup.png" width="700" alt="Study Stash's setup: the microphone allowed, connected to the library, and the transcription model ready, each step with a green check"></p>
 
 ## 3. Using the app
 
@@ -268,16 +204,28 @@ install line for a laptop, updates, and rewriting every summary:
 
 ## Updates
 
-Both computers update themselves: the background service checks GitHub for a new release every
-few hours, installs it, and restarts. Turn this off with `auto_update = false` in the config.
-To update right away, run `granola-share update`, or click **Update now** in Settings.
+Both computers update themselves: 10 minutes after it starts, then every 6 hours, the app checks
+for a new release and installs it as soon as nothing is recording, paused, or being transcribed,
+then restarts on the new version. Turn this off with `auto_update = false` in `client.toml`; to
+update right away, run `studystash update`, or click **Update now** in Settings.
 
-Releases come from CI (`.github/workflows/ci.yml`). Every push runs the tests on macOS, Linux,
-and Windows, runs the real one-line installer on each (twice, to check that updating in place
-works), then sets up and boots a library and a laptop page without a keyboard. To ship a
-release, bump `__version__` in `granola_share/__init__.py` and push to `main`. When everything
-passes, CI publishes `v<version>`, and both computers pick it up. To roll back, rerun the
-installer with `GRANOLA_SHARE_VERSION=v0.2.0` (or whichever version you want).
+On a Mac, an update downloads the release's DMG and swaps in the new **Study Stash.app**. On
+Windows, it downloads the new Setup.exe and runs it quietly, which closes and reopens the app.
+Either way the download is checked against the release's `SHA256SUMS.txt` first, and only an
+installed copy updates itself — a build folder, or `dotnet run`, never calls GitHub.
+
+Releases come from CI (`.github/workflows/ci.yml`): every push tests the engine on macOS, Linux,
+and Windows, builds and self-tests both apps (a fake microphone and the tiny Whisper model prove
+each one actually transcribes), and installs each with its own installer. To ship a release, bump
+`StudyStashVersion` in `engine/Directory.Build.props` and merge to `main`. When everything passes,
+CI tags it and publishes the four installers plus `SHA256SUMS.txt`, and both computers pick it up
+within the next 6 hours.
+
+## Uninstall
+
+**Mac:** quit Study Stash and drag it from Applications to the Trash. **Windows:** Settings →
+Apps → **Study Stash** → Uninstall. Either way, your lectures stay in your home folder (the
+library's) and in `Documents\Study Stash` (the laptop's) — uninstalling only removes the app.
 
 ## Set up with Claude Code
 
@@ -292,14 +240,12 @@ Start with `granola-share doctor`. It checks every piece and prints a fix for ea
 
 | Problem | Fix |
 |---|---|
-| The installer failed | Read `~/.granola-share/install.log`, then rerun the same line. It's safe to repeat. |
-| `granola-share: command not found` | Open a new terminal window, or use `~/.local/bin/granola-share`. |
+| The one-line install failed | It prints the reason; rerun the same line, it's safe to repeat. Or download the installer directly from the [releases page](https://github.com/Joseph-Rus/study-stash/releases/latest). |
+| "the download didn't match its checksum" | A bad download or a stale mirror. Rerun the install line; if it keeps happening, download the installer from the releases page instead. |
 | Laptop: "could not reach …" | Tailscale on and signed in on both computers, and the library's computer awake. Try the `100.x.y.z` address instead of the name. |
 | "Granola app ✗ not installed" | Install Granola from [granola.ai/download](https://www.granola.ai/download). Only the laptop needs it, not the library's computer. |
-| Windows install: "untrusted mount point (os error 448)" | That was uv, which OneDrive's Files On-Demand can block. Since 0.4.2 Windows doesn't use uv: run the install line again. |
-| Windows: "Windows protected your PC" | The app isn't signed. Click **More info**, then **Run anyway**. The install line avoids the question. |
-| Windows: Study Stash asks for WebView2 | Older Windows 10 may not have it. Say yes, and install it from Microsoft. |
-| Laptop can't reach a library on Windows | Windows Firewall. Rerun `granola-share setup` on the PC and let it add the rule (Windows asks for permission). |
+| Windows: "Windows protected your PC" | The app isn't signed with a paid certificate. Click **More info**, then **Run anyway**. |
+| Laptop can't reach a library on Windows | Windows Firewall. Reopen Setup on the PC and let it add the rule (Windows asks for permission). |
 | Tailscale "signed out" or "turned off" | Open Tailscale and sign in with the same account on both computers, or rerun `granola-share setup` to connect it. |
 | Laptop: "wrong password" | The password is in the Mac mini's `~/.granola-share/config.toml`, and under Settings on the library's page. |
 | No study notes, only Granola's | The transcript wasn't copied (open the lecture's transcript in Granola), or Ollama is closed on the Mac mini. |
@@ -381,9 +327,9 @@ granola_share/
   client_app.py the laptop's Study Stash page: setup and status, on 127.0.0.1 only
   launcher.py   the Study Stash app (native on macOS, else a script), Start Menu, .desktop
   assets/       the icon for Windows, Linux, and the pages (from macos/icon_assets.py)
-windows/        the Windows app: StudyStash.cs (WebView2), build.ps1 → zip, setup.iss → Setup.exe
-macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .app, zip, DMG; tour.py
-                → docs/screenshots
+windows/        build.ps1 → win-x64 + win-arm64 self-contained publishes, setup.iss → both Setup.exe
+macos/          build-app.sh → the universal app bundle (launcher.c) + both DMGs, selftest.sh →
+                proves a built bundle actually works
   transcript_grab.py  macOS, optional: copy transcripts from the Granola window
   dialogs.py    native popups and notifications (macOS/Windows/Linux)
   autostart.py  launchd / Startup folder / systemd --user
@@ -400,15 +346,14 @@ macos/          the native Mac app: StudyStash.swift, its icon, build.sh → .ap
 tests/          offline tests: .venv/bin/python -m pytest
 ```
 
-Build the Mac app with `sh macos/build.sh` (Xcode command line tools; the output lands in `dist/`),
-and the Windows app with `windows\build.ps1` (the .NET SDK, plus Inno Setup for Setup.exe). The
-Windows download of granola-share itself comes from `windows\bundle.ps1` (on Windows, with Python 3.13). The
-Windows app also compiles on a Mac with the .NET SDK, which is a quick check before CI.
-Redo the README's screenshots with `uv run --with pillow python macos/tour.py` after a build. It
-serves made-up lectures, lets the app capture its own window, and blurs addresses and passwords.
-From a checkout: `python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"`. To try the
-installer against your working copy, run
-`GRANOLA_SHARE_SRC=$PWD GRANOLA_SHARE_NO_SETUP=1 sh install.sh`.
+Build the Mac app with `sh macos/build-app.sh` (Xcode command line tools, the .NET SDK; the app and
+both DMGs land in `dist/mac`), then check it with `sh macos/selftest.sh "dist/mac/Study Stash.app"`
+(a fake microphone and the tiny Whisper model prove it transcribes from inside the bundle). Build
+the Windows app and both Setup.exe with `windows\build.ps1` (the .NET SDK, plus
+[Inno Setup](https://jrsoftware.org/isinfo.php) 6 — `choco install innosetup` if you use
+Chocolatey); it also compiles on a Mac with the .NET SDK, which is a quick check before CI. To try
+`install.sh` against a DMG you built, run `STUDYSTASH_DMG=dist/mac/Study-Stash-Laptop.dmg sh
+install.sh`.
 
 ## Known unknowns
 

@@ -81,47 +81,45 @@ keep working.
   through Ollama's API, so no `ollama` command is needed, and each one answers once before setup
   moves on. On Windows, setup adds one firewall rule for the library's port, open only to
   Tailscale's range (100.64.0.0/10) and the local subnet, through Windows' own permission prompt.
-- **The Windows app** (`windows/StudyStash.cs`) is the Mac app's twin: a WinForms window around
-  two WebView2 views (This PC and Library), on .NET Framework 4.8, which every Windows 10 and 11
-  has, so it's a 0.5 MB zip. It fills in the library's password itself, routes links like the Mac
-  app, and installs the helper from its welcome screen. The installer, `client open --install`,
-  and auto-update all put it in `%LOCALAPPDATA%\Programs\Study Stash`. Windows can't overwrite a
-  running program but can rename it, so an update moves files in use aside to `*.old`, which the
-  app deletes when it next starts.
-- **Four installers, two apps.** Each app also ships as its library computer's copy: "Study Stash
-  Library" (Info.plist `StudyStashRole` on a Mac, `study-stash.ini` on Windows). It shows only the
-  library, and before there is one it shows the library's setup as a page (`library_setup.py`,
-  `granola-share setup --page`): the terminal wizard's six steps as fields and buttons, with background
-  jobs (and progress bars) for installs and downloads. Answers stay in a draft until Finish writes
-  config.toml, which is how the app knows the library exists. Nobody needs a terminal.
+- **One Windows app installs as either role.** Both Setup.exe files share one Inno `AppId` and
+  install per-user into `%LOCALAPPDATA%\Programs\Study Stash`; whichever one you run last writes
+  `study-stash.ini`'s `role=`, so installing the other role over an existing install is just an
+  in-place upgrade, never a second copy.
+- **Four installers, one app per system.** The laptop and library installers hold the same
+  program; only the role preset differs (`StudyStashRole` in the Mac bundle's Info.plist,
+  `study-stash.ini` on Windows). `Apps.RolePreset` reads it once, on first run, so setup already
+  knows which one it is; after that the role lives in the app's own settings.
 - **No console windows on Windows.** The service and the apps have no console, so every console program
   they start (tailscale, PowerShell, cmd) would flash a window; the CLI starts them with CREATE_NO_WINDOW.
-- **Windows doesn't use uv.** uv's Python install fails under OneDrive's Files On-Demand (the link it
-  makes gets "untrusted mount point", os error 448). So CI builds one ready-made folder instead
-  (`windows/bundle.ps1`): python.org's embeddable Python 3.13, signed by the PSF, with every package
-  installed beside it. install.ps1 unpacks it into `%LOCALAPPDATA%\Programs\granola-share`, and
-  writes a `granola-share.cmd`. An update unpacks the next one beside it, and a helper swaps the
-  folders once nothing runs from the old one. A uv install from before moves over on its next update.
+- **Updates swap the installed copy.** An installed app checks GitHub for a new release, downloads
+  the matching installer, and checks its SHA-256 against `SHA256SUMS.txt`. On a Mac it mounts the
+  DMG, stages the new `.app` beside the old one, swaps them, and restarts any service that runs
+  from the bundle. On Windows it runs the new Setup.exe silently, which closes the running app and
+  relaunches it. Either way, only an installed copy updates itself; a build folder or `dotnet run`
+  never calls GitHub.
 - **Without the app** (Linux, or before it's downloaded) the page opens in an Edge or Chrome app
   window, and "Open your library" signs in by posting the saved password to the library's login
   form from a loopback-only page.
 - **The laptop checks its own needs**: Granola (the app that records; the library's computer
   doesn't need it) and Tailscale, shown at the top of setup with a fix button for each, and in
   `doctor`.
-- CI tests on macOS, Linux, and Windows, runs the real installer on each, builds the Mac app, and
-  publishes `v<version>` when `__version__` changes. Installed copies check every six hours,
-  install, and restart. Windows uses a detached helper, because it locks running files.
-- **The Mac app** (`macos/StudyStash.swift`) is a small AppKit window around the pages the service
-  serves, so there's one UI:
-  - a toolbar with This Mac and Library tabs, real menus, and native confirm dialogs;
-  - downloads into Downloads, and Copy through the pasteboard;
-  - automatic sign-in to the library with the saved password.
-
-  CI builds a universal binary and attaches a DMG and a zip to each release. The installer and
-  auto-update fetch the zip themselves, and nothing fetched that way is quarantined. Only a DMG
-  from the browser gets macOS's "Open Anyway" step, which is unavoidable without a paid Developer ID.
-- The Info.plist has only `NSAllowsArbitraryLoads`, because adding `NSAllowsLocalNetworking` makes
-  macOS ignore it. With both, the library's `*.ts.net` address was blocked.
+- CI tests the engine on macOS, Linux, and Windows, builds and self-tests both apps (a fake
+  microphone, the tiny Whisper model, real windows drawn headless), installs each with its own
+  installer, and publishes a release only when `StudyStashVersion` in `Directory.Build.props` is
+  new. The running app checks every six hours and installs when nothing is recording; Windows
+  hands off to its own Setup.exe, which relaunches the app once it's done.
+- **The Mac app is one universal bundle**, started by a tiny native launcher
+  (`macos/launcher.c`) at `Contents/MacOS/StudyStash` — the spot macOS reads the real Info.plist
+  from (`LSUIElement`, the microphone usage strings), so it can't be a per-architecture `exec`.
+  The launcher `dlopen`s the matching architecture's `libhostfxr.dylib` under
+  `Contents/MacOS/{arm64,x64}` and starts .NET in-process; a per-arch self-contained publish can't
+  be `lipo`-merged, so this is the trick that makes both look like one program. It's signed ad hoc
+  (no paid Developer ID) with the hardened runtime, `disable-library-validation` (so it can still
+  load its own unsigned dylibs), and a microphone entitlement.
+- The Info.plist carries `NSMicrophoneUsageDescription` and `NSAudioCaptureUsageDescription`
+  (without them macOS kills the app on first mic use), `StudyStashRole` for the role preset, and
+  `CFBundleShortVersionString`/`CFBundleVersion` set to `StudyStashVersion` so an installed copy
+  can report its own version without running .NET.
 - Tests run with HOME pointed at a temp folder, so they can't touch the real Applications folder or
   LaunchAgents.
 
