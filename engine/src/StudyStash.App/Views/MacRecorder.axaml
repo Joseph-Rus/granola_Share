@@ -96,32 +96,37 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ChatMessage">
                   <Panel>
-                    <!-- Yours: text at most 78% of the 336 across, the answer's 88%, each plus its padding (as the design's CSS) -->
+                    <!-- Yours: text at most 78% of the 336 across, the answer's 88%, each plus its padding (as the design's CSS);
+                         a bubble whose text wraps takes all of that, as in the design -->
                     <Border Classes="tint" IsVisible="{Binding Mine}" HorizontalAlignment="Right" MaxWidth="290" CornerRadius="18" Padding="14,8">
-                      <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.2" TextWrapping="Wrap" Foreground="{DynamicResource OnAccent}" />
+                      <c:FitWidth>
+                        <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.2" TextWrapping="Wrap" Foreground="{DynamicResource OnAccent}" />
+                      </c:FitWidth>
                     </Border>
                     <Border Classes="fill" IsVisible="{Binding !Mine}" HorizontalAlignment="Left" MaxWidth="324" CornerRadius="18" Padding="14,10">
-                      <StackPanel Spacing="8">
-                        <c:Spinner IsVisible="{Binding Thinking}" Width="14" Height="14" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
-                        <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.85" TextWrapping="Wrap" />
-                        <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SourceChip">
-                              <Button Classes="fill2" Theme="{StaticResource Surface}" Height="26" CornerRadius="13" Padding="8,0,10,0"
-                                      Command="{Binding $parent[UserControl].((vm:RecorderModel)DataContext).PlayCommand}" CommandParameter="{Binding}"
-                                      ToolTip.Tip="Play from here">
-                                <StackPanel Orientation="Horizontal" Spacing="3">
-                                  <c:Icon Glyph="play_arrow" Filled="True" Size="15" Foreground="{DynamicResource AccentText}" />
-                                  <TextBlock Classes="num" Text="{Binding Label}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" />
-                                </StackPanel>
-                              </Button>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </StackPanel>
+                      <c:FitWidth>
+                        <StackPanel Spacing="8">
+                          <c:Spinner IsVisible="{Binding Thinking}" Width="14" Height="14" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
+                          <TextBlock Text="{Binding Text}" FontSize="13" LineHeight="18.85" TextWrapping="Wrap" />
+                          <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:SourceChip">
+                                <Button Classes="fill2" Theme="{StaticResource Surface}" Height="26" CornerRadius="13" Padding="8,0,10,0"
+                                        Command="{Binding $parent[UserControl].((vm:RecorderModel)DataContext).PlayCommand}" CommandParameter="{Binding}"
+                                        ToolTip.Tip="Play from here">
+                                  <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <c:Icon Glyph="play_arrow" Filled="True" Size="15" Foreground="{DynamicResource AccentText}" />
+                                    <TextBlock Classes="num" Text="{Binding Label}" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" />
+                                  </StackPanel>
+                                </Button>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </c:FitWidth>
                     </Border>
                   </Panel>
                 </DataTemplate>

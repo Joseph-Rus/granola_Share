@@ -50,6 +50,34 @@ public class MacMetricsTests
         Assert.Equal(0.0, Skin.Blur(1));
     }
 
+    /// <summary>A chat bubble is as wide as its text on one line, and once the text wraps it takes all the width it
+    /// may, as in the design's browser (Avalonia alone would shrink it to its longest line).</summary>
+    [AvaloniaFact]
+    public void A_bubble_that_wraps_takes_its_whole_width()
+    {
+        Mac();
+        Border Bubble(string text) => new()
+        {
+            MaxWidth = 200, Padding = new Thickness(14, 8), HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new FitWidth { Child = new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap } },
+        };
+        var shortOne = Bubble("Big-O?");
+        var longOne = Bubble("Recursion traces and call-stack diagrams, like last week's. Big-O proofs won't be on it.");
+        var window = new Window { Width = 300, Height = 300, Content = new StackPanel { Children = { shortOne, longOne } } };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.InRange(shortOne.Bounds.Width, 30, 100);
+            Assert.Equal(200, longOne.Bounds.Width, 3);
+            Assert.True(longOne.Bounds.Height > 40, "the long answer wraps");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>The heights a Mac (and the design's browser) gives one line of SF Pro Text and SF Pro Display.</summary>
     [Theory]
     [InlineData(11, false, 13)]
