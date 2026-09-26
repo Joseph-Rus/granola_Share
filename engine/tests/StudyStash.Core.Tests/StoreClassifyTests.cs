@@ -18,7 +18,7 @@ public class StoreClassifyTests
     static List<ClassDef> GoldenClasses() => Golden.Cases("classes")
         .Select(c => new ClassDef(c![0].S(), c[1]!.AsArray().Select(a => a.S()).ToList(), c[2].S())).ToList();
 
-    static Meeting GoldenMeeting() => Granola.MeetingFromJson(Golden.Case("meeting"));
+    static Meeting GoldenMeeting() => Wire.MeetingFromJson(Golden.Case("meeting"));
 
     static SortChatFn Answer(string json) => (_, _, _) => Task.FromResult(json);
 
@@ -54,7 +54,7 @@ public class StoreClassifyTests
         var classes = GoldenClasses();
         foreach (var c in Golden.Cases("rules"))
         {
-            var got = Classify.ByRules(Granola.MeetingFromJson(c![0]), classes);
+            var got = Classify.ByRules(Wire.MeetingFromJson(c![0]), classes);
             if (c[1] is null)
             {
                 Assert.Null(got);

@@ -664,8 +664,7 @@
     },
     "latest": "v9.9.9",
     "cfg": {
-     "pool_password": "",
-     "server_sync": true
+     "pool_password": ""
     }
    },
    "checks": [
@@ -712,20 +711,14 @@
      "open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`"
     ],
     [
-     "Server's Granola",
-     "fail",
-     "server_sync is on but this server isn't signed in",
-     "`granola-share login`"
-    ],
-    [
      "Version",
      "warn",
      "0.4.4 installed, v9.9.9 is out",
      "run `granola-share update`"
     ]
    ],
-   "unicode": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         → no pool password: anyone who can reach the server can read and add notes\n   ✓ Notes folder        {root}/pool\n   ✗ Web server          port 8787 answered 404\n                         → another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         → `granola-share autostart install --role server`\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ✗ Server's Granola    server_sync is on but this server isn't signed in\n                         → `granola-share login`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         → run `granola-share update`",
-   "ascii": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         -> no pool password: anyone who can reach the server can read and add notes\n  ok Notes folder        {root}/pool\n   X Web server          port 8787 answered 404\n                         -> another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         -> `granola-share autostart install --role server`\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   X Server's Granola    server_sync is on but this server isn't signed in\n                         -> `granola-share login`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         -> run `granola-share update`"
+   "unicode": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         → no pool password: anyone who can reach the server can read and add notes\n   ✓ Notes folder        {root}/pool\n   ✗ Web server          port 8787 answered 404\n                         → another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         → `granola-share autostart install --role server`\n   ✓ Summary model       big:35b\n   ✓ Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         → open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         → run `granola-share update`",
+   "ascii": "title\n\n   ! Config              {root}/home/config.toml, 1 class\n                         -> no pool password: anyone who can reach the server can read and add notes\n  ok Notes folder        {root}/pool\n   X Web server          port 8787 answered 404\n                         -> another app may be using the port; change web_port in config.toml\n   ! Background service  not installed, so the library stops when you log out or reboot\n                         -> `granola-share autostart install --role server`\n  ok Summary model       big:35b\n  ok Sorting model       qwen3:1.7b\n   ! Tailscale           waiting for approval in your Tailscale admin page; your laptop can only reach this computer on the same Wi-Fi\n                         -> open Tailscale and sign in (same account as your laptop), or rerun `granola-share setup`\n   ! Version             0.4.4 installed, v9.9.9 is out\n                         -> run `granola-share update`"
   },
   "down-not-installed": {
    "given": {

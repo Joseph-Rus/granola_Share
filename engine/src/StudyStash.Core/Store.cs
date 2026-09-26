@@ -314,7 +314,7 @@ public sealed class Store : IDisposable
                 """,
                 m.Id, m.Title, m.Date, m.Owner, PyJson.Dumps(m.Attendees), m.Folder,
                 Py.Strip(m.Transcript).Length > 0 ? 1L : 0L, Py.Head(PyJson.Dumps(m.Raw), 200_000),
-                Granola.MeetingJson(m), Queued, now, now);
+                Wire.MeetingJson(m), Queued, now, now);
         }
     }
 
@@ -469,7 +469,7 @@ public sealed class Store : IDisposable
                 """,
                 m.Id, m.Title, m.Date, m.Owner, PyJson.Dumps(m.Attendees), m.Folder, c.ClassName, c.Confidence,
                 c.By, c.LectureTitle.Length > 0 ? c.LectureTitle : m.Title, PyJson.Dumps(c.Topics ?? []), path,
-                Py.Strip(m.Transcript).Length > 0 ? 1L : 0L, Py.Head(PyJson.Dumps(m.Raw), 200_000), Granola.MeetingJson(m),
+                Py.Strip(m.Transcript).Length > 0 ? 1L : 0L, Py.Head(PyJson.Dumps(m.Raw), 200_000), Wire.MeetingJson(m),
                 summaryMd.Length > 0 ? summaryMd : null, summaryModel.Length > 0 ? summaryModel : null, Done,
                 error.Length > 0 ? error : null, known ? firstSeen : now, now);
             Index(m.Id, summaryMd.Length > 0 ? summaryMd : m.NotesMarkdown, m.Transcript, now);
@@ -477,23 +477,14 @@ public sealed class Store : IDisposable
         }
     }
 
-    /// <summary>The whole shared lecture behind a row (rebuilt from its Markdown file for rows from 0.1).</summary>
+    /// <summary>The whole shared lecture behind a row (rebuilt from its columns and Markdown file for rows from 0.1).</summary>
     public Meeting Meeting(NoteRow row)
     {
         lock (gate)
         {
-            if (!string.IsNullOrEmpty(row.PayloadJson)) return Granola.MeetingFromJson(JsonNode.Parse(row.PayloadJson));
+            if (!string.IsNullOrEmpty(row.PayloadJson)) return Wire.MeetingFromJson(JsonNode.Parse(row.PayloadJson));
             var raw = JsonNode.Parse(string.IsNullOrEmpty(row.RawJson) ? "{}" : row.RawJson) as JsonObject ?? new JsonObject();
-            Meeting m;
-            try
-            {
-                m = Granola.NormalizeMeeting(raw);
-            }
-            catch (PayloadException)
-            {
-                m = new Meeting(row.Id) { Raw = raw };
-            }
-            m.Id = row.Id;
+            var m = new Meeting(row.Id) { Raw = raw };
             if (!string.IsNullOrEmpty(row.Title)) m.Title = row.Title;
             if (!string.IsNullOrEmpty(row.Date)) m.Date = row.Date;
             if (!string.IsNullOrEmpty(row.Owner)) m.Owner = row.Owner;
@@ -503,9 +494,9 @@ public sealed class Store : IDisposable
             if (!string.IsNullOrEmpty(row.MdPath) && File.Exists(row.MdPath))
             {
                 string text = Py.ReadText(row.MdPath);
-                if (m.NotesMarkdown.Length == 0) m.NotesMarkdown = Notes.Section(text, "Notes");
-                if (m.PrivateNotes.Length == 0) m.PrivateNotes = Notes.Section(text, "Private notes");
-                if (m.Transcript.Length == 0) m.Transcript = Notes.Section(text, "Transcript");
+                m.NotesMarkdown = Notes.Section(text, "Notes");
+                m.PrivateNotes = Notes.Section(text, "Private notes");
+                m.Transcript = Notes.Section(text, "Transcript");
             }
             return m;
         }

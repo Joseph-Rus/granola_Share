@@ -216,8 +216,6 @@ public static class Doctor
                 output.Add(new Check("Sleep", Warn, $"this computer sleeps after {mins} min idle, and the library goes offline with it", sleepFix));
         }
 
-        if (cfg.ServerSync && !File.Exists(cfg.TokensPath))
-            output.Add(new Check("Server's Granola", Fail, "server_sync is on but this server isn't signed in", "`granola-share login`"));
         output.Add(await VersionCheckAsync(host.Latest));
         return output;
     }

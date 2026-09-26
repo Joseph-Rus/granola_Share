@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,7 +14,7 @@ namespace StudyStash.Library;
 public static class Cli
 {
     /// <summary>The words that make the app the engine instead of opening its windows.</summary>
-    public static readonly string[] Commands = ["run", "serve", "setup", "init", "login", "logout", "sync", "tools", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
+    public static readonly string[] Commands = ["run", "serve", "setup", "init", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
 
     /// <summary>True when these arguments name a command (options may come first: <c>--home DIR run</c>).</summary>
     public static bool IsCommand(IReadOnlyList<string> args)
@@ -32,9 +31,10 @@ public static class Cli
 
     public static async Task<int> RunAsync(string[] args)
     {
-        // The C# engine. The Study Stash apps still start the Python one: these commands are for trying this one out.
-        //   The library:  run | serve | setup --page | init | login | logout | sync | tools
-        //   Both:         doctor | update | autostart | config-check | version
+        // The commands:
+        //   The library:   run | serve | setup --page | init
+        //   Claude and AI: mcp | ai
+        //   Both:          doctor | update | autostart | config-check | version
         string[] valued = ["--home", "--role"];
         string? Option(string name) => Array.IndexOf(args, name) is int i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         bool Flag(string name) => args.Contains(name);
@@ -59,37 +59,25 @@ public static class Cli
 
         string command = words.FirstOrDefault() ?? "";
         if (command is not ("version" or "")) Directory.CreateDirectory(home);
-        try
+        return command switch
         {
-            return command switch
-            {
-                "run" => await Library(ownSync: true, updates: true),
-                "serve" => await Library(ownSync: false, updates: false),
-                "setup" when Flag("--page") => await Setup(),
-                "init" => Print($"Config: {Configs.WriteExample(home)}\nEdit it, or run `granola-share setup` for the guided version."),
-                "login" => await SignIn(GranolaOAuth.For(Configs.Load(home))),
-                "logout" => Logout(),
-                "sync" => await SyncCommand(),
-                "tools" => await Tools(),
-                "mcp" => await Mcp(),
-                "ai" => await AiCommand(),
-                "doctor" => await Doctor.RunAsync(home, Option("--role"), DoctorHost.ThisComputer()),
-                "update" => await Update(),
-                "autostart" => AutostartCommand(),
-                "config-check" => ConfigCheck(),
-                "version" => Print(Engine.Version),
-                _ => Print("usage: studystash run | serve | setup --page [--no-browser] | init | login [--no-browser] | logout\n"
-                    + "       | sync [--once] [--no-ollama] | tools [--probe]\n"
-                    + "       | doctor [--role server|client] | update [--check] [--force]\n"
-                    + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
-                    + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
-                    + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)", 2),
-            };
-        }
-        catch (OAuthException e)
-        {
-            return Print(e.Message, 1);
-        }
+            "run" => await Library(updates: true),
+            "serve" => await Library(updates: false),
+            "setup" when Flag("--page") => await Setup(),
+            "init" => Print($"Config: {Configs.WriteExample(home)}\nEdit it, or run `granola-share setup` for the guided version."),
+            "mcp" => await Mcp(),
+            "ai" => await AiCommand(),
+            "doctor" => await Doctor.RunAsync(home, Option("--role"), DoctorHost.ThisComputer()),
+            "update" => await Update(),
+            "autostart" => AutostartCommand(),
+            "config-check" => ConfigCheck(),
+            "version" => Print(Engine.Version),
+            _ => Print("usage: studystash run | serve | setup --page [--no-browser] | init\n"
+                + "       | doctor [--role server|client] | update [--check] [--force]\n"
+                + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
+                + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
+                + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)", 2),
+        };
 
         // Where `mcp` reads the library: the laptop's library, or this computer's own.
         static (string? Url, string Key) McpTarget(string home)
@@ -118,8 +106,8 @@ public static class Cli
 
         // --- the library ----------------------------------------------------------------------------------------------
 
-        // Its pages, the laptop API, the pipeline, and (with server_sync, for `run`) its own Granola sync and updates.
-        async Task<int> Library(bool ownSync, bool updates)
+        // Its pages, the laptop API, the pipeline, Claude's door, and (for `run`) updates.
+        async Task<int> Library(bool updates)
         {
             if (UnderWindowsKeepAlive("server")) return 0;
             var cfg = Configs.Load(home);
@@ -137,15 +125,7 @@ public static class Cli
             var ai = new AiJobs(home, () => cfg.OllamaHost);
             var pipeline = new Pipeline(cfg, store, ai.SortAsync, ai.SummarizeAsync, notesModel: () => ai.Describe("notes", cfg));
             var working = pipeline.Start(stop.Token);
-            Task syncing = Task.CompletedTask, updating = Task.CompletedTask;
-            if (ownSync && cfg.ServerSync)
-            {
-                if (!File.Exists(cfg.TokensPath))
-                    Console.WriteLine("server_sync is on but this server is not logged in to Granola; run `granola-share login`. "
-                        + "Continuing with the web UI only.");
-                else
-                    syncing = Sync.RunLoopAsync(cfg, GranolaClient.For(cfg.McpUrl, GranolaOAuth.For(cfg)), store, onQueued: pipeline.Wake, stop: stop.Token);
-            }
+            Task updating = Task.CompletedTask;
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
             builder.WebHost.ConfigureKestrel(k => k.Listen(
@@ -191,7 +171,7 @@ public static class Cli
             await Until(stop.Token);
             await app.StopAsync(CancellationToken.None);
             await claude.StopAsync(CancellationToken.None);
-            await Task.WhenAll(working, syncing, updating, indexing);
+            await Task.WhenAll(working, updating, indexing);
             return 0;
         }
 
@@ -273,72 +253,6 @@ public static class Cli
         async Task<int> Setup()
         {
             await SetupWeb.ServeAsync(home, browser: !Flag("--no-browser"), stop: stop.Token);
-            return 0;
-        }
-
-        async Task<int> SignIn(GranolaOAuth oauth)
-        {
-            await oauth.LoginAsync(openBrowser: !Flag("--no-browser"), ct: stop.Token);
-            return 0;
-        }
-
-        int Logout()
-        {
-            GranolaOAuth.For(Configs.Load(home)).Logout();
-            return Print("Logged out.");
-        }
-
-        // The library's own pull from its own Granola account.
-        async Task<int> SyncCommand()
-        {
-            var cfg = Configs.Load(home);
-            if (Flag("--no-ollama")) cfg.OllamaEnabled = false;
-            var client = GranolaClient.For(cfg.McpUrl, GranolaOAuth.For(cfg));
-            using var store = new Store(cfg.DbPath, cfg.PoolDir);
-            var ai = new AiJobs(home, () => cfg.OllamaHost);
-            var pipeline = new Pipeline(cfg, store, ai.SortAsync, ai.SummarizeAsync, notesModel: () => ai.Describe("notes", cfg));
-            if (Flag("--once"))
-            {
-                var rep = await Sync.SyncOnceAsync(cfg, client, store, ct: stop.Token);
-                Console.WriteLine($"listed={rep.Listed} new={rep.New} queued={rep.Queued.Count} errors={rep.Errors.Count}");
-                foreach (string e in rep.Errors) Console.WriteLine("  error: " + e);
-                Console.WriteLine($"filed {await pipeline.RunPendingAsync(stop.Token)} note(s)");
-                return 0;
-            }
-            var working = pipeline.Start(stop.Token);
-            await Sync.RunLoopAsync(cfg, client, store, onQueued: pipeline.Wake, stop: stop.Token);
-            await working;
-            return 0;
-        }
-
-        // The MCP tools Granola has, for debugging; with --probe, a look at the account and the newest lectures too.
-        async Task<int> Tools()
-        {
-            var cfg = Configs.Load(home);
-            var client = GranolaClient.For(cfg.McpUrl, GranolaOAuth.For(cfg));
-            await using var s = await client.SessionAsync(stop.Token);
-            var tools = await client.ToolsAsync(s, stop.Token);
-            Console.WriteLine(PyJson.Dumps(new JsonObject(tools.Select(t => KeyValuePair.Create(t.Key,
-                (JsonNode?)new JsonObject { ["description"] = t.Value.Description, ["schema"] = t.Value.Schema.DeepClone() }))), indent: 2));
-            if (!Flag("--probe")) return 0;
-            if (tools.ContainsKey("get_account_info"))
-            {
-                Console.WriteLine("\n== get_account_info ==");
-                Console.WriteLine(Py.Head(PyJson.Dumps(await client.CallAsync(s, "get_account_info", new JsonObject(), stop.Token), indent: 2), 3000));
-            }
-            var stubs = await client.ListMeetingsAsync(s, ct: stop.Token);
-            Console.WriteLine($"\n== list_meetings: {stubs.Count} meetings ==");
-            foreach (var m in stubs.Take(5))
-                Console.WriteLine($"- {m.Id}  {Py.Head(m.Date, 10)}  {m.Title}  folder={Py.StrRepr(m.Folder)}  notes={m.NotesMarkdown.Length} chars");
-            if (stubs.Count == 0) return 0;
-            var full = await client.GetMeetingsAsync(s, [stubs[0].Id], stop.Token);
-            if (full.Count > 0)
-            {
-                Console.WriteLine($"\n== get_meetings({stubs[0].Id}) keys: {Py.Repr(new JsonArray(full[0].Raw.Select(kv => kv.Key).Order(StringComparer.Ordinal).Select(k => (JsonNode?)k).ToArray()))} ==");
-                Console.WriteLine(Py.Head(full[0].NotesMarkdown, 800));
-            }
-            string transcript = await client.GetTranscriptAsync(s, stubs[0].Id, stop.Token);
-            Console.WriteLine($"\n== transcript: {transcript.Length} chars ==" + (transcript.Length > 0 ? "" : " (none: free Granola plans don't share transcripts)"));
             return 0;
         }
 

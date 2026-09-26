@@ -46,7 +46,6 @@ public class DoctorTests
             {
                 if (over["classes"] is JsonArray none) cfg.Classes = none.Select(c => new ClassDef(c!["name"].S())).ToList();
                 if (over["pool_password"] is JsonNode pw) cfg.PoolPassword = pw.S();
-                if (over["server_sync"] is JsonNode sync) cfg.ServerSync = sync.GetValue<bool>();
                 if (over["ollama_enabled"] is JsonNode ai) cfg.OllamaEnabled = ai.GetValue<bool>();
                 if (over["summary_enabled"] is JsonNode sum) cfg.SummaryEnabled = sum.GetValue<bool>();
             }
