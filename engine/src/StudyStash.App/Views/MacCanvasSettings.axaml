@@ -102,7 +102,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:CanvasCourseRow">
               <StackPanel>
-                <Grid ColumnDefinitions="*,Auto" MinHeight="56" Margin="16,8">
+                <Grid ColumnDefinitions="*,Auto" MinHeight="40" Margin="16,8">
                   <StackPanel Spacing="3" VerticalAlignment="Center" MinWidth="0">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <Ellipse Classes="cv-dot" Fill="{Binding Dot}" VerticalAlignment="Center" />
@@ -157,7 +157,7 @@
         <ItemsControl ItemsSource="{Binding Changes}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:CanvasChangeRow">
-              <Grid ColumnDefinitions="Auto,*" MinHeight="38" Margin="16,8">
+              <Grid ColumnDefinitions="Auto,*" MinHeight="22" Margin="16,8">
                 <c:Icon Classes="cv-change" Glyph="{Binding Glyph}" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" Classes="cv-change" Text="{Binding Text}" Margin="12,0,0,0" VerticalAlignment="Center" />
               </Grid>

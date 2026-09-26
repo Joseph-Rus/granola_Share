@@ -117,7 +117,7 @@
     <Setter Property="Margin" Value="16,0,0,0" />
   </Style>
   <Style Selector="Grid.cv-row">
-    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinHeight" Value="28" />
     <Setter Property="Margin" Value="16,8" />
   </Style>
   <Style Selector="TextBlock.cv-value">

@@ -54,8 +54,8 @@ public static class CanvasFrames
         var sidebarPad = new Border { Padding = new Thickness(8, 8, 0, 8), Child = sidebar };
 
         var pane = new Border { Width = 220, Child = sidebarPad };
-        var body = new Border { Padding = new Thickness(40, 40, 40, 32), Child = content };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("220,*"), Children = { pane, body } };
+        var body = new Border { Height = 820, ClipToBounds = true, Padding = new Thickness(40, 40, 40, 32), Child = content };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("220,*"), RowDefinitions = new RowDefinitions("*"), Children = { pane, body } };
         Grid.SetColumn(body, 1);
 
         var window = new Border { Width = 900, Height = 820, CornerRadius = new CornerRadius(26), ClipToBounds = true, Child = grid };
@@ -95,11 +95,11 @@ public static class CanvasFrames
         }
         var navPane = new Border { Width = 240, Child = nav };
 
-        var layer = new Border { Padding = new Thickness(28, 28, 36, 28), BorderThickness = new Thickness(1, 1, 0, 0), Child = content };
+        var layer = new Border { Height = 956, ClipToBounds = true, Padding = new Thickness(28, 28, 36, 28), BorderThickness = new Thickness(1, 1, 0, 0), Child = content };
         layer.Bind(Border.BackgroundProperty, layer.GetResourceObservable("Layer"));
         layer.Bind(Border.BorderBrushProperty, layer.GetResourceObservable("LayerStroke"));
 
-        var below = new Grid { ColumnDefinitions = new ColumnDefinitions("240,*"), Children = { navPane, layer } };
+        var below = new Grid { ColumnDefinitions = new ColumnDefinitions("240,*"), RowDefinitions = new RowDefinitions("*"), Children = { navPane, layer } };
         Grid.SetColumn(layer, 1);
         var stack = new DockPanel();
         DockPanel.SetDock(titleBar, Dock.Top);

@@ -130,7 +130,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="16,10" />
-    <Setter Property="Margin" Value="0,0,0,8" />
+    <Setter Property="Margin" Value="0,0,0,4" />
   </Style>
   <Style Selector="TextBlock.cv-value">
     <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
