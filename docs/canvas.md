@@ -271,12 +271,111 @@ plain text, CSV or JSON come back as Canvas sent them (Marginalia's rule, bug 16
 
 ## The JSON API for the Canvas screens
 
-_Filled in by T7._ Until then the app reads `GET /api/v2/canvas` (keys `url`, `courses`, `available`, `last_sync`,
-`error`, `needs_login`, `extension_seen`, `extension_version`, `extension_latest`, `extension_outdated`,
-`extension_update`, `syncing`, `left`, `exploring`, `scouts`, `changes`) and
-`GET /api/v2/assignments` (keys `class`, `id`, `name`, `due`, `points`, `status`, `score`, `submitted`, `url`,
-`done`, `folder`). The extension's door is `/api/v2/canvas/work`, `/results` and `/status`; AIs read through
-`/api/v2/canvas/fetch`, `/agent-courses` and `/courses`.
+Every route below is under the library password, `Authorization: Bearer <password>`, like the rest of `/api/v2`
+(`LibraryWeb.Api`/`ApiAsync`). A class name goes in the query (`?class=CS%20101`), never the path, since class names
+may hold `/`. `*_at` fields are Canvas's own UTC ISO timestamps; `due` (and `synced`, `last_sync`, `posted_at` when
+they come from a saved index) are as `AssignmentInfo`/`CourseIndex` keep them. `Core/Canvas/CanvasView.cs` builds
+every answer below from `CanvasSettings`, a class's `CourseIndex` (`home/canvas/<class>.json`) and the crawl's live
+state; `Library/LibraryWeb.Canvas.cs` only maps routes onto it, so `LocalLibrary` (Claude's tools, T8) can call the
+same builders without going through HTTP.
+
+**Where the data comes from today.** Assignments, their rubric, submission, attempts, files and comments are real
+(T3): every assignment- and Due-list endpoint below reflects a real sync. `Modules`, `Files`, `Announcements`,
+`Quizzes`, `Discussions` and `Todos` are already fields on `CourseIndex` and every endpoint that reads them is
+built and tested against that shape, but the crawl doesn't fill them in yet (T5 leaves modules.md and
+announcements.md as plain Markdown instead of a structured `ModuleInfo`/`AnnouncementInfo` list; quizzes,
+discussions and the planner are T6's). Until then `GET .../modules`, `.../files`, `.../announcements` and
+`.../pages` answer with the right shape and an empty (or files-only) list; the Due list and notifications only ever
+carry assignments, never a `TodoInfo`. Nothing needs to change in this file or in `LibraryWeb.Canvas.cs` when T5/T6
+land: they fill `CourseIndex`, and every builder here reads straight from it.
+
+### State
+
+- `GET /api/v2/canvas/state` (also embedded as `state` in `GET /api/v2/canvas`): `{"state", "school", "url",
+  "extension":{"seen","version","latest","outdated","updated":{"from","to","at"}|null}, "last_sync" (when the last
+  sync finished), "next_sync", "poll_minutes", "syncing":{"left","total","classes":[…]}|null, "paused_until"|null,
+  "error":{"text","at"}|null, "warnings":[…]}`. `state` is decided by `CanvasView.StateOf` in this order: `not_set_up`
+  (no Canvas address) > `no_extension` (Chrome has never checked in) > `signed_out` > `chrome_away` (not seen for
+  over 5 minutes) > `syncing` > `error` (the last sync ended with one) > `connected`. `syncing.left`/`total` count
+  classes, not jobs (`total` = classes in this sync, `left` = classes whose four listings haven't all finished);
+  `classes` names them, straight from the crawl's live section states — no new state kept for this.
+- `POST /api/v2/canvas` (unchanged routes, wider body): also takes `poll_minutes` (15–1440, clamped) and
+  `dismiss_update: true`; its answer (same as `GET /api/v2/canvas`) now also carries `state` and `course_info`
+  (Canvas course id → `{code, name, term}`, from `FindCoursesAsync`, which now follows every page and asks for
+  `include[]=term`).
+
+### Classes and the Due list
+
+- `GET /api/v2/canvas/classes` → one row per class in this library, linked or not: `[{"class","linked",
+  "canvas":{"id","code","name","term","url"}|null, "suggested":{"id","name"}|null,"last_sync","counts":
+  {"to_hand_in","done","modules","files","announcements","announcements_new"},"files_hidden","scout":
+  {"state":"done|exploring|waiting|failed|never","files","when","report"}}]`. `suggested` (only when a class isn't
+  linked) is `CourseMatch.Suggest`'s best guess from the school's course list: a shared number ("CS 101" ~
+  "COMP 101") or a shared word, one a prefix of the other ("CALC" ~ "Calculus"); it's shown, never linked, by
+  itself. `announcements_new` is currently just unread-on-Canvas (T6's per-student "opened in Study Stash" tracking,
+  `CanvasSeen`, narrows this further once announcements are populated).
+- `GET /api/v2/canvas/due` → `{"synced","to_hand_in","next":item|null,"groups":[{"key","label","items":[item]}]}`
+  across every class, groups in order **Overdue** (not done, due before now) / **This week** (due before the eighth
+  day from now) / **Later** / **No due date** / **Handed in** (submitted, graded or excused, most recently
+  submitted-or-graded first, only the last 7 days). `to_hand_in` is the size of the first four groups combined;
+  `next` is the soonest of them that isn't overdue.
+- `GET /api/v2/canvas/assignments?class=` → `{"class","to_hand_in":[item],"done":[item]}` (soonest due first / most
+  recently due first). `item` = `{"class","id","name","kind","due","due_at","points","status","label","score",
+  "grade","score_text","late","missing","excused","submitted","graded_at","marked_done","url","folder"}`.
+
+### One assignment
+
+- `GET /api/v2/canvas/assignment?class=&id=` → `item` plus `{"instructions","unlock_at","lock_at",
+  "submission_types","allowed_attempts","grading_type","files":[file],"rubric":[{"id","criterion","description",
+  "points","ratings":[{"label","points"}],"mark":{"points","rating","comment"}|null}],"submission":{"state",
+  "attempt","submitted_at","graded_at","score","grade","late","points_deducted","body","files":[file],"attempts":
+  [{"attempt","submitted_at","late","files":[file]}]}|null,"comments":[{"author","at","text","files":[file],
+  "media_url"}],"quiz":{…}|null (only once T6 fills `CourseIndex.Quizzes`),"spec","feedback"}` — `spec`/`feedback`
+  are the assignment's own `spec.md`/`feedback.md`, relative to the class's folder, for `/api/v2/files/raw`. `file` =
+  `{"id","name","size","content_type","format","local","skipped","url"}`; `format` is derived from the content type
+  or the name's extension when nothing more specific is saved (T5 will save a real one on `CourseFileInfo`).
+  A 404 for an unknown class or assignment id.
+
+### Modules, files, announcements, pages
+
+- `GET /api/v2/canvas/modules?class=` → `{"count","modules":[{"id","name","position","state","unlock_at",
+  "items_count","items":[{"id","type","kind","title","indent","format","size","local","saved","source","url",
+  "external_url","assignment_id","locked","skipped"}]}]}`, straight off `CourseIndex.Modules`.
+- `GET /api/v2/canvas/files?class=` → `{"allowed","count","files":[{"id","folder","name","size","content_type",
+  "format","updated_at","local","skipped"}]}`; `allowed` is false only when Canvas hides the Files area
+  (`CourseIndex.FilesHidden`).
+- `GET /api/v2/canvas/announcements?class=` → `{"count","new","items":[{"id","title","posted_at","author","new",
+  "read_on_canvas","body","files":[file],"url"}]}`, newest first; `new` is unread on Canvas and not marked seen in
+  Study Stash. `POST /api/v2/canvas/announcements/seen {"class","ids":[…]}` marks announcements opened here
+  (`Core/Canvas/CanvasSeen.cs`, `home/canvas_seen.json`) so they stop counting as new even before Canvas itself
+  shows them read.
+- `GET /api/v2/canvas/pages?class=` → `{"syllabus":path|null,"front_page":page|null,"pages":[page],"quizzes":[…],
+  "discussions":[…]}`; `page` = `{"title","url","updated_at","local","in_module"}`.
+
+### Notifications
+
+- `GET /api/v2/canvas/notifications?after=<id>` → `{"last","items":[{"id","kind","title","text","class",
+  "assignment_id","announcement_id","at","seen"}]}`. `Core/Canvas/CanvasNotifications.cs`
+  (`home/canvas_notifications.json`, ids always increasing, capped at 200) turns a finished sync's `CanvasChange`s
+  into notifications (`new` → `new_assignment`/"New assignment", `moved` → `due_moved`, `graded` → `new_score`,
+  `feedback` → `new_feedback`, `missing` → `missing`; `removed` isn't news). A class's first sync makes no changes at
+  all, so it makes no notifications either. Reading this endpoint also adds one `due_soon`/"Due soon" per assignment
+  the first time it's open and due within 24 hours, never repeated for the same assignment.
+- `POST /api/v2/canvas/notifications/seen {"up_to":id}` marks every notification up to that id seen.
+
+### Raw files
+
+- `GET /api/v2/files/raw?class=&path=` → the bytes of any file already saved inside that class's folder (any size,
+  any type — for opening `ps4-answers.pdf` on a laptop, say); 404 for a path that leaves the folder or doesn't
+  exist. `GET /api/v2/files?class=&path=` (unchanged) still only serves small `.md`/`.txt` files, as text, for the
+  library's own pages.
+
+### Unchanged
+
+`GET /api/v2/canvas` gains `state` and `course_info` but keeps every key the app already reads (`url`, `available`,
+`courses`, `error`, `extension_seen`, `syncing`, `left`, `last_sync`, …); `GET /api/v2/assignments` keeps its flat
+list and all its keys. The extension's door (`/api/v2/canvas/work`, `/results`, `/status`) and the AI reads
+(`/api/v2/canvas/fetch`, `/agent-courses`, `/courses`, `/api/v2/canvas/scout`) are untouched.
 
 ## Claude's Canvas tools
 
@@ -292,5 +391,11 @@ asked for" checks, and `Run(sync)`, which plays the extension until the sync is 
 Problem set 4 graded 18/20 by Dr. Okafor with the rubric comment "The frame for n = 1 is missing in 3b.", Week 3 and
 Week 4 modules, four announcements with one unread). `ExtensionScriptTests` runs the real `background.js` (the copy
 the engine carries) in Jint, with `importScripts`, `chrome.*`, `fetch`, `btoa`, `URL` and `setTimeout` stood in for;
-`CanvasExtensionTests` covers the folder, the handshake and a 40 MB file through real Kestrel. Tests fix the clock at the design's "now", Thu 25 Sep 2025,
+`CanvasExtensionTests` covers the folder, the handshake and a 40 MB file through real Kestrel. `CanvasApiTests` syncs
+a library over all four of the design's classes (adding minimal fixtures for BIO 110, CALC II and HIST 210 alongside
+COMP 101's) and reads the JSON API in this document back through a real `TestSite`: state's priority order, the
+classes list (including a suggested, unlinked course), the cross-class Due list, one class's to-hand-in/done split,
+one assignment's rubric marks and the grader's comment, modules/files/announcements' shape, notifications (due soon,
+marking seen), a raw file download, and the old keys `GET /api/v2/canvas` and `GET /api/v2/assignments` still
+answer. Tests fix the clock at the design's "now", Thu 25 Sep 2025,
 10:24 in California (`2025-09-25T17:24:00Z`), and never assert times in the machine's own zone. Made-up people only.
