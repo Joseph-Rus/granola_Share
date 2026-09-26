@@ -115,6 +115,17 @@
           <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource Fg2}" />
         </StackPanel>
         <StackPanel Spacing="4">
+          <Button Classes="nav" Classes.selected="{Binding Due.Selected, FallbackValue=False}" IsVisible="{Binding HasDue}"
+                  Command="{Binding PickClassCommand}" CommandParameter="{Binding Due}">
+            <Panel>
+              <Border Classes="pill" Width="3" Height="16" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Margin="-16,0,0,0" />
+              <Grid ColumnDefinitions="Auto,14,*,Auto">
+                <c:Icon Glyph="event_upcoming" Size="16" Foreground="{DynamicResource AccentText}" />
+                <TextBlock Grid.Column="2" Text="Due" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Classes="count" Text="{Binding Due.Count, FallbackValue=0}" FontSize="12" VerticalAlignment="Center" />
+              </Grid>
+            </Panel>
+          </Button>
           <TextBlock Text="Classes" FontSize="14" FontWeight="SemiBold" Margin="16,8" />
           <ItemsControl ItemsSource="{Binding Classes}">
             <ItemsControl.ItemsPanel>
@@ -122,7 +133,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ClassItem">
-                <Button Classes="nav" Classes.selected="{Binding Selected}"
+                <Button Classes="nav" Classes.selected="{Binding Selected}" IsVisible="{Binding !IsDue}"
                         Command="{Binding $parent[UserControl].((vm:LibraryModel)DataContext).PickClassCommand}" CommandParameter="{Binding}">
                   <Panel>
                     <Border Classes="pill" Width="3" Height="16" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Margin="-16,0,0,0" />

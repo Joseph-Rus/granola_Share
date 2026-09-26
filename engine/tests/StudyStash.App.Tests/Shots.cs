@@ -295,6 +295,13 @@ public class SurfaceShots
         foreach (var t in Themes) Shot.Take("win-04-full-app", SkinKind.Win, t, () => new WinLibrary { DataContext = Demo.Library(), Width = 1280, Height = 800 });
     }
 
+    /// <summary>The sidebar with a Due entry, to eyeball against the Canvas Due screen's.</summary>
+    [AvaloniaFact]
+    public void Win_app_due()
+    {
+        Shot.Take("win-04-full-app-due", SkinKind.Win, ThemeVariant.Light, () => new WinLibrary { DataContext = Demo.Library(due: true), Width = 1280, Height = 800 });
+    }
+
     [AvaloniaFact]
     public void Mac_setup()
     {
