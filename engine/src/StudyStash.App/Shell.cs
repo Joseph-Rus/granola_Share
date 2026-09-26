@@ -331,6 +331,16 @@ public static partial class Shell
                 "Settings", ShowSettings);
             return;
         }
+        var mic = host.MicAccess();
+        if (mic is MicAccess.Denied or MicAccess.Restricted)
+        {
+            var p = Problems.For(host);
+            Toast(p?.Title ?? "Study Stash can't use the microphone", p?.Detail ?? "", p is { HasAction: true } ? p.ActionLabel : null,
+                () => Dialogs.OpenUrl(host.MicSettingsUrl));
+            return;
+        }
+        // Not asked yet: ask now, and start recording anyway (the watchdog catches a refusal once it comes).
+        if (mic == MicAccess.NotAsked) host.AskMic();
         try
         {
             var l = host.StartRecording(RecordClass());
