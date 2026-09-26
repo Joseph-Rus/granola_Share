@@ -121,20 +121,5 @@ public class UiTests
         Assert.True(Updates.IsNewer(new Release("v0.4.4.1", [0, 4, 4, 1], "", ""), "0.4.4"));
         Assert.False(Updates.IsNewer(new Release("v0.4", [0, 4], "", ""), "0.4.0"));
     }
-
-    [Fact]
-    public async Task The_newest_release_is_read_from_github()
-    {
-        var github = new FakeOllama((path, _) => path == "/repos/Joseph-Rus/study-stash/releases/latest" ? JsonNode.Parse("""
-            {"tag_name": "v0.5.0", "html_url": "https://github.com/Joseph-Rus/study-stash/releases/tag/v0.5.0",
-             "assets": [{"name": "Study-Stash-mac.zip", "browser_download_url": "https://dl/mac.zip"},
-                        {"name": "Study-Stash-helper-windows.zip", "browser_download_url": "https://dl/win.zip"}]}
-            """)! : (System.Net.HttpStatusCode.NotFound, "{}"));
-        var rel = await Updates.LatestAsync(github.Client());
-        Assert.Equal(("v0.5.0", "https://dl/mac.zip", "https://dl/win.zip", ""), (rel!.Tag, rel.MacApp, rel.WindowsHelper, rel.WindowsApp));
-        Assert.Equal([0, 5, 0], rel.Version);
-        Assert.Equal("https://github.com/Joseph-Rus/study-stash/archive/refs/tags/v0.5.0.tar.gz", rel.Url);
-        var none = new FakeOllama((_, _) => (System.Net.HttpStatusCode.NotFound, "{}"));
-        Assert.Null(await Updates.LatestAsync(none.Client()));
-    }
+    // The newest release is parsed from GitHub: UpdaterTests (T3), with the four installers instead of the old zips.
 }

@@ -23,8 +23,7 @@ public sealed class UpdateHost
     public HttpClient? Http { get; init; }
     public Runner Run { get; init; } = (_, _, _) => throw Off("Running commands");
     public ServicePlaces Places { get; init; } = ServicePlaces.Default;
-    /// <summary>What the copy at this path (a Mac bundle or a Windows exe) says its version is, or null when it
-    /// doesn't run here.</summary>
+    /// <summary>What running this exact program with `version` prints, or null when it doesn't run here.</summary>
     public Func<string, string?> VersionOf { get; init; } = _ => throw Off("Running the new app");
     /// <summary>Start a program detached from this one, so it outlives it: Windows' Setup.exe, or the Mac relaunch
     /// waiter below.</summary>
@@ -105,10 +104,9 @@ public static partial class Updates
             _ => host.AppDir.Length > 0 ? null : host.NotInstalledReason,
         };
 
-    /// <summary>What the copy at this path says `version` is: a Mac bundle's own program, or a Windows exe directly.</summary>
-    public static string? VersionOf(string appOrExe)
+    /// <summary>What running this exact program with `version` prints, or null when it doesn't run here.</summary>
+    public static string? VersionOf(string exe)
     {
-        string exe = appOrExe.EndsWith(".app", StringComparison.OrdinalIgnoreCase) ? Path.Combine(appOrExe, "Contents", "MacOS", "StudyStash") : appOrExe;
         var p = Machine.Run(exe, ["version"], TimeSpan.FromSeconds(30));
         return p is { ExitCode: 0 } ? Py.Strip(p.Stdout) : null;
     }
@@ -198,7 +196,7 @@ public static partial class Updates
             }
             string freshVersion = Apps.PlistString(Path.Combine(fresh, "Contents", "Info.plist"), "CFBundleShortVersionString") ?? "";
             bool signedOk = host.Run("codesign", ["--verify", "--deep", "--strict", fresh], TimeSpan.FromMinutes(2)) is { ExitCode: 0 };
-            bool runsOk = host.VersionOf(fresh) is string v && Compare(ParseVersion(v), release.Version) == 0;
+            bool runsOk = host.VersionOf(MacExe(fresh)) is string v && Compare(ParseVersion(v), release.Version) == 0;
             if (Compare(ParseVersion(freshVersion), release.Version) != 0 || !signedOk || !runsOk)
             {
                 Apps.TryDeleteFolder(fresh);

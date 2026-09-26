@@ -24,7 +24,7 @@ public static class Checksums
             if (sp < 0) continue;
             string hex = line[..sp].Trim().ToLowerInvariant();
             string name = line[(sp + 1)..].TrimStart(' ', '*').Trim();
-            if (hex.Length > 0 && name.Length > 0) map[name] = hex;
+            if (hex.Length > 0 && name.Length > 0 && hex.All(Uri.IsHexDigit)) map[name] = hex;
         }
         return map;
     }
