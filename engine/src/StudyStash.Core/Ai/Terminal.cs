@@ -39,7 +39,6 @@ public static class Terminal
             "gemini" => ("agy", new List<string>()),
             _ => ("claude", new List<string> { "--append-system-prompt", Briefing(library, folder, className) }),
         };
-        string exe = AiProvider.Which(bin) ?? throw new InvalidOperationException($"{bin} isn't installed on this computer.");
         if (bin == "claude" && mcp.Count > 0)
             args.AddRange(["--mcp-config", new System.Text.Json.Nodes.JsonObject
             {
@@ -52,10 +51,22 @@ public static class Terminal
                 },
             }.ToJsonString()]);
         if (!Py.SamePath(folder, library)) args.AddRange(bin == "claude" ? ["--add-dir", library] : []);
+        return LaunchInTerminal(home, folder, terminal, bin, args);
+    }
 
+    /// <summary>Open a terminal on this computer running a plain command (a sign-in, e.g. `codex login`), for the
+    /// student to finish by hand. The terminal's name, or throws InvalidOperationException saying why not.</summary>
+    public static string RunCommand(string home, string terminal, string exe, IReadOnlyList<string> args) =>
+        LaunchInTerminal(home, home, terminal, exe, args);
+
+    static string LaunchInTerminal(string home, string folder, string terminal, string bin, IReadOnlyList<string> args)
+    {
+        string exe = AiProvider.Which(bin) ?? throw new InvalidOperationException($"{bin} isn't installed on this computer.");
         if (OperatingSystem.IsWindows())
         {
-            Process.Start(new ProcessStartInfo("wt.exe") { UseShellExecute = true, ArgumentList = { "-d", folder, exe } });
+            var wt = new ProcessStartInfo("wt.exe") { UseShellExecute = true, ArgumentList = { "-d", folder, exe } };
+            foreach (string a in args) wt.ArgumentList.Add(a);
+            Process.Start(wt);
             return "Windows Terminal";
         }
         var t = Mac.FirstOrDefault(m => m.Id == terminal);
