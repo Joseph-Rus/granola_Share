@@ -120,7 +120,10 @@ public sealed class CourseIndex
             Modules = Pick("modules", staged.Modules, prev?.Modules),
             Files = Pick("files", staged.Files, prev?.Files),
             FilesHidden = State("files") switch { "hidden" => true, "ok" => false, _ => prev?.FilesHidden ?? false },
-            Pages = Pick("pages", staged.Pages, prev?.Pages),
+            // Pages outside modules aren't a tracked section (T1's four listings): a sync that read any keeps only
+            // what it read (a page gone from Canvas drops out); one that read none (hidden, failed, or never asked
+            // this class's course) keeps what was known.
+            Pages = staged.Pages.Count > 0 ? staged.Pages : prev?.Pages ?? [],
             FrontPage = staged.FrontPage ?? prev?.FrontPage,
             Syllabus = staged.Syllabus ?? prev?.Syllabus,
             Announcements = Pick("announcements", staged.Announcements, prev?.Announcements),
