@@ -1,23 +1,52 @@
 using System.Diagnostics;
+using System.Net.Sockets;
 
 namespace StudyStash.Core;
+
+/// <summary>The notes engine didn't answer at all (not running, or not reachable): the lecture waits for it instead of
+/// being filed without notes.</summary>
+public sealed class EngineOfflineException(string engine, Exception inner)
+    : Exception($"{engine} isn't answering: {inner.Message}", inner)
+{
+    /// <summary>What writes the notes ("Ollama").</summary>
+    public string Engine { get; } = engine;
+}
 
 /// <summary>
 /// Turns queued lectures into filed ones: writes our notes from the transcript, sorts, saves. Runs in the
 /// background of the library, so an upload from the laptop returns at once even when a big model takes minutes.
+/// While the notes engine isn't answering, lectures stay in the queue and get their notes when it's back.
 /// </summary>
 public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
-    Func<Meeting, Config, Task<string>>? summarize = null, Action<string>? log = null, Func<string>? notesModel = null)
+    Func<Meeting, Config, Task<string>>? summarize = null, Action<string>? log = null, Func<string>? notesModel = null,
+    Func<string>? notesEngine = null)
 {
     readonly Func<Meeting, Config, Task<string>> summarize = summarize ?? ((m, c) => Summarize.SummarizeTranscriptAsync(m, c));
     readonly Action<string> log = log ?? Console.WriteLine;
     readonly SemaphoreSlim wake = new(0, 1);
     volatile string? current;
+    volatile string? engineProblem;
 
     public Config Cfg { get; } = cfg;
 
     /// <summary>The id of the lecture being written right now.</summary>
     public string? Current => current;
+
+    /// <summary>"Ollama isn't answering on your library. New lectures wait and get their notes when it's back.", while
+    /// it isn't; null once notes are written again.</summary>
+    public string? EngineProblem => engineProblem;
+
+    /// <summary>How long a pass waits before looking at the queue again: longer while the notes engine is away.</summary>
+    public TimeSpan Pause => engineProblem is null ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(60);
+
+    /// <summary>Not an answer, but no answer: nothing listening, the connection dropped, or no reply in time. A
+    /// refusal with a status (a model it doesn't have) is an answer, and keeps today's handling.</summary>
+    public static bool IsOffline(Exception e) => e switch
+    {
+        TimeoutException => true,
+        HttpRequestException h => h.StatusCode is null || h.InnerException is SocketException,
+        _ => false,
+    };
 
     public async Task<string?> ProcessAsync(NoteRow row)
     {
@@ -31,6 +60,10 @@ public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
             {
                 summary = await summarize(m, Cfg);
                 log($"[pipeline] summarized '{m.Title}' with {model} in {watch.Elapsed.TotalSeconds:0}s");
+            }
+            catch (Exception e) when (IsOffline(e))
+            {
+                throw new EngineOfflineException(notesEngine?.Invoke() ?? "Ollama", e);
             }
             catch (Exception e)
             {
@@ -84,6 +117,19 @@ public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
             {
                 await ProcessAsync(row);
                 done++;
+                if (engineProblem is not null)
+                {
+                    engineProblem = null;
+                    log("[pipeline] the notes engine is answering again");
+                }
+            }
+            catch (EngineOfflineException e)
+            {
+                // Back in the queue, with the rest waiting behind it: the next pass tries again.
+                store.ResetWorking();
+                engineProblem = $"{e.Engine} isn't answering on your library. New lectures wait and get their notes when it's back.";
+                log($"[pipeline] {e.Message}: '{row.Id}' waits");
+                break;
             }
             catch (Exception e)
             {
@@ -127,7 +173,7 @@ public sealed class Pipeline(Config cfg, Store store, SortChatFn? chat = null,
             }
             try
             {
-                await wake.WaitAsync(TimeSpan.FromSeconds(30), stop);
+                await wake.WaitAsync(Pause, stop);
             }
             catch (OperationCanceledException)
             {
