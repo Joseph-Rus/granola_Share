@@ -367,10 +367,16 @@
     <Style Selector="Border.field">
       <Setter Property="Height" Value="30" />
       <Setter Property="CornerRadius" Value="{DynamicResource RadiusControl}" />
-      <Setter Property="Background" Value="{DynamicResource Control}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Sep}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Padding" Value="9,0" />
+    </Style>
+    <Style Selector=".mac Border.field">
+      <Setter Property="Background" Value="{DynamicResource Raised}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Sep}" />
+    </Style>
+    <Style Selector=".win Border.field">
+      <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
     </Style>
     <Style Selector="Border.field.bad">
       <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />

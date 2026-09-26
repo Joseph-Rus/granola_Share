@@ -15,8 +15,9 @@ namespace StudyStash.App.Windows;
 /// </summary>
 public class Floating : Window
 {
-    /// <summary>Room for the content's shadow, all round.</summary>
-    public const double ShadowRoom = 28;
+    /// <summary>Room for the content's shadow, all round: the Mac's Liquid Glass shadow reaches further (18+50px)
+    /// than Windows' does.</summary>
+    public static readonly double ShadowRoom = OperatingSystem.IsMacOS() ? 60 : 28;
 
     readonly Border holder = new() { Padding = new Thickness(ShadowRoom), ClipToBounds = false };
 

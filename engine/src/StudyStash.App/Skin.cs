@@ -177,13 +177,6 @@ public static class Skin
         r["Ring3"] = Shadows([Outer(0, 0, 0, 3, accentTint)]);
         r["Ring4"] = Shadows([Outer(0, 0, 0, 4, accentTint)]);
         r["OnAccentRing"] = Shadows([Outer(0, 0, 0, 1.5, onAccent)]);
-
-        // Old names, until every view uses the design's.
-        r["Mat"] = r["GlassSolid"];
-        r["Side"] = r["Page"] = r["Nav"] = r["Win"];
-        r["Control"] = r["Raised"];
-        r["Shadow"] = r["GlassShadow"];
-        r["ShadowSmall"] = Shadows([Outer(0, 1, 2, 0, Black(dark ? 0.35 : 0.14))]);
         B("Ground", dark ? Hex("#161616") : Hex("#E4E2DF"));
     }
 
@@ -234,12 +227,8 @@ public static class Skin
             B("IbGlyph", Colors.White);
             B("Hover", Black(0.04));
             B("Press", Black(0.02));
-            // Old names, until every view uses the design's.
             B("Fill", Black(0.04));
             B("Fill2", Black(0.06));
-            B("Page", Hex("#F9F9F9"));
-            B("Nav", Hex("#F3F3F3"));
-            B("Control", Hex("#FDFDFD"));
         }
         else
         {
@@ -281,12 +270,8 @@ public static class Skin
             B("IbGlyph", Colors.Black);
             B("Hover", White(0.06));
             B("Press", White(0.03));
-            // Old names, until every view uses the design's.
             B("Fill", White(0.06));
             B("Fill2", White(0.09));
-            B("Page", Hex("#272727"));
-            B("Nav", Hex("#202020"));
-            B("Control", Hex("#2D2D2D"));
         }
         B("IcInfo", accentText);
         B("Good", Good);

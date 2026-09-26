@@ -12,8 +12,8 @@ public partial class ToastView : UserControl
         CloseButton.Click += (_, _) => Dismissed?.Invoke();
         bool mac = Skin.Current == SkinKind.Mac;
         Card.CornerRadius = new CornerRadius(mac ? 14 : 8);
-        Bind(Card, Border.BackgroundProperty, mac ? "Mat" : "Acrylic");
-        Bind(Card, Border.BoxShadowProperty, mac ? "Shadow" : "ShadowLg");
+        Bind(Card, Border.BackgroundProperty, mac ? "GlassSolid" : "Acrylic");
+        Bind(Card, Border.BoxShadowProperty, mac ? "GlassShadow" : "ShadowLg");
         if (!mac)
         {
             Bind(Card, Border.BorderBrushProperty, "FlyStroke");
