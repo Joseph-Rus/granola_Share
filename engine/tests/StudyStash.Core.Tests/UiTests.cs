@@ -107,6 +107,44 @@ public class UiTests
     }
 
     [Fact]
+    public async Task A_library_from_any_version_on_the_port_counts_as_ours()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            async Task<string> Answering(System.Net.HttpStatusCode status, string body, string? header = null)
+            {
+                using var http = new HttpClient(new HealthAnswer(status, body, header));
+                return await HostInfo.PortStatusAsync(port, http);
+            }
+            Assert.Equal("ours", await Answering(System.Net.HttpStatusCode.OK, "{}", "X-Study-Stash"));
+            // Libraries from before say so by what their health check answers: their details, or their password refusal.
+            Assert.Equal("ours", await Answering(System.Net.HttpStatusCode.OK, """{"ok": true, "pool_name": "Fall", "classes": ["CS 101"]}"""));
+            Assert.Equal("ours", await Answering(System.Net.HttpStatusCode.Unauthorized, """{"detail": "wrong password"}"""));
+            Assert.Equal("ours", await Answering(System.Net.HttpStatusCode.Unauthorized, """{"detail": "bad pool password"}"""));
+            Assert.Equal("busy", await Answering(System.Net.HttpStatusCode.Unauthorized, """{"detail": "sign in first"}"""));
+            Assert.Equal("busy", await Answering(System.Net.HttpStatusCode.OK, """{"ok": true}"""));
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    /// <summary>Answers every request with one status, JSON body and optional marker header.</summary>
+    sealed class HealthAnswer(System.Net.HttpStatusCode status, string body, string? header) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var r = new HttpResponseMessage(status) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+            if (header is not null) r.Headers.Add(header, "0.4.4");
+            return Task.FromResult(r);
+        }
+    }
+
+    [Fact]
     public void Releases_compare_like_python_tuples()
     {
         var v9 = new Release("v9.9.9", [9, 9, 9], "", "");

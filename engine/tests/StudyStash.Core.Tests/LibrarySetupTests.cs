@@ -290,6 +290,25 @@ public class LibrarySetupTests
     public async Task The_page_matches_the_python_engine_in_every_state()
     {
         if (OperatingSystem.IsWindows()) return; // the page shows the notes folder, and Windows spells it with backslashes
+        foreach (var (name, want, html) in await GoldenStates())
+            Assert.True(html == want, $"setup page, {name}: differs from Python's at {Diff(want, html)}");
+    }
+
+    [Fact]
+    public async Task No_setup_state_mentions_granola()
+    {
+        foreach (var (name, _, html) in await GoldenStates())
+        {
+            Assert.False(html.Contains("granola", StringComparison.OrdinalIgnoreCase), $"setup page, {name}, mentions Granola");
+            Assert.DoesNotContain("install.sh", html); // the laptop gets the app, not a line for a terminal
+        }
+    }
+
+    /// <summary>The setup page in each state the fixture keeps (fresh, windows, mac-asleep, finished), as this
+    /// engine draws it, with the fixture's copy.</summary>
+    static async Task<List<(string Name, string Want, string Html)>> GoldenStates()
+    {
+        var states = new List<(string, string, string)>();
         foreach (var (name, want) in Golden.PageCases()["setup"]!.AsObject())
         {
             using var dir = new TempDir();
@@ -310,9 +329,9 @@ public class LibrarySetupTests
             };
             var s = new LibrarySetup(dir["home"], host);
             if (name == "finished") s.Finished = true;
-            string html = await SetupWeb.RenderAsync(s);
-            Assert.True(html == want["html"].S(), $"setup page, {name}: differs from Python's at {Diff(want["html"].S(), html)}");
+            states.Add((name, want["html"].S(), await SetupWeb.RenderAsync(s)));
         }
+        return states;
     }
 
     static string Diff(string want, string got)

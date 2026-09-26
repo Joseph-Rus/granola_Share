@@ -104,6 +104,58 @@ public class LibraryWebTests
     }
 
     [Fact]
+    public async Task No_page_mentions_granola()
+    {
+        using var dir = new TempDir();
+        var cfg = new Config(dir["home"], dir["pool"])
+        {
+            PoolPassword = "pw", SummaryModel = "gemma4:e4b",
+            Classes = [new ClassDef("CS 101", ["cs101"]), new ClassDef("Bio 110"), new ClassDef("Calc II")],
+        };
+        using var store = new Store(cfg.DbPath, cfg.PoolDir);
+        SeedLibrary(cfg, store);
+        // A lecture the laptop recorded: filed under the class it was recorded for, a transcript, no notes of its own,
+        // and notes that failed to write.
+        const string failed = "Summary with gemma4:e4b failed: the model is not installed";
+        store.Save(new Meeting("r1") { Title = "Recursion", Date = "2026-09-11T10:00:00", Folder = "CS 101",
+                Transcript = "today we trace a recursive call down to its base case" },
+            new Classification("CS 101", 1.0, "folder", "Recursion and the call stack", ["recursion"]), error: failed);
+        // One that came with notes typed in class, whose study notes also failed.
+        store.Save(new Meeting("r2") { Title = "Osmosis", Date = "2026-09-12T09:00:00", Folder = "Bio 110",
+                NotesMarkdown = "water follows salt", Transcript = "water crosses the membrane toward more salt" },
+            new Classification("Bio 110", 1.0, "folder", "", []), error: failed);
+        await using var site = await Site(cfg, store);
+        var login = await site.Stranger().GetAsync("/login");
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var pages = new Dictionary<string, string> { ["/login"] = await login.Content.ReadAsStringAsync() };
+        await site.PostForm("/login", ("password", "pw"), ("next", "/"));
+
+        string[] paths = ["/", "/unsorted", "/search?q=cells", "/settings",
+            .. new[] { "CS 101", "Bio 110", "Calc II", "History 9" }.Select(Ui.ClassUrl),
+            .. new[] { "n1", "n2", "n3", "n4", "q1", "f1", "r1", "r2" }.Select(id => $"/note/{id}")];
+        foreach (string path in paths)
+        {
+            var r = await site.Get(path);
+            Assert.True(r.StatusCode == HttpStatusCode.OK, $"{path}: {(int)r.StatusCode}");
+            pages[path] = await r.Content.ReadAsStringAsync();
+        }
+        foreach (var (path, html) in pages)
+            Assert.False(html.Contains("granola", StringComparison.OrdinalIgnoreCase), $"{path} mentions Granola");
+
+        // Each lecture says where its notes came from, in a recording's terms.
+        string recorded = pages["/note/r1"];
+        Assert.Contains("<dt>Summary</dt><dd>No study notes yet</dd>", recorded);
+        Assert.Contains("Sorted by the class it was recorded for", recorded);
+        Assert.Contains(failed + ".", recorded);
+        Assert.DoesNotContain("Showing the notes it came with", recorded); // there are none to show instead
+        Assert.Contains("<dt>Summary</dt><dd>The notes it came with</dd>", pages["/note/r2"]);
+        Assert.Contains(failed + ". Showing the notes it came with.", pages["/note/r2"]);
+        Assert.Contains("<section id=\"notes\" role=\"tabpanel\">", pages["/note/r2"]);
+        Assert.Contains("<dt>Summary</dt><dd>No transcript, so no study notes</dd>", pages["/note/n3"]);
+        Assert.Contains("No notes for this lecture yet.", pages["/note/n3"]);
+    }
+
+    [Fact]
     public async Task Settings_picks_the_ai_for_everything_and_for_each_kind_of_work()
     {
         using var dir = new TempDir();
