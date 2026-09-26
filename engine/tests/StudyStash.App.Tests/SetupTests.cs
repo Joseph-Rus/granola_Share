@@ -152,6 +152,44 @@ public sealed class SetupTests
     }
 
     [Fact]
+    public async Task Adding_an_already_shown_class_sets_its_times_instead_of_posting_a_duplicate()
+    {
+        int posts = 0;
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        WebHostBuilderKestrelExtensions.ConfigureKestrel(builder.WebHost, k => k.Listen(IPAddress.Loopback, 0));
+        var app = builder.Build();
+        app.MapPost("/classes", () => { posts++; return Results.Ok(new { }); });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            string url = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+            using var home = new TempHome();
+            using var host = Host(home);
+            var cc = host.Client();
+            cc.ServerUrl = url;
+            Configs.SaveClient(cc);
+            var t = host.Timetable;
+            t.Classes.Add(new TimetableClass("CS 101", []));
+            host.SaveTimetable(t);
+            var m = Setup.Make(host);
+
+            m.NewClass = "CS 101";
+            m.NewWhen = "Tue Thu 10:00-11:15";
+            await m.AddClassCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, posts);
+            Assert.Single(m.Classes, c => c.Name == "CS 101");
+            Assert.Contains("Tue", m.Classes.Single(c => c.Name == "CS 101").When);
+            Assert.Single(host.Timetable.Classes, c => c.Name == "CS 101");
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Mic_check_hears_speech_within_two_seconds()
     {
         string wav = Path.Combine(AppContext.BaseDirectory, "Fixtures", "speech.wav");

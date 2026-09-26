@@ -219,7 +219,8 @@ public static class Setup
             times = parsed;
         }
         m.ClassProblem = null;
-        if (host.Remote() is { } lib)
+        bool existing = host.Timetable.Classes.Any(c => c.Name == name);
+        if (!existing && host.Remote() is { } lib)
         {
             try
             {
@@ -235,7 +236,10 @@ public static class Setup
         t.Classes.RemoveAll(c => c.Name == name);
         t.Classes.Add(new TimetableClass(name, times));
         host.SaveTimetable(t);
-        m.Classes.Add(new SetupClass { Name = name, When = string.Join(", ", times.Select(x => x.Describe())), Dot = Skin.ClassDot(Math.Max(0, host.ColorOf(name))) });
+        string when = string.Join(", ", times.Select(x => x.Describe()));
+        var dot = Skin.ClassDot(Math.Max(0, host.ColorOf(name)));
+        if (m.Classes.FirstOrDefault(c => c.Name == name) is { } row) row.When = when;
+        else m.Classes.Add(new SetupClass { Name = name, When = when, Dot = dot });
         m.NewClass = "";
         m.NewWhen = "";
     }
