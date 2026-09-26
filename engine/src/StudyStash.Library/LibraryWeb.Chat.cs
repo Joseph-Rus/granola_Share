@@ -135,6 +135,7 @@ public sealed partial class LibraryWeb
             var (ok, why) = LibraryHistory.Undo(sha);
             return Http.SeeOther(ok ? $"/history?undone={sha}" : "/history?problem=" + Uri.EscapeDataString(why));
         }));
+        MapAi(app);
     }
 
     IResult ChatPage(string role, Chat? chat, string cls, string lecture)
