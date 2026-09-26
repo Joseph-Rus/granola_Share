@@ -227,20 +227,126 @@ public class SurfaceShots
                 new MacPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }));
     }
 
+    /// <summary>Windows-only, shots-only: a flyout/recorder mockup sits over a taskbar strip in the design's
+    /// pictures for context (not part of the app) — <see cref="TaskbarStrip"/> right-aligned under it.</summary>
+    static StackPanel OverTaskbar(Control surface, bool recording, string time, string date) => new()
+    {
+        Spacing = 12, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+        Children = { surface, TaskbarStrip(recording, time, date) },
+    };
+
+    /// <summary>An <see cref="Icon"/> in a themed foreground, for the shots-only Windows taskbar mockups.</summary>
+    static Icon TaskbarIcon(string glyph, double size, string fg)
+    {
+        var icon = new Icon { Glyph = glyph, Size = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        icon.Bind(Icon.ForegroundProperty, icon.GetResourceObservable(fg));
+        return icon;
+    }
+
+    /// <summary>
+    /// Windows-only, shots-only (win-01/02's Win Flyout.html): the taskbar strip under a flyout — the launcher
+    /// arrow, the app's taskbar button (a red dot on it while recording), network/volume/battery, and the clock.
+    /// Not part of the app; drawn only so the comparison picture matches the design's context around it.
+    /// </summary>
+    static Border TaskbarStrip(bool recording, string time, string date)
+    {
+        var appButton = new Border { Width = 36, Height = 40, CornerRadius = new CornerRadius(4), Child = TaskbarIcon("graphic_eq", 19, "Fg") };
+        appButton.Bind(Border.BackgroundProperty, appButton.GetResourceObservable("Subtle2"));
+        if (recording)
+        {
+            var ring = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 3, 5) };
+            ring.Bind(Border.BackgroundProperty, ring.GetResourceObservable("Subtle2"));
+            var dot = new Border
+            {
+                Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.Parse("#E5484D")),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 4, 6),
+            };
+            appButton.Child = new Panel { Children = { TaskbarIcon("graphic_eq", 19, "Fg"), ring, dot } };
+        }
+
+        var icons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center };
+        foreach (var glyph in new[] { "wifi", "volume_up", "battery_5_bar" }) icons.Children.Add(TaskbarIcon(glyph, 18, "Fg"));
+
+        TextBlock Line(string text)
+        {
+            var t = new TextBlock { Text = text, FontSize = 12, LineHeight = 16.2, TextAlignment = TextAlignment.Right };
+            t.Bind(TextBlock.ForegroundProperty, t.GetResourceObservable("Fg"));
+            return t;
+        }
+        var clock = new StackPanel { Margin = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Right, Children = { Line(time), Line(date) } };
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center,
+            Children = { new Border { Width = 32, Height = 40, Child = TaskbarIcon("keyboard_arrow_up", 18, "Fg") }, appButton, icons, clock },
+        };
+        var strip = new Border
+        {
+            Height = 48, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
+            Child = row, HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        strip.Bind(Border.BackgroundProperty, strip.GetResourceObservable("Taskbar"));
+        strip.Bind(Border.BorderBrushProperty, strip.GetResourceObservable("FlyStroke"));
+        return strip;
+    }
+
     [AvaloniaFact]
     public void Win_flyout()
     {
         foreach (var t in Themes)
             Shot.Take("win-01-dropdown", SkinKind.Win, t, () => Shot.Side(
-                new WinPanel { DataContext = Demo.Panel(recording: false), VerticalAlignment = VerticalAlignment.Top },
-                new WinPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }));
+                OverTaskbar(new WinPanel { DataContext = Demo.Panel(recording: false), VerticalAlignment = VerticalAlignment.Top }, false, "12:34", "25/09/2026"),
+                OverTaskbar(new WinPanel { DataContext = Demo.Panel(recording: true), VerticalAlignment = VerticalAlignment.Top }, true, "10:24", "23/09/2026")));
     }
 
-    static StackPanel Recorders(Func<RecorderModel, Control> view)
+    /// <summary>
+    /// Windows-only, shots-only (win-02's Win Recorder.html): the app's taskbar button while a lecture transcribes
+    /// — a 2×2 grid button, search, and the app icon over a 42% progress track — with the design's caption.
+    /// </summary>
+    static Control TranscribingTaskbarButton()
+    {
+        Border Square() { var b = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(1) }; b.Bind(Border.BackgroundProperty, b.GetResourceObservable("Fg2")); return b; }
+        StackPanel Row() => new() { Orientation = Orientation.Horizontal, Spacing = 2, Children = { Square(), Square() } };
+        var grid = new StackPanel { Spacing = 2, Width = 18, Height = 18, Children = { Row(), Row() } };
+        var gridButton = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(4), Child = grid };
+        var searchButton = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(4), Child = TaskbarIcon("search", 20, "Fg2") };
+
+        var accentIcon = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Child = TaskbarIcon("graphic_eq", 15, "OnAccent") };
+        accentIcon.Bind(Border.BackgroundProperty, accentIcon.GetResourceObservable("Accent"));
+        var track = new Border { Width = 28, Height = 3, CornerRadius = new CornerRadius(2) };
+        track.Bind(Border.BackgroundProperty, track.GetResourceObservable("Fg3"));
+        var fill = new Border { Width = 28 * 0.42, Height = 3, CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(Color.Parse("#4CAF50")), HorizontalAlignment = HorizontalAlignment.Left };
+        var progressButton = new Border
+        {
+            Width = 40, Height = 40, CornerRadius = new CornerRadius(4),
+            Child = new StackPanel
+            {
+                Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 0, 0),
+                Children = { accentIcon, new Panel { Width = 28, Height = 3, Children = { track, fill } } },
+            },
+        };
+        progressButton.Bind(Border.BackgroundProperty, progressButton.GetResourceObservable("Subtle2"));
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { gridButton, searchButton, progressButton } };
+        var strip = new Border
+        {
+            Height = 48, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(8, 0),
+            Child = row, HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        strip.Bind(Border.BackgroundProperty, strip.GetResourceObservable("Taskbar"));
+        strip.Bind(Border.BorderBrushProperty, strip.GetResourceObservable("FlyStroke"));
+
+        var caption = new TextBlock { Text = "Taskbar button while a lecture transcribes (42%)", FontSize = 12 };
+        caption.Bind(TextBlock.ForegroundProperty, caption.GetResourceObservable("Fg2"));
+        return new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Left, Children = { strip, caption } };
+    }
+
+    static StackPanel Recorders(Func<RecorderModel, Control> view, Control? extra = null)
     {
         var pills = new StackPanel { Spacing = 32, VerticalAlignment = VerticalAlignment.Top };
         pills.Children.Add(view(Demo.Recorder()));
         pills.Children.Add(view(Demo.Recorder(paused: true)));
+        if (extra is not null) pills.Children.Add(extra);
         return Shot.Side(pills, view(Demo.Recorder(expanded: true)));
     }
 
@@ -253,7 +359,7 @@ public class SurfaceShots
     [AvaloniaFact]
     public void Win_recorder()
     {
-        foreach (var t in Themes) Shot.Take("win-02-recorder", SkinKind.Win, t, () => Recorders(m => new WinRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }));
+        foreach (var t in Themes) Shot.Take("win-02-recorder", SkinKind.Win, t, () => Recorders(m => new WinRecorder { DataContext = m, VerticalAlignment = VerticalAlignment.Top }, TranscribingTaskbarButton()));
     }
 
     static StackPanel Quick(Func<QuickModel, Control> view)
