@@ -276,7 +276,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         var cc = host.Client();
         if (cc.DisplayName == value.Trim()) return;
         cc.DisplayName = value.Trim();
-        Configs.SaveClient(cc);
+        host.SaveClient(cc);
     }
 
     [RelayCommand] void Go(string section) => Section = section;
@@ -293,7 +293,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
             cc.ServerUrl = url;
             cc.PoolKey = Password.Trim();
             cc.PoolName = health["pool_name"]?.GetValue<string>() ?? "";
-            Configs.SaveClient(cc);
+            host.SaveClient(cc);
             Address = url;
             Password = "";
             LibrarySay = $"Connected to {cc.PoolName}.";

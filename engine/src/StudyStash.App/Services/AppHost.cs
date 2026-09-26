@@ -202,7 +202,38 @@ public sealed class AppHost : IDisposable, IProblemSource
     /// <summary>Write a line in the app's log.</summary>
     public void Log(string line) => log(line);
 
-    public ClientConfig Client() => Configs.LoadClient(Home);
+    readonly Lock clientLock = new();
+    ClientConfig? client;
+    DateTime clientReadAt;
+
+    /// <summary>client.toml, read once and kept until the file's own timestamp moves on (someone else wrote it, or
+    /// <see cref="SaveClient"/> did): every tick doesn't need its own trip to disk.</summary>
+    public ClientConfig Client()
+    {
+        string path = Path.Combine(Home, "client.toml");
+        lock (clientLock)
+        {
+            DateTime mtime = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+            if (client is null || mtime != clientReadAt)
+            {
+                client = Configs.LoadClient(Home);
+                clientReadAt = mtime;
+            }
+            return client;
+        }
+    }
+
+    /// <summary>Write client.toml and keep it as what <see cref="Client"/> hands back, so the app's own save is never
+    /// immediately re-read as if someone else had changed it.</summary>
+    public void SaveClient(ClientConfig cc)
+    {
+        Configs.SaveClient(cc);
+        lock (clientLock)
+        {
+            client = cc;
+            clientReadAt = File.Exists(cc.ConfigPath) ? File.GetLastWriteTimeUtc(cc.ConfigPath) : DateTime.MinValue;
+        }
+    }
 
     // --- the microphone -------------------------------------------------------------------------------------------
     // The only way the app reaches the microphone: with a pretend one (a test, the self-test, STUDYSTASH_MIC_FILE) the
@@ -341,69 +372,86 @@ public sealed class AppHost : IDisposable, IProblemSource
         }
     }
 
+    /// <summary>Only one check talks to the library at a time: Setup, Settings' Connect and the background watch can
+    /// all ask for one at once, and there's no sense in two racing.</summary>
+    readonly SemaphoreSlim libraryCheck = new(1, 1);
+    /// <summary>A dropped Tailscale link shouldn't leave the dropdown saying "connected" for minutes: the library's
+    /// own HTTP client waits far longer than that, so a check gives up on its own after this.</summary>
+    static readonly TimeSpan LibraryCheckTimeout = TimeSpan.FromSeconds(8);
+    readonly Lock timetableLock = new();
+
     /// <summary>Ask the library how it is; its classes come back, and they keep the timetable honest.</summary>
     public async Task CheckLibraryAsync()
     {
-        var before = Library;
-        if (LocalLibrary is { State: LibraryServiceState.Starting })
+        await libraryCheck.WaitAsync();
+        try
         {
-            // Our own library is coming up: "Can't reach it" would be alarming and wrong.
-            Library = LibraryState.Starting;
-            Changed?.Invoke();
-            return;
-        }
-        if (Remote() is not { } lib)
-        {
-            Library = LibraryState.NotSetUp;
-        }
-        else
-        {
-            try
+            var before = Library;
+            if (LocalLibrary is { State: LibraryServiceState.Starting })
+            {
+                // Our own library is coming up: "Can't reach it" would be alarming and wrong.
+                Library = LibraryState.Starting;
+                Changed?.Invoke();
+                return;
+            }
+            if (Remote() is not { } lib)
+            {
+                Library = LibraryState.NotSetUp;
+            }
+            else
             {
                 try
                 {
-                    Overview = await lib.OverviewAsync();
-                    OlderLibrary = false;
-                }
-                catch (LibraryRefusedException e) when (e.Status == 404)
-                {
-                    // The Python engine's library: its classes from /api/health, in its order.
-                    var cc = Client();
-                    var health = await LibraryApi.CheckServerAsync(cc.ServerUrl, cc.PoolKey);
-                    int i = 0;
-                    Overview = new JsonObject
+                    try
                     {
-                        ["name"] = health["pool_name"]?.DeepClone(),
-                        ["classes"] = new JsonArray((health["classes"] as JsonArray ?? []).Select(n => (JsonNode?)new JsonObject { ["name"] = n?.DeepClone(), ["lectures"] = 0, ["color"] = i++ }).ToArray()),
-                        ["unsorted"] = 0,
-                        ["ask"] = false,
-                    };
-                    OlderLibrary = true;
+                        Overview = await lib.OverviewAsync().WaitAsync(LibraryCheckTimeout);
+                        OlderLibrary = false;
+                    }
+                    catch (LibraryRefusedException e) when (e.Status == 404)
+                    {
+                        // The Python engine's library: its classes from /api/health, in its order.
+                        var cc = Client();
+                        var health = await LibraryApi.CheckServerAsync(cc.ServerUrl, cc.PoolKey).WaitAsync(LibraryCheckTimeout);
+                        int i = 0;
+                        Overview = new JsonObject
+                        {
+                            ["name"] = health["pool_name"]?.DeepClone(),
+                            ["classes"] = new JsonArray((health["classes"] as JsonArray ?? []).Select(n => (JsonNode?)new JsonObject { ["name"] = n?.DeepClone(), ["lectures"] = 0, ["color"] = i++ }).ToArray()),
+                            ["unsorted"] = 0,
+                            ["ask"] = false,
+                        };
+                        OlderLibrary = true;
+                    }
+                    Library = LibraryState.Connected;
+                    var names = (Overview["classes"] as JsonArray ?? []).Select(c => c?["name"]?.GetValue<string>() ?? "").ToList();
+                    lock (timetableLock)
+                        if (!OlderLibrary && names.Count > 0 && Timetable.KeepOnly(names)) Timetable.Save(Home);
                 }
-                Library = LibraryState.Connected;
-                var names = (Overview["classes"] as JsonArray ?? []).Select(c => c?["name"]?.GetValue<string>() ?? "").ToList();
-                if (!OlderLibrary && names.Count > 0 && Timetable.KeepOnly(names)) Timetable.Save(Home);
+                catch (InvalidOperationException e) when (e.Message == "wrong password")
+                {
+                    Library = LibraryState.WrongPassword;
+                }
+                catch (InvalidOperationException)
+                {
+                    Library = LibraryState.Unreachable;
+                }
+                catch (LibraryRefusedException e) when (e.Status is 401 or 403)
+                {
+                    Library = LibraryState.WrongPassword;
+                }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or TimeoutException or LibraryRefusedException or JsonException)
+                {
+                    Library = LibraryState.Unreachable;
+                }
             }
-            catch (InvalidOperationException e) when (e.Message == "wrong password")
-            {
-                Library = LibraryState.WrongPassword;
-            }
-            catch (InvalidOperationException)
-            {
-                Library = LibraryState.Unreachable;
-            }
-            catch (LibraryRefusedException e) when (e.Status is 401 or 403)
-            {
-                Library = LibraryState.WrongPassword;
-            }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or LibraryRefusedException or JsonException)
-            {
-                Library = LibraryState.Unreachable;
-            }
+            // Lectures that waited for it go now: a wake alone would leave them waiting out their last try's wait (10 minutes).
+            if (before != Library && Library == LibraryState.Connected) Sender.RetryNow();
+            Changed?.Invoke();
         }
-        // Lectures that waited for it go now: a wake alone would leave them waiting out their last try's wait (10 minutes).
-        if (before != Library && Library == LibraryState.Connected) Sender.RetryNow();
-        Changed?.Invoke();
+        finally
+        {
+            libraryCheck.Release();
+        }
     }
 
     /// <summary>The library's classes, in its order: (name, color index, lectures).</summary>
@@ -455,7 +503,7 @@ public sealed class AppHost : IDisposable, IProblemSource
 
     public void SaveTimetable(Timetable t)
     {
-        Timetable = t;
+        lock (timetableLock) Timetable = t;
         try
         {
             t.Save(Home);

@@ -72,12 +72,12 @@ public sealed class LibraryHere
             throw new InvalidOperationException("The library didn't start." + (svc.Failure is { Length: > 0 } f ? $" {f}." : "") + " Its log is in the logs folder.");
         host.UseLocalLibrary(svc);
         host.Save(s => s.Role = role);
-        var cc = Configs.LoadClient(host.Home);
+        var cc = host.Client();
         cc.ServerUrl = $"http://127.0.0.1:{cfg.WebPort}";
         cc.PoolKey = cfg.PoolPassword;
         cc.PoolName = cfg.PoolName;
         if (cc.DisplayName.Length == 0) cc.DisplayName = displayName;
-        Configs.SaveClient(cc);
+        host.SaveClient(cc);
         return $"{name} is ready on this {(OperatingSystem.IsMacOS() ? "Mac" : "PC")}.";
     }
 }

@@ -151,7 +151,7 @@ public static class Setup
                 cc.PoolKey = m.Password.Trim();
                 cc.PoolName = health["pool_name"]?.GetValue<string>() ?? "";
                 if (cc.DisplayName.Length == 0) cc.DisplayName = Person();
-                Configs.SaveClient(cc);
+                host.SaveClient(cc);
                 m.Address = url;
                 m.LibraryOk = true;
                 m.LibraryResult = $"Connected to {cc.PoolName}.";
