@@ -25,7 +25,7 @@ public sealed class TempDir : IDisposable
     }
 }
 
-/// <summary>What the Python engine wrote (engine/tests/golden.py), to compare against.</summary>
+/// <summary>Fixed expectations, first written by the retired Python engine, to compare against.</summary>
 public static class Golden
 {
     static readonly Lazy<JsonObject> cases = new(() => (JsonObject)JsonNode.Parse(Text("cases.json"))!);

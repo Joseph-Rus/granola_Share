@@ -3,8 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_update.py: finding and installing a release. The installs here are real (a real zip, unpacked
-/// and swapped in on this computer) but of a stand-in engine in a scratch folder; every service command is a fake.</summary>
+/// <summary>Finding and installing a release. The installs here are real (a real zip, unpacked and swapped in on
+/// this computer) but of a stand-in engine in a scratch folder; every service command is a fake.</summary>
 public class UpdaterTests
 {
     static Release Rel(string tag, string? engineUrl = null, string windowsApp = "", string macApp = "") =>

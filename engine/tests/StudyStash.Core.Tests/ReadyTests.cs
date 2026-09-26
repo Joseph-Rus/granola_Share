@@ -2,7 +2,7 @@ using System.Text;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_ready.py: getting the library's computer ready (Tailscale, Ollama, Windows' firewall and sleep).
+/// <summary>Getting the library's computer ready (Tailscale, Ollama, Windows' firewall and sleep).
 /// Every install here is a fake: nothing is downloaded or installed.</summary>
 public class ReadyTests
 {

@@ -7,7 +7,7 @@ using StudyStash.Library;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_sync_web.py's web tests and tests/test_ingest.py, plus every page compared with the Python engine's.</summary>
+/// <summary>The library's web pages and the laptop's ingest API, plus every page compared with the Python engine's own text.</summary>
 public class LibraryWebTests
 {
     static readonly List<(string, double)> Models = [("qwen3:1.7b", 1.4), ("gemma4:e4b", 9.6)];
@@ -53,7 +53,7 @@ public class LibraryWebTests
 
     // --- every page, as the Python engine serves it ------------------------------------------------------------
 
-    /// <summary>golden.py's seed_library, lecture for lecture.</summary>
+    /// <summary>The Python engine's own fixed library, lecture for lecture.</summary>
     static void SeedLibrary(Config cfg, Store store)
     {
         void Save(string id, string title, string date, string cls, string by, double conf, List<string> topics, string notes = "", string transcript = "") =>
@@ -183,7 +183,7 @@ public class LibraryWebTests
         return $"python: …{want[from..Math.Min(want.Length, i + 80)]}\nc#:     …{got[from..Math.Min(got.Length, i + 80)]}";
     }
 
-    // --- tests/test_sync_web.py ---------------------------------------------------------------------------------
+    // --- the library's own web pages ----------------------------------------------------------------------------
 
     [Fact]
     public async Task Login_browse_move_download()
@@ -364,7 +364,7 @@ public class LibraryWebTests
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
     }
 
-    // --- tests/test_ingest.py: the API the laptop talks to ------------------------------------------------------------
+    // --- the API the laptop talks to -----------------------------------------------------------------------------
 
     static HttpRequestMessage Req(HttpMethod method, string path, string? key = null, object? json = null)
     {

@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_store_classify.py, plus the note files and prompts compared with Python's own.</summary>
+/// <summary>Saving and sorting a lecture, plus the note files and prompts compared with the Python engine's own.</summary>
 public class StoreClassifyTests
 {
     static Config CfgFor(TempDir dir) => new(dir["home"], dir["pool"])

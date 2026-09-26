@@ -5,14 +5,14 @@ using StudyStash.Library;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_library_setup.py: the library's setup as a page, so nobody needs a terminal. Plus the page itself
-/// against the Python engine's, in four states.</summary>
+/// <summary>The library's setup as a page, so nobody needs a terminal. Plus the page itself against the Python
+/// engine's, in four states.</summary>
 public class LibrarySetupTests
 {
     static readonly List<(string, double)> Models = [("qwen3:1.7b", 1.4)];
     static readonly TailscaleInfo Tailnet = new(true, true, "Running", "pc.tail.ts.net", ["100.64.0.9"]);
 
-    /// <summary>golden.py's fakes: every check answered, and everything that changes the computer succeeds.</summary>
+    /// <summary>Every check answered, and everything that changes the computer succeeds.</summary>
     static SetupHost Fakes(string system = "Darwin", Func<string, Task<List<(string, double)>?>>? listModels = null, Func<bool>? ollamaInstalled = null,
         Func<Action<string>, Action<long, long>, Task<bool>>? installOllama = null, Func<string, string, Action<long, long>, Task<(bool, string)>>? pull = null,
         Func<TailscaleInfo>? tailscale = null, Func<Action<string>, Action<long, long>, Task<bool>>? installTailscale = null, Func<int, bool?>? firewall = null,
@@ -314,7 +314,7 @@ public class LibrarySetupTests
             using var dir = new TempDir();
             Directory.CreateDirectory(dir["home"]);
             File.WriteAllText(Path.Combine(dir["home"], "setup_draft.json"), want!["draft"]!.ToJsonString());
-            // golden.py's fakes: its two models, its tailnet, 200.4 GB free, unless the state says otherwise
+            // The fixed fixture's two models, its tailnet, 200.4 GB free, unless the state says otherwise
             List<(string, double)> pageModels = [("qwen3:1.7b", 1.4), ("gemma4:e4b", 9.6)];
             var tailnet = new TailscaleInfo(true, true, "Running", "mini.tail.ts.net", ["100.64.0.9"]);
             Func<string, Task<List<(string, double)>?>> models = _ => Task.FromResult<List<(string, double)>?>(pageModels);

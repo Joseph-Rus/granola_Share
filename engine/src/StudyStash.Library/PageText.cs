@@ -1,5 +1,5 @@
-// Made by engine/tests/golden.py from the Python engine's own text: run that again rather than edit this.
-// (The pages must look the same whichever engine serves them.)
+// The library's page CSS and JavaScript, carried over byte for byte from the Python engine before it retired.
+// Edit this file directly now; there's nothing left to regenerate it from.
 
 namespace StudyStash.Library;
 

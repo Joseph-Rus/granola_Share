@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_dialogs_autostart.py and the Windows half of test_ready.py: the background services, now under
-/// Study Stash's own names and files (a fixed golden fixture, once the Python engine's own output).</summary>
+/// <summary>The background services, under Study Stash's own names and files (a fixed golden fixture, once the
+/// Python engine's own output).</summary>
 public class AutostartTests
 {
     static readonly string[] Engine = ["/opt/studystash"];

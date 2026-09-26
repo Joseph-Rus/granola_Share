@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_doctor.py, and every scenario golden.py gave the Python engine's doctor: the same checks, the same
-/// words, printed the same way.</summary>
+/// <summary>Every scenario the retired Python engine's doctor answered: the same checks, the same words, printed
+/// the same way.</summary>
 public class DoctorTests
 {
     static JsonObject P => Golden.Platform();
@@ -16,7 +16,7 @@ public class DoctorTests
 
     static Func<Task<Release?>> Latest(JsonNode? tag) => () => Task.FromResult(Rel(tag));
 
-    /// <summary>The temporary folder as golden.py wrote it; on Windows, with its forward slashes.</summary>
+    /// <summary>The temporary folder as the fixed fixture wrote it; on Windows, with its forward slashes.</summary>
     static string Scrub(string text, string root)
     {
         string s = text.Replace(root, "{root}");

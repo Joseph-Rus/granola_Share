@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace StudyStash.Core.Tests;
 
-/// <summary>tests/test_summarize.py: our own notes from the transcript, the pipeline, and the runaway-model guards.</summary>
+/// <summary>Study notes from the transcript, the pipeline, and the runaway-model guards.</summary>
 public class SummarizeTests
 {
     const string Line = "The derivative measures how fast a function changes at a point.\n";
