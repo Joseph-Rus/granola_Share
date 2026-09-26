@@ -67,6 +67,8 @@ public sealed partial class SetupModel : ObservableObject
     [ObservableProperty] public partial string? LibraryResult { get; set; }
     [ObservableProperty] public partial bool LibraryOk { get; set; }
     [ObservableProperty] public partial bool Connecting { get; set; }
+    /// <summary>Start Study Stash when the student logs in: off unless they tick it.</summary>
+    [ObservableProperty] public partial bool StartAtLogin { get; set; }
 
     // Model
     [ObservableProperty] public partial string ModelName { get; set; } = "Whisper large-v3";

@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using StudyStash.App.Platform;
 using StudyStash.Audio;
 using StudyStash.Core;
 
@@ -88,7 +87,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool ComputerAudio { get; set; }
     [ObservableProperty] public partial string KeepAudio { get; set; } = "30";
     [ObservableProperty] public partial bool Shortcuts { get; set; }
-    public bool CanRecordComputerAudio => Microphones.CanRecordComputerAudio;
+    public bool CanRecordComputerAudio => host.CanRecordComputerAudio;
 
     // Classes
     public ObservableCollection<TimetableRow> Rows { get; } = [];
@@ -137,6 +136,12 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
 
     public static SettingsModel Make(AppHost host) => new(host);
 
+    /// <summary>True while the constructor fills in what's already set: nothing is saved, and starting at login isn't
+    /// touched, until the student changes something.</summary>
+    readonly bool loading = true;
+    /// <summary>Putting the box back after the login item couldn't be changed.</summary>
+    bool settingLogin;
+
     SettingsModel(AppHost host)
     {
         this.host = host;
@@ -149,7 +154,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         ComputerAudio = host.Settings.ComputerAudio;
         KeepAudio = host.Settings.KeepAudioDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
         Shortcuts = host.Settings.Shortcuts;
-        StartAtLogin = Desktop.StartsAtLogin();
+        StartAtLogin = host.LoginItems.StartsAtLogin(host.Home);
         ClaudeCommand = claude.ClaudeCodeCommand;
         foreach (var m in WhisperModels.All.Where(m => m.Id != WhisperModels.Tiny.Id))
             Models.Add(new ModelChoice { Model = m, Chosen = m.Id == host.Model.Id, Here = WhisperModels.IsDownloaded(host.Home, m) });
@@ -161,6 +166,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         host.Changed += OnHostChanged;
         AiModels.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAiModels));
         CanvasLinks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasCanvasLinks));
+        loading = false;
         _ = LoadCanvasAsync();
         Refresh();
         _ = LoadClaudeAsync();
@@ -196,18 +202,46 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
     }
 
     partial void OnWebUrlChanged(string? value) => OnPropertyChanged(nameof(HasWebUrl));
-    partial void OnLanguageChanged(string value) => host.Save(s => s.Language = value.Trim());
-    partial void OnComputerAudioChanged(bool value) => host.Save(s => s.ComputerAudio = value);
-    partial void OnShortcutsChanged(bool value) => host.Save(s => s.Shortcuts = value);
-    partial void OnStartAtLoginChanged(bool value) => Desktop.StartAtLogin(value, host.Home);
+    partial void OnLanguageChanged(string value)
+    {
+        if (!loading) host.Save(s => s.Language = value.Trim());
+    }
+
+    partial void OnComputerAudioChanged(bool value)
+    {
+        if (!loading) host.Save(s => s.ComputerAudio = value);
+    }
+
+    partial void OnShortcutsChanged(bool value)
+    {
+        if (!loading) host.Save(s => s.Shortcuts = value);
+    }
+
+    /// <summary>Only the student's own tick adds (or takes away) the login item.</summary>
+    partial void OnStartAtLoginChanged(bool value)
+    {
+        if (loading || settingLogin) return;
+        try
+        {
+            host.LoginItems.StartAtLogin(value, host.Home);
+        }
+        catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            host.Log($"[app] start at login: {e.Message}");
+            settingLogin = true;
+            StartAtLogin = !value;
+            settingLogin = false;
+        }
+    }
 
     partial void OnKeepAudioChanged(string value)
     {
-        if (int.TryParse(value, out int days) && days >= 0) host.Save(s => s.KeepAudioDays = days);
+        if (!loading && int.TryParse(value, out int days) && days >= 0) host.Save(s => s.KeepAudioDays = days);
     }
 
     partial void OnDisplayNameChanged(string value)
     {
+        if (loading) return;
         var cc = host.Client();
         if (cc.DisplayName == value.Trim()) return;
         cc.DisplayName = value.Trim();

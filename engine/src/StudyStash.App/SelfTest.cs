@@ -50,6 +50,7 @@ public static class SelfTest
     public static void Run() => Dispatcher.UIThread.Post(async () =>
     {
         Directory.CreateDirectory(Dir!);
+        int code = 0;
         try
         {
             await Script();
@@ -58,9 +59,10 @@ public static class SelfTest
         catch (Exception e)
         {
             Say($"failed: {e}");
+            code = 1;
         }
         await File.WriteAllLinesAsync(Path.Combine(Dir!, "selftest.txt"), said);
-        Shell.Quit();
+        Shell.Quit(code);
     });
 
     static async Task Script()

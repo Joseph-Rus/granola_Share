@@ -1,6 +1,10 @@
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security;
+using System.Security.Cryptography;
+using System.Text;
+using Avalonia.Threading;
 using Microsoft.Win32;
 using StudyStash.Core;
 
@@ -63,58 +67,99 @@ public static class Desktop
 
     // --- starting at login -------------------------------------------------------------------------------------------
 
-    const string LoginLabel = "com.study-stash.app";
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
+    /// <summary>Tests and the self-test: nothing here changes this computer. Starting at login refuses, and whether it
+    /// starts at login reads "no" without looking. On when STUDYSTASH_SELFTEST is set; the app's tests turn it on as
+    /// they load.</summary>
+    internal static bool SystemChangesOff { get; set; } = Environment.GetEnvironmentVariable("STUDYSTASH_SELFTEST") is { Length: > 0 };
 
     /// <summary>The program to start: the app bundle's executable (a Mac), or StudyStash.exe.</summary>
     public static string Program => Environment.ProcessPath ?? "StudyStash";
 
-    static string LaunchAgent => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents", LoginLabel + ".plist");
-
-    public static bool StartsAtLogin()
+    /// <summary>The login item's name for a settings folder: the usual folder is "com.study-stash.app" (a LaunchAgent)
+    /// and "Study Stash" (the Run key); any other folder gets its own, so a second profile never replaces the real one.</summary>
+    internal static (string Label, string RunValue) LoginName(string home)
     {
-        if (OperatingSystem.IsMacOS()) return File.Exists(LaunchAgent);
-        if (OperatingSystem.IsWindows()) return Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue("Study Stash") is string;
+        if (SameFolder(home, Configs.DefaultHome)) return ("com.study-stash.app", "Study Stash");
+        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(home))))[..8];
+        return ($"com.study-stash.app.{hash}", $"Study Stash ({hash})");
+    }
+
+    static bool SameFolder(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary>What starts the app at login: quietly (--background), and with its folder when it isn't the usual one.</summary>
+    internal static List<string> LoginArgs(string program, string home)
+    {
+        var args = new List<string> { program, "--background" };
+        if (!SameFolder(home, Configs.DefaultHome)) args.AddRange(["--home", home]);
+        return args;
+    }
+
+    /// <summary>The Run key's command that starts the app when you log in to Windows.</summary>
+    internal static string RunCommand(string program, string home) =>
+        $"\"{program}\" --background" + (SameFolder(home, Configs.DefaultHome) ? "" : $" --home \"{home}\"");
+
+    /// <summary>The LaunchAgent that starts the app when you log in to a Mac.</summary>
+    internal static string LaunchAgentPlist(string label, IEnumerable<string> args)
+    {
+        string items = string.Concat(args.Select(a => $"\n    <string>{SecurityElement.Escape(a)}</string>"));
+        return $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+              <key>Label</key>
+              <string>{SecurityElement.Escape(label)}</string>
+              <key>ProgramArguments</key>
+              <array>{items}
+              </array>
+              <key>RunAtLoad</key>
+              <true/>
+              <key>ProcessType</key>
+              <string>Interactive</string>
+            </dict>
+            </plist>
+            """;
+    }
+
+    static string LaunchAgent(string label) =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents", label + ".plist");
+
+    /// <summary>Whether the app starts when you log in, for this settings folder.</summary>
+    public static bool StartsAtLogin(string home)
+    {
+        if (SystemChangesOff) return false;
+        var (label, value) = LoginName(home);
+        if (OperatingSystem.IsMacOS()) return File.Exists(LaunchAgent(label));
+        if (OperatingSystem.IsWindows()) return Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue(value) is string;
         return false;
     }
 
-    /// <summary>Start (or stop starting) when you log in, quietly: to the menu bar or tray, no window.</summary>
+    /// <summary>Start (or stop starting) when you log in, quietly: to the menu bar or tray, no window. Only when the
+    /// student turns it on.</summary>
     public static void StartAtLogin(bool on, string home)
     {
+        if (SystemChangesOff) throw new InvalidOperationException("Start at login is off here.");
+        var (label, value) = LoginName(home);
         if (OperatingSystem.IsMacOS())
         {
+            string plist = LaunchAgent(label);
             if (!on)
             {
-                File.Delete(LaunchAgent);
+                File.Delete(plist);
                 return;
             }
-            var args = new List<string> { Program, "--background" };
-            if (home != Configs.DefaultHome) args.AddRange(["--home", home]);
-            Directory.CreateDirectory(Path.GetDirectoryName(LaunchAgent)!);
-            string items = string.Concat(args.Select(a => $"\n    <string>{System.Security.SecurityElement.Escape(a)}</string>"));
-            File.WriteAllText(LaunchAgent, $"""
-                <?xml version="1.0" encoding="UTF-8"?>
-                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                <plist version="1.0">
-                <dict>
-                  <key>Label</key>
-                  <string>{LoginLabel}</string>
-                  <key>ProgramArguments</key>
-                  <array>{items}
-                  </array>
-                  <key>RunAtLoad</key>
-                  <true/>
-                  <key>ProcessType</key>
-                  <string>Interactive</string>
-                </dict>
-                </plist>
-                """);
+            Directory.CreateDirectory(Path.GetDirectoryName(plist)!);
+            File.WriteAllText(plist, LaunchAgentPlist(label, LoginArgs(Program, home)));
         }
         else if (OperatingSystem.IsWindows())
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (on) key.SetValue("Study Stash", $"\"{Program}\" --background" + (home != Configs.DefaultHome ? $" --home \"{home}\"" : ""));
-            else key.DeleteValue("Study Stash", throwOnMissingValue: false);
+            if (on) key.SetValue(value, RunCommand(Program, home));
+            else key.DeleteValue(value, throwOnMissingValue: false);
         }
     }
 
@@ -167,38 +212,88 @@ public static class Desktop
 
     // --- one copy at a time ------------------------------------------------------------------------------------------
 
-    static string PipeName(string home) => "StudyStash-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(home)))[..16];
+    /// <summary>The lock each settings folder's copy holds while it runs. Kept here for the life of the process: a
+    /// stream nobody refers to is collected, and that lets the lock go.</summary>
+    static readonly Dictionary<string, FileStream> claims = [];
 
-    /// <summary>Tell the copy already running (for this folder) to show itself. True when there was one.</summary>
-    public static bool HandOff(string home, string message)
+    internal static string PipeName(string home) => "StudyStash-" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(home)))[..16];
+
+    /// <summary>Be the one copy of the app for this settings folder: hold its app.lock until the app ends. False when
+    /// another copy holds it.</summary>
+    public static bool Claim(string home)
     {
+        string path = Path.Combine(home, "app.lock");
         try
         {
-            using var pipe = new NamedPipeClientStream(".", PipeName(home), PipeDirection.Out);
-            pipe.Connect(300);
-            using var w = new StreamWriter(pipe);
-            w.WriteLine(message);
+            Directory.CreateDirectory(home);
+            var lockFile = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.None);
+            lock (claims)
+            {
+                if (claims.Remove(Path.GetFullPath(home), out var old)) old.Dispose();
+                claims[Path.GetFullPath(home)] = lockFile;
+            }
             return true;
         }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return false;
         }
     }
 
-    /// <summary>Listen for later copies handing off (they say "show", or "record").</summary>
-    public static void Listen(string home, Action<string> onMessage, CancellationToken stop)
+    /// <summary>Let the folder go (tests; the app keeps its claim until it ends).</summary>
+    internal static void Release(string home)
     {
+        lock (claims)
+            if (claims.Remove(Path.GetFullPath(home), out var f)) f.Dispose();
+    }
+
+    /// <summary>Tell the copy already running (for this folder) to show itself, or to record. It may still be starting,
+    /// so this keeps trying for a while. True when it heard.</summary>
+    public static bool HandOff(string home, string message, TimeSpan? wait = null)
+    {
+        var until = DateTime.UtcNow + (wait ?? TimeSpan.FromSeconds(5));
+        while (true)
+        {
+            try
+            {
+                using var pipe = new NamedPipeClientStream(".", PipeName(home), PipeDirection.Out);
+                pipe.Connect((int)Math.Clamp((until - DateTime.UtcNow).TotalMilliseconds, 1, 1000));
+                using var w = new StreamWriter(pipe);
+                w.WriteLine(message);
+                return true;
+            }
+            catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                if (DateTime.UtcNow >= until) return false;
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    /// <summary>The words a later copy can hand off.</summary>
+    static readonly HashSet<string> Words = ["show", "record"];
+
+    /// <summary>Listen for later copies handing off (they say "show", or "record"); what they say is passed to
+    /// <paramref name="onMessage"/> through <paramref name="post"/> (the UI thread, unless a test says otherwise).
+    /// Anything else is ignored, and a copy that connects and says nothing is let go after 2 seconds.</summary>
+    public static void Listen(string home, Action<string> onMessage, CancellationToken stop, Action<Action>? post = null)
+    {
+        post ??= a => Dispatcher.UIThread.Post(a);
+        string name = PipeName(home);
         _ = Task.Run(async () =>
         {
+            NamedPipeServerStream? next = null;
             while (!stop.IsCancellationRequested)
             {
+                NamedPipeServerStream? pipe = null;
                 try
                 {
-                    await using var pipe = new NamedPipeServerStream(PipeName(home), PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                    pipe = next ?? Server(name);
+                    next = null;
                     await pipe.WaitForConnectionAsync(stop);
-                    using var r = new StreamReader(pipe);
-                    if (await r.ReadLineAsync(stop) is { } line) Avalonia.Threading.Dispatcher.UIThread.Post(() => onMessage(line.Trim()));
+                    // Listen again before reading this one: a copy that comes meanwhile waits its turn, not turned away.
+                    next = Server(name);
+                    if (await ReadWordAsync(pipe, stop) is { } word && Words.Contains(word)) post(() => onMessage(word));
                 }
                 catch (OperationCanceledException)
                 {
@@ -206,9 +301,58 @@ public static class Desktop
                 }
                 catch (IOException)
                 {
-                    await Task.Delay(500, CancellationToken.None);
+                    try
+                    {
+                        await Task.Delay(500, stop);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+                finally
+                {
+                    pipe?.Dispose();
                 }
             }
+            next?.Dispose();
         }, CancellationToken.None);
     }
+
+    static NamedPipeServerStream Server(string name) =>
+        new(name, PipeDirection.In, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+    /// <summary>The line a copy sent, or null when it said nothing within 2 seconds.</summary>
+    static async Task<string?> ReadWordAsync(Stream pipe, CancellationToken stop)
+    {
+        using var quiet = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        quiet.CancelAfter(TimeSpan.FromSeconds(2));
+        using var r = new StreamReader(pipe, leaveOpen: true);
+        try
+        {
+            return (await r.ReadLineAsync(quiet.Token))?.Trim();
+        }
+        catch (OperationCanceledException) when (!stop.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+}
+
+/// <summary>Starting the app when you log in, as the app sees it: <see cref="LoginItems.System"/> is the real thing
+/// (<see cref="Desktop"/>); a test gives its own and counts the calls.</summary>
+public interface ILoginItems
+{
+    bool StartsAtLogin(string home);
+    void StartAtLogin(bool on, string home);
+}
+
+/// <summary>This computer's login items: a LaunchAgent on a Mac, the Run key on Windows.</summary>
+public sealed class LoginItems : ILoginItems
+{
+    public static readonly LoginItems System = new();
+
+    public bool StartsAtLogin(string home) => Desktop.StartsAtLogin(home);
+
+    public void StartAtLogin(bool on, string home) => Desktop.StartAtLogin(on, home);
 }

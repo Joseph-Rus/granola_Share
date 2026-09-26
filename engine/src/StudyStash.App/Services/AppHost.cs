@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using StudyStash.App.Platform;
 using StudyStash.Audio;
 using StudyStash.Core;
 
@@ -67,8 +68,11 @@ public sealed class AppHost : IDisposable
 {
     readonly CancellationTokenSource stop = new();
     readonly Action<string> log;
+    readonly Func<IAudioSource>? pretendMic;
+    readonly List<Task> running = [];
     KeepAwake? awake;
     CancellationTokenSource? download;
+    bool disposed;
 
     public string Home { get; }
     public AppSettings Settings { get; private set; }
@@ -93,25 +97,34 @@ public sealed class AppHost : IDisposable
     public event Action<Lecture>? Filed;
     /// <summary>Whisper wrote down more of the lecture being recorded.</summary>
     public event Action<Lecture, IReadOnlyList<Spoken>>? Heard;
-    /// <summary>Something went wrong that the person should hear about now.</summary>
-    public event Action<string>? Problem;
+    /// <summary>Something went wrong that the person should hear about now: a title and what to know.</summary>
+    public event Action<string, string>? Problem;
 
+    /// <summary>Starting the app at login (the real login items unless a test gives its own).</summary>
+    public ILoginItems LoginItems { get; }
+
+    /// <summary>
+    /// The app's engine room for a settings folder. <paramref name="microphone"/> stands in for the microphone; without
+    /// one, STUDYSTASH_MIC_FILE (a WAV) does, and only with neither is the real microphone ever opened.
+    /// </summary>
     public AppHost(string home, Func<IAudioSource>? microphone = null, Func<ITranscriber>? whisper = null, LaptopHost? laptop = null,
-        Action<string>? log = null)
+        Action<string>? log = null, ILoginItems? loginItems = null)
     {
         Home = home;
         this.log = log ?? (s => Console.WriteLine(s));
+        pretendMic = microphone ?? MicFromEnvironment();
+        LoginItems = loginItems ?? Platform.LoginItems.System;
         Directory.CreateDirectory(home);
         Settings = AppSettings.Load(home);
         Timetable = Timetable.Load(home);
         Lectures = new LectureStore(home);
         Recorder.Recover(Lectures, this.log);
-        Recorder = new Recorder(Lectures, microphone ?? (() => Microphones.Open(Settings.ComputerAudio)), log: this.log);
+        Recorder = new Recorder(Lectures, OpenMic, log: this.log);
         Whisper = new TranscriptionWorker(Lectures, whisper ?? LoadWhisper, () => Recorder.Current, this.log);
         var net = laptop ?? new LaptopHost();
         Sender = new LectureSender(Lectures, Client, net, this.log);
         Recorder.Changed += () => Changed?.Invoke();
-        Recorder.Problem += why => Problem?.Invoke(why);
+        Recorder.Problem += why => Problem?.Invoke("Recording paused", why);
         Whisper.Heard += (l, lines) =>
         {
             Heard?.Invoke(l, lines);
@@ -129,7 +142,39 @@ public sealed class AppHost : IDisposable
         };
     }
 
+    /// <summary>Write a line in the app's log.</summary>
+    public void Log(string line) => log(line);
+
     public ClientConfig Client() => Configs.LoadClient(Home);
+
+    // --- the microphone -------------------------------------------------------------------------------------------
+    // The only way the app reaches the microphone: with a pretend one (a test, the self-test, STUDYSTASH_MIC_FILE) the
+    // real one is never opened, asked for, or even asked about.
+
+    /// <summary>STUDYSTASH_MIC_FILE: a WAV file played, round again, as the microphone.</summary>
+    public static Func<IAudioSource>? MicFromEnvironment() =>
+        Environment.GetEnvironmentVariable("STUDYSTASH_MIC_FILE") is { Length: > 0 } wav && File.Exists(wav) ? () => new FileMicrophone(wav) : null;
+
+    /// <summary>A pretend microphone stands in for the real one.</summary>
+    public bool PretendMic => pretendMic is not null;
+
+    /// <summary>Whether Study Stash may use the microphone (a pretend one always may).</summary>
+    public MicAccess MicAccess() => PretendMic ? Audio.MicAccess.Allowed : Microphones.Access();
+
+    /// <summary>Have the system ask the student (a Mac asks once; the answer comes later). Nothing to ask for a pretend one.</summary>
+    public void AskMic()
+    {
+        if (!PretendMic) Microphones.Ask();
+    }
+
+    /// <summary>The microphone to record from (and on Windows, if asked, what the computer plays too).</summary>
+    public IAudioSource OpenMic() => pretendMic is { } pretend ? pretend() : Microphones.Open(Settings.ComputerAudio);
+
+    /// <summary>Where the student turns the microphone on for Study Stash.</summary>
+    public string MicSettingsUrl => Microphones.SettingsUrl;
+
+    /// <summary>This computer can record what it plays, too (Windows).</summary>
+    public bool CanRecordComputerAudio => Microphones.CanRecordComputerAudio;
 
     /// <summary>The library over its API, once one is set up.</summary>
     public RemoteLibrary? Remote()
@@ -154,10 +199,10 @@ public sealed class AppHost : IDisposable
 
     public void Start()
     {
-        _ = Task.Run(() => Whisper.RunAsync(stop.Token));
-        _ = Task.Run(() => Sender.RunAsync(stop.Token));
-        _ = Task.Run(WatchLibrary);
-        _ = Task.Run(() => Lectures.PruneAudio(Settings.KeepAudioDays, DateTimeOffset.Now));
+        running.Add(Task.Run(() => Whisper.RunAsync(stop.Token)));
+        running.Add(Task.Run(() => Sender.RunAsync(stop.Token)));
+        running.Add(Task.Run(WatchLibrary));
+        running.Add(Task.Run(() => Lectures.PruneAudio(Settings.KeepAudioDays, DateTimeOffset.Now)));
     }
 
     async Task WatchLibrary()
@@ -261,17 +306,35 @@ public sealed class AppHost : IDisposable
         return ($"{lib} · {model}", Library == LibraryState.Connected && ModelReady);
     }
 
+    /// <summary>Change the settings and write them to app.json. A full disk (or a folder it can't write) is said, not
+    /// thrown: the change still holds until the app quits.</summary>
     public void Save(Action<AppSettings> change)
     {
         change(Settings);
-        Settings.Save(Home);
+        try
+        {
+            Settings.Save(Home);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log($"[app] couldn't save the settings: {e.Message}");
+            Problem?.Invoke("Your settings couldn't be saved", e.Message);
+        }
         Changed?.Invoke();
     }
 
     public void SaveTimetable(Timetable t)
     {
         Timetable = t;
-        t.Save(Home);
+        try
+        {
+            t.Save(Home);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log($"[app] couldn't save the timetable: {e.Message}");
+            Problem?.Invoke("Your timetable couldn't be saved", e.Message);
+        }
         Changed?.Invoke();
     }
 
@@ -340,11 +403,31 @@ public sealed class AppHost : IDisposable
         }
     }
 
+    /// <summary>Stop: the lecture being recorded is saved, and Whisper, the sender and the library check get up to 3
+    /// seconds to finish what they're doing.</summary>
     public void Dispose()
     {
-        if (Recorder.Current is not null) StopRecording();
+        if (disposed) return;
+        disposed = true;
+        try
+        {
+            if (Recorder.Current is not null) StopRecording();
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or AggregateException)
+        {
+            log($"[app] couldn't finish the recording: {e.Message}");
+        }
         stop.Cancel();
         download?.Cancel();
         awake?.Dispose();
+        awake = null;
+        try
+        {
+            if (!Task.WaitAll([.. running], TimeSpan.FromSeconds(3))) log("[app] still busy after 3 seconds: quitting anyway");
+        }
+        catch (AggregateException e)
+        {
+            log($"[app] {e.InnerException?.Message}");
+        }
     }
 }
