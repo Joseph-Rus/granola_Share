@@ -415,22 +415,20 @@ public static partial class Shell
             panelWindow.Hide();
             return;
         }
+        // The click that opens it follows the deactivate that just closed it (one gesture, two events): don't reopen.
+        if (panelWindow is not null && DateTime.UtcNow - panelWindow.LastDeactivateHide < Floating.ToggleDebounce) return;
         panelWindow ??= new Floating { Content = PanelView(), CloseOnDeactivate = true, Title = "Study Stash" };
         Refresh();
-        var (area, scale) = panelWindow.WorkArea(Floating.Pointer());
+        var pointer = Floating.Pointer();
+        var (_, scale) = panelWindow.WorkArea(pointer);
         var size = panelWindow.Measured(scale);
         int room = (int)(Floating.ShadowRoom * scale);
-        if (OperatingSystem.IsMacOS())
-        {
-            // Below the menu bar, under the icon that was clicked.
-            int x = (Floating.Pointer()?.X is int px ? (int)(px * scale) : area.Right - size.Width) - (int)(24 * scale) - room;
-            panelWindow.Position = new PixelPoint(Math.Clamp(x, area.X, area.Right - size.Width), area.Y + (int)(6 * scale) - room);
-        }
-        else
-        {
-            // 12 px above the tray, like Quick Settings.
-            panelWindow.Position = new PixelPoint(area.Right - size.Width - (int)(12 * scale) + room, area.Bottom - size.Height - (int)(12 * scale) + room);
-        }
+        // NSEvent's mouse location is in points, in the same coordinate space Avalonia's screens report: no
+        // rescaling (a display's own scale factor doesn't change where its menu bar sits in that shared space).
+        var anchor = pointer ?? new PixelPoint(0, 0);
+        panelWindow.Position = OperatingSystem.IsMacOS()
+            ? Placement.MacDropdown(anchor, panelWindow.ScreenList(), size, room)
+            : Placement.TrayFlyout(anchor, panelWindow.ScreenList(), size, room);
         panelWindow.Show();
         panelWindow.Activate();
         Desktop.Activate();
@@ -448,42 +446,49 @@ public static partial class Shell
     {
         var view = Skin.Current == SkinKind.Mac ? (Control)new MacRecorder { DataContext = recorder } : new WinRecorder { DataContext = recorder };
         var w = new Floating { Content = view, Title = "Study Stash recorder" };
-        // Drag it anywhere by its background; it remembers where.
+        // Drag it anywhere by its background; where it lands is saved once the drag ends, not on every pixel moved.
         view.PointerPressed += (_, e) =>
         {
             if (e.Source is TextBox || !e.GetCurrentPoint(view).Properties.IsLeftButtonPressed) return;
             w.BeginMoveDrag(e);
         };
-        w.PositionChanged += (_, _) =>
-        {
-            if (!w.IsVisible) return;
-            var (_, scale) = w.WorkArea(w.Position);
-            var size = w.Measured(scale);
-            host.Settings.RecorderX = w.Position.X + size.Width;
-            host.Settings.RecorderY = w.Position.Y;
-        };
+        view.PointerReleased += (_, _) => SaveRecorderPosition();
         w.Closing += (_, e) =>
         {
             if (quitting) return;
             e.Cancel = true;
             w.Hide();
+            SaveRecorderPosition();
         };
+        // A display is unplugged, or one's plugged back in: put it back where it belongs, or on screen at least.
+        w.Screens.Changed += (_, _) => PlaceRecorder();
         return w;
     }
 
-    /// <summary>The recorder keeps its top right corner where you left it (a corner by default) as it grows and shrinks.</summary>
+    /// <summary>Remembers the recorder's top right corner, so it comes back there next time (a drag just ended, or
+    /// the window is about to hide or the app to quit).</summary>
+    static void SaveRecorderPosition()
+    {
+        if (recorderWindow is not { IsVisible: true } w) return;
+        var (_, scale) = w.WorkArea(w.Position);
+        var size = w.Measured(scale);
+        host.Save(s =>
+        {
+            s.RecorderX = w.Position.X + size.Width;
+            s.RecorderY = w.Position.Y;
+        });
+    }
+
+    /// <summary>The recorder keeps its top right corner where you left it (a corner by default) as it grows and
+    /// shrinks, on whichever display it was on — or the default corner, if that display is gone.</summary>
     static void PlaceRecorder()
     {
         if (recorderWindow is null) return;
-        var (area, scale) = recorderWindow.WorkArea();
+        var (_, scale) = recorderWindow.WorkArea(recorderWindow.Position);
         var size = recorderWindow.Measured(scale);
         int room = (int)(Floating.ShadowRoom * scale);
-        int right = host.Settings.RecorderX is double rx ? (int)rx : area.Right - (int)(16 * scale) + room;
-        int top = host.Settings.RecorderY is double ry ? (int)ry
-            : OperatingSystem.IsMacOS() ? area.Y + (int)(10 * scale) - room : area.Bottom - size.Height - (int)(12 * scale) + room;
-        int x = Math.Clamp(right - size.Width, area.X - room, area.Right - size.Width + room);
-        int y = Math.Clamp(top, area.Y - room, area.Bottom - size.Height + room);
-        recorderWindow.Position = new PixelPoint(x, y);
+        PixelPoint? saved = host.Settings.RecorderX is double rx && host.Settings.RecorderY is double ry ? new PixelPoint((int)rx, (int)ry) : null;
+        recorderWindow.Position = Placement.KeepOnScreen(saved, recorderWindow.ScreenList(), size, OperatingSystem.IsMacOS(), room);
     }
 
     static void ToggleQuick()
@@ -493,6 +498,7 @@ public static partial class Shell
             quickWindow.Hide();
             return;
         }
+        if (quickWindow is not null && DateTime.UtcNow - quickWindow.LastDeactivateHide < Floating.ToggleDebounce) return;
         var view = quickWindow?.Content;
         if (quickWindow is null)
         {
@@ -502,9 +508,11 @@ public static partial class Shell
         quick.Answering = false;
         quick.Query = "";
         _ = SearchAsync("");
-        var (area, scale) = quickWindow.WorkArea(Floating.Pointer());
+        var pointer = Floating.Pointer();
+        var (_, scale) = quickWindow.WorkArea(pointer);
         var size = quickWindow.Measured(scale);
-        quickWindow.Position = new PixelPoint(area.X + (area.Width - size.Width) / 2, area.Y + area.Height / 5 - (int)(Floating.ShadowRoom * scale));
+        int room = (int)(Floating.ShadowRoom * scale);
+        quickWindow.Position = Placement.QuickPanel(pointer, quickWindow.ScreenList(), size, room);
         quickWindow.Show();
         quickWindow.Activate();
         Desktop.Activate();
