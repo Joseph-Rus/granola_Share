@@ -42,14 +42,8 @@ public sealed record CanvasContext(CanvasClient? Client, CanvasClock Clock, Func
 
     static void OpenInChrome(string? url)
     {
-        try
-        {
-            if (OperatingSystem.IsMacOS()) Machine.Run("open", url is null ? ["-a", "Google Chrome"] : ["-a", "Google Chrome", url], TimeSpan.FromSeconds(10));
-            else if (OperatingSystem.IsWindows()) Machine.Run("cmd", url is null ? ["/c", "start", "chrome"] : ["/c", "start", "chrome", url], TimeSpan.FromSeconds(10));
-            else if (url is not null) Dialogs.OpenUrl(url);
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-        }
+        // Chrome.Open covers Mac and Windows and says so (a plain sentence) when it can't; on any other platform
+        // there's no "Chrome" to open specifically, so fall back to the system's own default browser.
+        if (Chrome.Open(url) is not null && url is not null && !OperatingSystem.IsMacOS() && !OperatingSystem.IsWindows()) Dialogs.OpenUrl(url);
     }
 }

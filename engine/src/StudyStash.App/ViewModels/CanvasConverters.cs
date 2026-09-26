@@ -18,4 +18,7 @@ public static class CanvasConverters
         CanvasTone.Error => "✕",
         _ => "i",
     });
+
+    /// <summary>Windows' expander card chevron (design 07): pointing up while the step is open, down otherwise.</summary>
+    public static readonly IValueConverter Chevron = new FuncValueConverter<bool, string>(current => current ? "expand_less" : "expand_more");
 }
