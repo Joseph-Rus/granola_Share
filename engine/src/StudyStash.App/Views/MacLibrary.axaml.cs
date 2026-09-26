@@ -9,6 +9,7 @@ public partial class MacLibrary : UserControl
     public MacLibrary()
     {
         InitializeComponent();
+        Fades.Over(TopFade, "Win", 0.3);
         Fades.Under(Fade, "Win", 0.7);
     }
 
