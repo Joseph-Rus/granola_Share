@@ -1,0 +1,86 @@
+<!-- The recorder's compact chat and the quick panel's ask (design 16): a 360-wide thread of question/answer bubbles
+     with the byline, and a small field with an engine chip and send button (no scope chip: it always asks about
+     this lecture, live while it's recording). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             xmlns:v="using:StudyStash.App.Views"
+             x:Class="StudyStash.App.Views.MacAiAskChat"
+             x:DataType="vm:AiAskModel"
+             ClipToBounds="False">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/MacAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <c:Glass CornerRadius="28" Padding="14,12,12,12" Width="360" ClipToBounds="False">
+    <StackPanel Spacing="10">
+      <ItemsControl ItemsSource="{Binding Turns}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AiTurn">
+            <StackPanel Spacing="10">
+              <Border Classes="ai-bubble-q" MaxWidth="280">
+                <TextBlock Text="{Binding Question}" />
+              </Border>
+              <Border Classes="ai-bubble-a" MaxWidth="317" IsVisible="{Binding !IsThinking}">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="ai-answer" Text="{Binding Answer}" IsVisible="{Binding Answer, Converter={x:Static c:Converters.NotEmpty}}" />
+                  <TextBlock Classes="ai-answer" Text="{Binding Failed}" Foreground="{DynamicResource Warn}"
+                             IsVisible="{Binding Failed, Converter={x:Static c:Converters.NotEmpty}}" />
+                  <Button Theme="{StaticResource Surface}" Padding="0" HorizontalContentAlignment="Left"
+                          Command="{Binding $parent[UserControl].((vm:AiAskModel)DataContext).OpenTurnSourceCommand}" CommandParameter="{Binding}"
+                          IsVisible="{Binding Byline, Converter={x:Static c:Converters.NotEmpty}}">
+                    <TextBlock Classes="ai-byline" Text="{Binding Byline}" />
+                  </Button>
+                  <TextBlock Classes="ai-byline" Text="{Binding FellBackNote}" IsVisible="{Binding FellBackNote, Converter={x:Static c:Converters.NotEmpty}}" />
+                </StackPanel>
+              </Border>
+              <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsThinking}">
+                <c:Spinner Width="14" Height="14" Foreground="{DynamicResource Fg2}" />
+                <TextBlock Classes="ai-thinking" Text="{Binding ThinkingWords}" />
+              </StackPanel>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Classes="ai-field">
+        <Grid ColumnDefinitions="*,6,Auto,6,Auto" VerticalAlignment="Center">
+          <TextBox Classes="bare" Text="{Binding Question}" PlaceholderText="{Binding Placeholder}" FontSize="13" VerticalAlignment="Center">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AskCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <Button Name="EngineChip" Grid.Column="2" Classes="ai-chipbtn" VerticalAlignment="Center">
+            <Border Classes="ai-field-chip">
+              <StackPanel Orientation="Horizontal" Spacing="3">
+                <c:Icon Glyph="auto_awesome" Size="13" Foreground="{DynamicResource AccentText}" />
+                <TextBlock Text="{Binding EngineName}" TextTrimming="CharacterEllipsis" MaxWidth="90" />
+                <c:Icon Glyph="unfold_more" Size="14" Foreground="{DynamicResource Fg2}" />
+              </StackPanel>
+            </Border>
+            <Button.Flyout>
+              <Flyout Placement="Top" ShowMode="Standard">
+                <ContentControl Content="{Binding Menu}">
+                  <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:EngineMenuModel">
+                      <v:MacAiEngineMenu />
+                    </DataTemplate>
+                  </ContentControl.ContentTemplate>
+                </ContentControl>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <Border Grid.Column="4" Classes="ai-field-send">
+            <Button Classes="ai-send" Command="{Binding AskCommand}">
+              <c:Icon Glyph="arrow_upward" Size="18" Foreground="{DynamicResource Fg}" />
+            </Button>
+          </Border>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </c:Glass>
+</UserControl>
