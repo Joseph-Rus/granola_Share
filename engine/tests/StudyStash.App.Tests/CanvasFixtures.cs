@@ -38,7 +38,11 @@ public static class CanvasFixtures
                 Log("PrepareExtension", $"{key} {canvasUrl}");
                 return home is null ? "" : Path.Combine(home, "chrome-extension");
             });
-        IBrush DotOf(string cls) => Skin.ClassDot(Array.IndexOf(Classes, cls) is var i && i >= 0 ? i : 0);
+        // A fresh brush from the same palette Skin.ClassDot draws from, not that shared cache itself: plain (non-UI-
+        // thread) tests run alongside Avalonia ones in this project, and an AvaloniaObject born on the wrong thread
+        // makes every later render of it throw "a different thread owns it" — however far away that render is.
+        IBrush DotOf(string cls) =>
+            new SolidColorBrush(Color.Parse(StudyStash.Core.ClassColors.Hex(StudyStash.Core.ClassColors.For(Array.IndexOf(Classes, cls) is var i && i >= 0 ? i : 0))));
         return new CanvasContext(client, new CanvasClock(() => Now, Zone), DotOf, actions, home ?? "");
     }
 }
