@@ -35,6 +35,7 @@ public static partial class Shell
     static readonly QuickModel quick = new();
     static readonly LibraryModel library = new();
     static SetupModel? setup;
+    static MicCheck? micCheck;
 
     static Floating? panelWindow, recorderWindow, quickWindow;
     static Window? mainWindow, setupWindow, settingsWindow;
@@ -585,28 +586,19 @@ public static partial class Shell
             w.Opened += (_, _) => MicaIfAvailable(w);
         }
         var model = setup;
+        var mic = micCheck = new MicCheck();
         setup.OnFinish = () =>
         {
-            host.Save(s => s.SetupDone = true);
+            Setup.Finish(model, host);
             w.Close();
-            // Only when the student ticked it: starting at login changes this computer.
-            if (model.StartAtLogin)
-            {
-                try
-                {
-                    host.LoginItems.StartAtLogin(true, host.Home);
-                }
-                catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
-                {
-                    Program.Log($"[app] start at login: {e.Message}");
-                }
-            }
             ShowLibrary();
         };
         w.Closed += (_, _) =>
         {
             setupWindow = null;
             if (setup == model) setup = null;
+            mic.Close();
+            if (micCheck == mic) micCheck = null;
             UpdateDock();
         };
         setupWindow = w;
@@ -676,6 +668,7 @@ public static partial class Shell
 
     static void Tick()
     {
+        if (setup is not null && micCheck is not null) Setup.TickMic(setup, host, micCheck);
         var live = host.Recorder.Current;
         if (live is null) return;
         string elapsed = TimedText.Clock(host.Recorder.Elapsed);

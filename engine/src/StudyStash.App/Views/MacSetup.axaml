@@ -141,6 +141,10 @@
               <c:Icon Glyph="check_circle" Filled="True" Size="18" Foreground="{DynamicResource Accent}" />
               <TextBlock Text="The microphone is allowed." FontSize="13" VerticalAlignment="Center" />
             </StackPanel>
+            <StackPanel IsVisible="{Binding MicAllowed}" Margin="0,16,0,0" Spacing="8">
+              <c:Waveform Height="28" Bars="24" Levels="{Binding MicLevels}" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left" />
+              <TextBlock Text="{Binding MicLine}" FontSize="12" Foreground="{DynamicResource Fg2}" />
+            </StackPanel>
             <Button Classes="push default" HorizontalAlignment="Left" Margin="0,32,0,0" Command="{Binding AllowMicCommand}" IsVisible="{Binding !MicAllowed}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <c:Icon Glyph="mic" Filled="True" Size="16" Foreground="{DynamicResource OnAccent}" />
@@ -154,6 +158,9 @@
                 <TextBlock Text="Open System Settings" FontSize="13" />
               </Button>
             </StackPanel>
+            <Button Theme="{StaticResource Surface}" HorizontalAlignment="Left" Margin="0,20,0,0" CornerRadius="6" Padding="0" Command="{Binding PickOnlyLibraryCommand}">
+              <TextBlock Text="{Binding SkipRecordingText}" FontSize="12" Foreground="{DynamicResource AccentText}" />
+            </Button>
           </StackPanel>
 
           <!-- 2: the library -->
@@ -201,10 +208,17 @@
               <Button Classes="push" Command="{Binding ConnectCommand}" IsEnabled="{Binding !Connecting}">
                 <TextBlock Text="{Binding ThisComputer, Converter={x:Static c:Converters.CreateOrConnect}}" FontSize="13" />
               </Button>
+              <Button Classes="push" Command="{Binding FindCommand}" IsEnabled="{Binding !Finding}" IsVisible="{Binding OtherComputer}">
+                <TextBlock Text="Find it" FontSize="13" />
+              </Button>
               <c:Spinner IsVisible="{Binding Connecting}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
+              <c:Spinner IsVisible="{Binding Finding}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
               <TextBlock IsVisible="{Binding HasLibraryResult}" Text="{Binding LibraryResult}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300"
                          Foreground="{Binding LibraryOk, Converter={x:Static c:Converters.OkText}}" />
             </StackPanel>
+            <CheckBox IsChecked="{Binding StartAtLogin}" IsVisible="{Binding ShowStartAtLogin}" Margin="0,12,0,0">
+              <TextBlock Text="Start Study Stash when I log in, so the library keeps running" FontSize="13" />
+            </CheckBox>
           </StackPanel>
 
           <!-- 3: the model -->

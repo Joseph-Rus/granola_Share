@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StudyStash.App.Services;
 
 namespace StudyStash.App.ViewModels;
 
@@ -53,22 +54,35 @@ public sealed partial class SetupModel : ObservableObject
 {
     public ObservableCollection<StepItem> Steps { get; } = [];
     [ObservableProperty] public partial SetupStep Step { get; set; }
+    /// <summary>What this computer is for: set by <see cref="SetRole"/>, which also rebuilds <see cref="Steps"/>.</summary>
+    [ObservableProperty] public partial AppRole Role { get; set; } = AppRole.Laptop;
 
     // Microphone
     [ObservableProperty] public partial bool MicAllowed { get; set; }
     [ObservableProperty] public partial bool MicDenied { get; set; }
+    /// <summary>The mic check's bars, oldest first, 0 to 1 (24 of them).</summary>
+    [ObservableProperty] public partial IReadOnlyList<double>? MicLevels { get; set; }
+    /// <summary>A level has passed the "hears you" mark since the mic check opened.</summary>
+    [ObservableProperty] public partial bool MicHeard { get; set; }
+    public string MicLine => MicHeard ? "Study Stash hears you." : "Say something. The bars move when Study Stash hears you.";
+    public string SkipRecordingText => $"This {DeviceWord} won't record: it's only the library";
 
     // Library
     [ObservableProperty] public partial bool ThisComputer { get; set; }
     [ObservableProperty] public partial bool OtherComputer { get; set; } = true;
+    /// <summary>This computer is only the library: it never records. Implies <see cref="ThisComputer"/>.</summary>
+    [ObservableProperty] public partial bool OnlyLibrary { get; set; }
     [ObservableProperty] public partial string Address { get; set; } = "";
     [ObservableProperty] public partial string Password { get; set; } = "";
     [ObservableProperty] public partial string LibraryName { get; set; } = "";
     [ObservableProperty] public partial string? LibraryResult { get; set; }
     [ObservableProperty] public partial bool LibraryOk { get; set; }
     [ObservableProperty] public partial bool Connecting { get; set; }
+    /// <summary>Looking for a library on this computer or your Tailscale network ("Find it").</summary>
+    [ObservableProperty] public partial bool Finding { get; set; }
     /// <summary>Start Study Stash when the student logs in: off unless they tick it.</summary>
     [ObservableProperty] public partial bool StartAtLogin { get; set; }
+    public bool ShowStartAtLogin => ThisComputer || OnlyLibrary;
 
     // Model
     [ObservableProperty] public partial string ModelName { get; set; } = "Whisper large-v3";
@@ -111,43 +125,68 @@ public sealed partial class SetupModel : ObservableObject
     public static SetupModel For(SkinKind skin)
     {
         var m = new SetupModel();
-        m.Steps.Add(new StepItem { Step = SetupStep.Microphone, Number = 1, Title = "Microphone" });
-        m.Steps.Add(new StepItem { Step = SetupStep.Library, Number = 2, Title = "Library" });
-        m.Steps.Add(new StepItem { Step = SetupStep.Model, Number = 3, Title = "Transcription model" });
-        m.Steps.Add(new StepItem { Step = SetupStep.Classes, Number = 4, Title = "Classes", Optional = true });
-        if (skin == SkinKind.Win) m.Steps.Add(new StepItem { Step = SetupStep.Taskbar, Number = 5, Title = "Taskbar" });
-        m.Go(SetupStep.Microphone);
+        m.SetRole(AppRole.Laptop, skin);
         return m;
     }
 
+    /// <summary>What this computer is for: rebuilds <see cref="Steps"/> (Laptop and Both keep the microphone and the
+    /// model; Library skips both) and stays on the current step when it's still one of them, else goes to the first.</summary>
+    public void SetRole(AppRole role, SkinKind? skin = null)
+    {
+        Role = role;
+        var sk = skin ?? Skin.Current;
+        var wanted = Step;
+        Steps.Clear();
+        int n = 1;
+        if (role != AppRole.Library) Steps.Add(new StepItem { Step = SetupStep.Microphone, Number = n++, Title = "Microphone" });
+        Steps.Add(new StepItem { Step = SetupStep.Library, Number = n++, Title = "Library" });
+        if (role != AppRole.Library) Steps.Add(new StepItem { Step = SetupStep.Model, Number = n++, Title = "Transcription model" });
+        Steps.Add(new StepItem { Step = SetupStep.Classes, Number = n++, Title = "Classes", Optional = true });
+        if (sk == SkinKind.Win) Steps.Add(new StepItem { Step = SetupStep.Taskbar, Number = n++, Title = "Taskbar" });
+        Go(Steps.Any(s => s.Step == wanted) ? wanted : Steps[0].Step);
+        NotifyStepDerived();
+    }
+
+    /// <summary>Steps before this one are done (a check); this one and the ones after are still to come, even if
+    /// they were done before: going Back undoes their checks too.</summary>
     public void Go(SetupStep step)
     {
         Step = step;
-        bool before = true;
-        foreach (var s in Steps)
+        int at = Steps.ToList().FindIndex(s => s.Step == step);
+        for (int i = 0; i < Steps.Count; i++)
         {
-            s.Current = s.Step == step;
-            if (s.Current) before = false;
-            else if (before) s.Done = true;
+            Steps[i].Current = i == at;
+            Steps[i].Done = at >= 0 && i < at;
         }
     }
 
-    partial void OnStepChanged(SetupStep value)
+    void NotifyStepDerived()
     {
         foreach (string p in new[] { nameof(Index), nameof(IsLast), nameof(StepLabel), nameof(ContinueLabel), nameof(CanGoBack), nameof(OnMicrophone),
                      nameof(OnLibrary), nameof(OnModel), nameof(OnClasses), nameof(OnTaskbar) })
             OnPropertyChanged(p);
     }
 
+    partial void OnStepChanged(SetupStep value) => NotifyStepDerived();
+
     partial void OnThisComputerChanged(bool value)
     {
         if (value) OtherComputer = false;
+        OnPropertyChanged(nameof(ShowStartAtLogin));
     }
 
     partial void OnOtherComputerChanged(bool value)
     {
-        if (value) ThisComputer = false;
+        if (value)
+        {
+            ThisComputer = false;
+            OnlyLibrary = false;
+        }
     }
+
+    partial void OnOnlyLibraryChanged(bool value) => OnPropertyChanged(nameof(ShowStartAtLogin));
+
+    partial void OnMicHeardChanged(bool value) => OnPropertyChanged(nameof(MicLine));
 
     partial void OnLibraryResultChanged(string? value) => OnPropertyChanged(nameof(HasLibraryResult));
 
@@ -170,6 +209,7 @@ public sealed partial class SetupModel : ObservableObject
     public Action? OnAllowMic { get; set; }
     public Action? OnMicSettings { get; set; }
     public Func<Task>? OnConnect { get; set; }
+    public Func<Task>? OnFind { get; set; }
     public Action? OnRetryModel { get; set; }
     public Func<Task>? OnAddClass { get; set; }
     public Action? OnTaskbarSettings { get; set; }
@@ -180,13 +220,46 @@ public sealed partial class SetupModel : ObservableObject
     [RelayCommand] void MicSettings() => OnMicSettings?.Invoke();
     [RelayCommand] void RetryModel() => OnRetryModel?.Invoke();
     [RelayCommand] void TaskbarSettings() => OnTaskbarSettings?.Invoke();
-    [RelayCommand] void PickThis() => ThisComputer = true;
-    [RelayCommand] void PickOther() => OtherComputer = true;
+
+    [RelayCommand]
+    void PickThis()
+    {
+        OtherComputer = false;
+        OnlyLibrary = false;
+        ThisComputer = true;
+        SetRole(AppRole.Both);
+    }
+
+    [RelayCommand]
+    void PickOther()
+    {
+        ThisComputer = false;
+        OnlyLibrary = false;
+        OtherComputer = true;
+        SetRole(AppRole.Laptop);
+    }
+
+    /// <summary>"This {Mac|PC} won't record: it's only the library" on the microphone step: skips straight to
+    /// setting this computer up as the library, with no microphone or model to come.</summary>
+    [RelayCommand]
+    void PickOnlyLibrary()
+    {
+        OtherComputer = false;
+        ThisComputer = true;
+        OnlyLibrary = true;
+        SetRole(AppRole.Library);
+    }
 
     [RelayCommand]
     async Task Connect()
     {
         if (OnConnect is not null) await OnConnect();
+    }
+
+    [RelayCommand]
+    async Task Find()
+    {
+        if (OnFind is not null) await OnFind();
     }
 
     [RelayCommand]

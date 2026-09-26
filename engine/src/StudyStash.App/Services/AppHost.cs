@@ -265,8 +265,9 @@ public sealed class AppHost : IDisposable
         running.Add(Task.Run(WatchLibrary));
         running.Add(Task.Run(() => Lectures.PruneAudio(Settings.KeepAudioDays, DateTimeOffset.Now)));
         watchdog = new Timer(_ => CheckRecorder(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-        // A download that quitting (or a closed laptop) cut short picks up where it stopped.
-        if (Settings.SetupDone && !ModelReady) _ = DownloadModelAsync();
+        // A download that quitting (or a closed laptop) cut short picks up where it stopped. A library-only
+        // computer never records, so it never needs the model.
+        if (Settings.SetupDone && Settings.Role != AppRole.Library && !ModelReady) _ = DownloadModelAsync();
         if (Settings.Role != AppRole.Laptop && Settings.SetupDone) _ = RefreshLocalLibraryAsync();
     }
 
