@@ -1,0 +1,29 @@
+[
+  {
+    "id": 301, "name": "Week 3 · Scope", "position": 3, "unlock_at": null, "require_sequential_progress": false,
+    "published": true, "items_count": 5, "state": "completed", "completed_at": "2025-09-19T20:00:00Z",
+    "items_url": "https://canvas.test/api/v1/courses/4201/modules/301/items"
+  },
+  {
+    "id": 302, "name": "Week 4 · Recursion", "position": 4, "unlock_at": null, "require_sequential_progress": false,
+    "published": true, "items_count": 5, "state": "started", "completed_at": null,
+    "items_url": "https://canvas.test/api/v1/courses/4201/modules/302/items",
+    "items": [
+      {"id": 3021, "module_id": 302, "position": 1, "title": "recursion-slides.pdf", "indent": 0, "type": "File",
+       "content_id": 555, "html_url": "https://canvas.test/courses/4201/modules/items/3021",
+       "url": "https://canvas.test/api/v1/courses/4201/files/555", "published": true},
+      {"id": 3022, "module_id": 302, "position": 2, "title": "Lab 3 instructions", "indent": 0, "type": "Page",
+       "page_url": "lab-3-instructions", "html_url": "https://canvas.test/courses/4201/modules/items/3022",
+       "url": "https://canvas.test/api/v1/courses/4201/pages/lab-3-instructions", "published": true},
+      {"id": 3023, "module_id": 302, "position": 3, "title": "Tracing worksheet", "indent": 1, "type": "ExternalUrl",
+       "external_url": "https://app.box.com/s/abc123", "html_url": "https://canvas.test/courses/4201/modules/items/3023",
+       "url": "https://canvas.test/api/v1/courses/4201/module_item_redirect/3023", "published": true},
+      {"id": 3024, "module_id": 302, "position": 4, "title": "Stack diagrams handout", "indent": 1, "type": "ExternalUrl",
+       "external_url": "https://drive.google.com/file/d/xyz/view", "html_url": "https://canvas.test/courses/4201/modules/items/3024",
+       "url": "https://canvas.test/api/v1/courses/4201/module_item_redirect/3024", "published": true},
+      {"id": 3025, "module_id": 302, "position": 5, "title": "Lab 3: recursion traces", "indent": 0, "type": "Assignment",
+       "content_id": 9001, "html_url": "https://canvas.test/courses/4201/modules/items/3025",
+       "url": "https://canvas.test/api/v1/courses/4201/assignments/9001", "published": true}
+    ]
+  }
+]

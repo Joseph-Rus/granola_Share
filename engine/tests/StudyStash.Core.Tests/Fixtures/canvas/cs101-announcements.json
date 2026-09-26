@@ -1,0 +1,42 @@
+[
+  {
+    "id": 6004, "title": "Lab 3 is up", "is_announcement": true, "published": true, "locked": true,
+    "message": "<p>Lab 3 is posted under Week 4. It’s due <strong>Tuesday 30 September at 11:59 PM</strong>. Bring your traces to Thursday’s lab if you get stuck.</p>",
+    "posted_at": "2025-09-23T16:05:00Z", "delayed_post_at": null, "last_reply_at": "2025-09-23T16:05:00Z",
+    "read_state": "unread", "unread_count": 0, "user_name": "Dr. Okafor", "context_code": "course_4201",
+    "html_url": "https://canvas.test/courses/4201/discussion_topics/6004",
+    "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png", "html_url": "https://canvas.test/courses/4201/users/3301"},
+    "attachments": []
+  },
+  {
+    "id": 6003, "title": "Office hours move to Thursday this week", "is_announcement": true, "published": true, "locked": true,
+    "message": "<p>This week only, office hours are on Thursday from 2 to 4 PM in room 214.</p>",
+    "posted_at": "2025-09-15T20:00:00Z", "delayed_post_at": null, "last_reply_at": "2025-09-15T20:00:00Z",
+    "read_state": "read", "unread_count": 0, "user_name": "Dr. Okafor", "context_code": "course_4201",
+    "html_url": "https://canvas.test/courses/4201/discussion_topics/6003",
+    "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png", "html_url": "https://canvas.test/courses/4201/users/3301"},
+    "attachments": []
+  },
+  {
+    "id": 6002, "title": "Problem set 3 solutions", "is_announcement": true, "published": true, "locked": true,
+    "message": "<p>Solutions to problem set 3 are attached. Compare them with your own before Friday's quiz.</p>",
+    "posted_at": "2025-09-11T18:30:00Z", "delayed_post_at": null, "last_reply_at": "2025-09-11T18:30:00Z",
+    "read_state": "read", "unread_count": 0, "user_name": "Dr. Okafor", "context_code": "course_4201",
+    "html_url": "https://canvas.test/courses/4201/discussion_topics/6002",
+    "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png", "html_url": "https://canvas.test/courses/4201/users/3301"},
+    "attachments": [
+      {"id": 5201, "display_name": "ps3-solutions.pdf", "filename": "ps3-solutions.pdf", "content-type": "application/pdf",
+       "url": "https://canvas.test/files/5201/download?download_frd=1&verifier=v5201", "size": 204800,
+       "updated_at": "2025-09-11T18:29:00Z", "locked_for_user": false}
+    ]
+  },
+  {
+    "id": 6001, "title": "Welcome to COMP 101", "is_announcement": true, "published": true, "locked": true,
+    "message": "<p>Welcome! Lectures are Tuesdays and Thursdays at 10 AM. The syllabus is on the course home page.</p>",
+    "posted_at": "2025-08-25T15:00:00Z", "delayed_post_at": null, "last_reply_at": "2025-08-25T15:00:00Z",
+    "read_state": "read", "unread_count": 0, "user_name": "Dr. Okafor", "context_code": "course_4201",
+    "html_url": "https://canvas.test/courses/4201/discussion_topics/6001",
+    "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png", "html_url": "https://canvas.test/courses/4201/users/3301"},
+    "attachments": []
+  }
+]

@@ -1,0 +1,81 @@
+[
+  {
+    "id": 88001, "assignment_id": 9001, "user_id": 5501, "workflow_state": "unsubmitted",
+    "submitted_at": null, "graded_at": null, "score": null, "grade": null, "attempt": null,
+    "late": false, "missing": false, "excused": false, "points_deducted": null, "submission_type": null,
+    "preview_url": "https://canvas.test/courses/4201/assignments/9001/submissions/5501?preview=1",
+    "submission_comments": [],
+    "assignment": {"id": 9001, "name": "Lab 3: recursion traces", "points_possible": 20.0, "due_at": "2025-10-01T06:59:00Z",
+                   "html_url": "https://canvas.test/courses/4201/assignments/9001", "submission_types": ["online_upload"]}
+  },
+  {
+    "id": 88002, "assignment_id": 9002, "user_id": 5501, "workflow_state": "graded",
+    "submitted_at": "2025-09-17T04:41:00Z", "graded_at": "2025-09-22T18:00:00Z", "score": 18.0, "grade": "18",
+    "attempt": 1, "late": false, "missing": false, "excused": false, "points_deducted": null, "submission_type": "online_upload",
+    "grader_id": 3301,
+    "preview_url": "https://canvas.test/courses/4201/assignments/9002/submissions/5501?preview=1",
+    "attachments": [
+      {"id": 8801, "uuid": "u8801", "folder_id": 90, "display_name": "ps4-answers.pdf", "filename": "ps4-answers.pdf",
+       "content-type": "application/pdf", "url": "https://canvas.test/files/8801/download?download_frd=1&verifier=v8801",
+       "size": 1258291, "created_at": "2025-09-17T04:40:00Z", "updated_at": "2025-09-17T04:40:00Z",
+       "locked": false, "hidden": false, "locked_for_user": false, "mime_class": "pdf"},
+      {"id": 8802, "uuid": "u8802", "folder_id": 90, "display_name": "ps4.py", "filename": "ps4.py",
+       "content-type": "text/x-python", "url": "https://canvas.test/files/8802/download?download_frd=1&verifier=v8802",
+       "size": 4096, "created_at": "2025-09-17T04:40:00Z", "updated_at": "2025-09-17T04:40:00Z",
+       "locked": false, "hidden": false, "locked_for_user": false, "mime_class": "code"}
+    ],
+    "rubric_assessment": {
+      "_2001": {"rating_id": "_2001a", "comments": "", "points": 5.0},
+      "_2002": {"rating_id": "_2002b", "comments": "The frame for n = 1 is missing in 3b.", "points": 8.0},
+      "_2003": {"rating_id": "_2003a", "comments": "Name helpers after what they return.", "points": 5.0}
+    },
+    "submission_comments": [
+      {"id": 51001, "author_id": 3301, "author_name": "Dr. Okafor",
+       "author": {"id": 3301, "display_name": "Dr. Okafor", "avatar_image_url": "https://canvas.test/images/messages/avatar-50.png",
+                  "html_url": "https://canvas.test/courses/4201/users/3301", "pronouns": null},
+       "comment": "Good work overall. Watch the last frame in 3b, it’s the one people drop.",
+       "created_at": "2025-09-22T18:00:00Z", "edited_at": null, "attempt": 1}
+    ],
+    "assignment": {"id": 9002, "name": "Problem set 4", "points_possible": 20.0, "due_at": "2025-09-17T06:59:00Z",
+                   "html_url": "https://canvas.test/courses/4201/assignments/9002", "submission_types": ["online_upload"],
+                   "rubric": [
+                     {"id": "_2001", "points": 5.0, "description": "Base cases", "ratings": [{"id": "_2001a", "points": 5.0, "description": "Full marks"}, {"id": "_2001b", "points": 0.0, "description": "No marks"}]},
+                     {"id": "_2002", "points": 10.0, "description": "Stack traces", "ratings": [{"id": "_2002a", "points": 10.0, "description": "Full marks"}, {"id": "_2002b", "points": 8.0, "description": "One frame missing"}, {"id": "_2002c", "points": 0.0, "description": "No marks"}]},
+                     {"id": "_2003", "points": 5.0, "description": "Style", "ratings": [{"id": "_2003a", "points": 5.0, "description": "Full marks"}, {"id": "_2003b", "points": 0.0, "description": "No marks"}]}
+                   ]}
+  },
+  {
+    "id": 88003, "assignment_id": 9003, "user_id": 5501, "workflow_state": "graded",
+    "submitted_at": "2025-09-09T22:12:00Z", "graded_at": "2025-09-15T17:30:00Z", "score": 20.0, "grade": "20",
+    "attempt": 1, "late": false, "missing": false, "excused": false, "points_deducted": null, "submission_type": "online_upload",
+    "attachments": [
+      {"id": 8701, "display_name": "ps3.py", "filename": "ps3.py", "content-type": "text/x-python",
+       "url": "https://canvas.test/files/8701/download?download_frd=1&verifier=v8701", "size": 2310,
+       "updated_at": "2025-09-09T22:11:00Z", "locked_for_user": false}
+    ],
+    "submission_comments": [],
+    "assignment": {"id": 9003, "name": "Problem set 3", "points_possible": 20.0, "due_at": "2025-09-10T06:59:00Z",
+                   "html_url": "https://canvas.test/courses/4201/assignments/9003", "submission_types": ["online_upload"]}
+  },
+  {
+    "id": 88004, "assignment_id": 9004, "user_id": 5501, "workflow_state": "graded",
+    "submitted_at": "2025-09-12T15:20:00Z", "graded_at": "2025-09-18T16:00:00Z", "score": 17.0, "grade": "17",
+    "attempt": 1, "late": true, "missing": false, "excused": false, "points_deducted": 2.0, "submission_type": "online_upload",
+    "attachments": [
+      {"id": 8601, "display_name": "lab2-traces.pdf", "filename": "lab2-traces.pdf", "content-type": "application/pdf",
+       "url": "https://canvas.test/files/8601/download?download_frd=1&verifier=v8601", "size": 88210,
+       "updated_at": "2025-09-12T15:19:00Z", "locked_for_user": false}
+    ],
+    "submission_comments": [],
+    "assignment": {"id": 9004, "name": "Lab 2: tracing loops", "points_possible": 20.0, "due_at": "2025-09-12T06:59:00Z",
+                   "html_url": "https://canvas.test/courses/4201/assignments/9004", "submission_types": ["online_upload"]}
+  },
+  {
+    "id": 88005, "assignment_id": 9005, "user_id": 5501, "workflow_state": "unsubmitted",
+    "submitted_at": null, "graded_at": null, "score": null, "grade": null, "attempt": null,
+    "late": false, "missing": false, "excused": true, "points_deducted": null, "submission_type": null,
+    "submission_comments": [],
+    "assignment": {"id": 9005, "name": "Syllabus quiz", "points_possible": 5.0, "due_at": "2025-09-06T06:59:00Z",
+                   "html_url": "https://canvas.test/courses/4201/assignments/9005", "submission_types": ["online_quiz"], "quiz_id": 7001}
+  }
+]

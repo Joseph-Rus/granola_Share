@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using StudyStash.Core;
 using StudyStash.Core.Canvas;
 
@@ -27,22 +28,38 @@ public sealed partial class LibraryWeb
 
     static string S(JsonNode? v) => v is JsonValue j && j.TryGetValue(out string? s) ? s : "";
 
+    /// <summary>The most one post of the extension's answers may carry: a 40 MiB file is about 56 MB of base64, and an
+    /// extension from before protocol 2 posts up to six answers together.</summary>
+    const long ResultsLimit = 256L * 1024 * 1024;
+
     void MapCanvas(WebApplication app)
     {
-        // The extension.
-        app.MapGet("/api/v2/canvas/work", (HttpContext ctx, int? force, string? v) =>
+        // An updated Study Stash brings the extension folder it made up to date; Chrome's copy reloads itself from it.
+        try
+        {
+            if (Extension.Refresh(Extension.Folder(cfg.Home))) Console.WriteLine($"[canvas] the Chrome extension's folder is now version {Extension.Version()}");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"[canvas] couldn't update the Chrome extension's folder: {e.Message}");
+        }
+
+        // The extension. It says its version (v) and protocol (p); one from before protocol 2 sends no p.
+        app.MapGet("/api/v2/canvas/work", (HttpContext ctx, int? force, string? v, int? p) =>
         {
             if (RequireExtension(ctx) is { } no) return no;
-            var w = Canvas.Work(force is 1, v);
+            var w = Canvas.Work(force is 1, v, p ?? 1);
             return Http.Json(new JsonObject
             {
                 ["jobs"] = new JsonArray(w.Jobs.Select(j => (JsonNode)new JsonObject { ["id"] = j.Id, ["url"] = j.Url, ["kind"] = j.Kind }).ToArray()),
-                ["hot"] = w.Hot, ["ext"] = w.Ext,
+                ["hot"] = w.Hot, ["ext"] = w.Ext, ["p"] = Extension.Protocol,
             });
         });
         app.MapPost("/api/v2/canvas/results", Http.Handle(async ctx =>
         {
             if (RequireExtension(ctx) is { } no) return no;
+            // Files come as base64 inside JSON: past Kestrel's 30 MB default for a big one.
+            if (ctx.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit) limit.MaxRequestBodySize = ResultsLimit;
             var body = await Http.JsonBodyAsync(ctx.Request);
             Canvas.Results((body?["results"] as JsonArray ?? []).OfType<JsonObject>().Select(CanvasResult.From).ToList());
             return Http.Json(new JsonObject { ["ok"] = true });
@@ -77,6 +94,8 @@ public sealed partial class LibraryWeb
                         else s.Courses.Remove(cls);
                     }
                 if (body?["sync"] is JsonValue sv && sv.TryGetValue(out bool now) && now) s.SyncNow = true;
+                if (body?["dismiss_update"] is JsonValue dv && dv.TryGetValue(out bool dismiss) && dismiss && s.ExtensionUpdate is { } noted)
+                    s.ExtensionUpdate = noted with { Dismissed = true };
             });
             return Http.Json(CanvasJson());
         })));
@@ -176,6 +195,8 @@ public sealed partial class LibraryWeb
         {
             ["url"] = s.Url, ["courses"] = courses, ["available"] = available, ["last_sync"] = s.LastSync, ["error"] = s.Error,
             ["needs_login"] = s.NeedsLogin, ["extension_seen"] = s.ExtensionSeen, ["extension_version"] = s.ExtensionVersion,
+            ["extension_latest"] = Extension.Version(), ["extension_outdated"] = s.ExtensionOutdated,
+            ["extension_update"] = s.ExtensionUpdate is { Dismissed: false } up ? new JsonObject { ["from"] = up.From, ["to"] = up.To, ["at"] = up.At } : null,
             ["syncing"] = Canvas.Crawl.Active, ["left"] = waiting + inflight,
             ["exploring"] = options.Scout?.Running, ["scouts"] = new JsonObject(s.Scouts.Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)new JsonObject
             {

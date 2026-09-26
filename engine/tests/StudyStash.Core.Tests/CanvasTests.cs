@@ -41,69 +41,93 @@ public class CanvasTests
         Assert.Null(CanvasSettings.CleanUrl("not a url"));
     }
 
-    static CanvasResult Ok(CanvasJob j, string text, string link = "") => new(j.Id, 200, link, text, "", "", j.Url);
-
     [Fact]
-    public async Task A_sync_mirrors_specs_feedback_modules_pages_files_and_announcements()
+    public void A_sync_mirrors_specs_feedback_modules_pages_files_and_announcements()
     {
         using var dir = new TempDir();
-        string ClassDir(string c) { string d = Path.Combine(dir["pool"], c); Directory.CreateDirectory(d); return d; }
-        CanvasSettings.Update(dir.Path, s => { s.Url = "https://canvas.test"; s.Courses["CS 101"] = 42; });
-        var sync = new CanvasSync(dir.Path, ClassDir, _ => { });
-        var work = sync.Work(force: true);
-        Assert.Equal(4, work.Jobs.Count);
-        Assert.True(work.Hot);
-        var answers = new List<CanvasResult>();
-        foreach (var j in work.Jobs)
-        {
-            if (j.Url.Contains("/assignments?", StringComparison.Ordinal))
-                answers.Add(Ok(j, """[{"id":7,"name":"Lab 1: Recursion","due_at":"2026-09-30T06:59:00Z","points_possible":10,"published":true,"html_url":"https://canvas.test/courses/42/assignments/7","description":"<p>Write <b>fib</b>.</p><script>x()</script>","submission_types":["online_upload"],"submission":{}}]""",
-                    "<https://canvas.test/api/v1/courses/42/assignments?page=2>; rel=\"next\""));
-            else if (j.Url.Contains("/students/submissions", StringComparison.Ordinal))
-                answers.Add(Ok(j, """[{"assignment":{"id":7,"name":"Lab 1: Recursion","points_possible":10},"score":9,"submitted_at":"2026-09-29T00:00:00Z","workflow_state":"graded","attempt":1,"attachments":[{"id":5,"display_name":"fib.py","url":"https://canvas.test/files/5/download","content-type":"text/x-python","size":20,"updated_at":"u1"}],"submission_comments":[{"author_name":"Dr. T","created_at":"2026-09-29T01:00:00Z","comment":"Nice"}]}]"""));
-            else if (j.Url.Contains("/modules", StringComparison.Ordinal))
-                answers.Add(Ok(j, """[{"position":1,"name":"Week 1","items":[{"type":"Page","title":"Syllabus","url":"https://canvas.test/api/v1/courses/42/pages/syllabus"},{"type":"ExternalUrl","title":"Book","external_url":"https://book.test"}]}]"""));
-            else
-                answers.Add(Ok(j, """[{"title":"Welcome","posted_at":"2026-08-25T00:00:00Z","author":{"display_name":"Dr. T"},"message":"<p>Hi all</p>"}]"""));
-        }
-        sync.Results(answers);
-        string root = Path.Combine(dir["pool"], "CS 101", "Canvas");
-        string spec = File.ReadAllText(Path.Combine(root, "assignments", "Lab 1- Recursion", "spec.md"));
-        Assert.Contains("canvas_id: 7\n", spec);
-        Assert.Contains("Write **fib**.", spec);
-        Assert.DoesNotContain("x()", spec);
-        Assert.Contains("- **Score:** 9/10", File.ReadAllText(Path.Combine(root, "assignments", "Lab 1- Recursion", "feedback.md")));
-        Assert.Contains("[Syllabus](modules/01%20Week%201/Syllabus.md)", File.ReadAllText(Path.Combine(root, "modules.md")));
-        Assert.Contains("Hi all", File.ReadAllText(Path.Combine(root, "announcements.md")));
+        var sync = FakeCanvas.Library(dir, () => FakeCanvas.DesignNow);
+        var canvas = FakeCanvas.Cs101();
+        Assert.True(canvas.Run(sync));
 
-        // The next page of assignments, the page and the submitted file come next.
-        var more = sync.Work(force: false).Jobs;
-        Assert.Equal(3, more.Count);
-        sync.Results(more.Select(j => j.Kind == "bytes" ? new CanvasResult(j.Id, 200, "", "", Convert.ToBase64String("def fib(): ..."u8.ToArray()), "", j.Url)
-            : j.Url.Contains("pages", StringComparison.Ordinal) ? Ok(j, """{"title":"Syllabus","body":"<h2>Grading</h2><ul><li>Labs 50%</li></ul>","updated_at":"2026-08-20T00:00:00Z"}""")
-            : Ok(j, "[]")).ToList());
-        Assert.Equal("def fib(): ...", File.ReadAllText(Path.Combine(root, "assignments", "Lab 1- Recursion", "submission", "fib.py")));
-        Assert.Contains("## Grading", File.ReadAllText(Path.Combine(root, "modules", "01 Week 1", "Syllabus.md")));
+        // Everything is looked at once the sync has finished: Markdown may be written at the end.
+        string root = FakeCanvas.CanvasRoot(dir);
+        string spec = File.ReadAllText(Path.Combine(root, "assignments", "Lab 3- recursion traces", "spec.md"));
+        Assert.Contains("canvas_id: 9001\n", spec);
+        Assert.Contains("generated_by: study-stash", spec);
+        Assert.Contains("Trace factorial(4) and fib(5) by hand.", spec);
+        Assert.Contains("| Correct traces (Every call and every return value is right.) | 10 |", spec);
+        string feedback = File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "feedback.md"));
+        Assert.Contains("- **Score:** 18/20", feedback);
+        Assert.Contains("- Stack traces: 8 (The frame for n = 1 is missing in 3b.)", feedback);
+        Assert.Contains("**Dr. Okafor**", feedback);
+        Assert.Contains("Watch the last frame in 3b, it’s the one people drop.", feedback);
+        Assert.Equal("%PDF-1.4 ps4 answers", File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "submission", "ps4-answers.pdf")));
+        Assert.StartsWith("def fact(n):", File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "submission", "ps4.py")));
+        Assert.False(File.Exists(Path.Combine(root, "assignments", "Lab 3- recursion traces", "feedback.md"))); // nothing handed in yet
 
-        Assert.False(sync.Crawl.Active);
+        string modules = File.ReadAllText(Path.Combine(root, "modules.md"));
+        Assert.True(modules.IndexOf("## Week 3 · Scope", StringComparison.Ordinal) < modules.IndexOf("## Week 4 · Recursion", StringComparison.Ordinal));
+        Assert.Contains("[Lab 3 instructions](modules/04%20Week%204%20·%20Recursion/Lab%203%20instructions.md)", modules);
+        Assert.Contains("[Tracing worksheet](https://app.box.com/s/abc123) (link)", modules);
+        string week4 = Path.Combine(root, "modules", "04 Week 4 · Recursion");
+        Assert.Contains("## What to hand in", File.ReadAllText(Path.Combine(week4, "Lab 3 instructions.md")));
+        Assert.Equal("%PDF-1.4 recursion slides", File.ReadAllText(Path.Combine(week4, "recursion-slides.pdf")));
+
+        string news = File.ReadAllText(Path.Combine(root, "announcements.md"));
+        Assert.True(news.IndexOf("## Lab 3 is up", StringComparison.Ordinal) < news.IndexOf("## Welcome to COMP 101", StringComparison.Ordinal));
+        Assert.Contains("## Office hours move to Thursday this week", news);
+        Assert.Contains("**Tuesday 30 September at 11:59 PM**", news);
+
         var saved = Assignments.Load(dir.Path);
-        Assert.Equal("Lab 1: Recursion", Assert.Single(saved).Name);
+        Assert.Equal(["Syllabus quiz", "Problem set 3", "Lab 2: tracing loops", "Problem set 4", "Lab 3: recursion traces"], saved.Select(a => a.Name));
+        Assert.Equal("open", saved.Single(a => a.Id == 9001).Status);
+        Assert.Equal(18, saved.Single(a => a.Id == 9002).Score);
+        Assert.Equal("excused", saved.Single(a => a.Id == 9005).Status);
+        Assert.Equal("Canvas/assignments/Problem set 4", sync.Crawl.AssignmentFolder("CS 101", 9002));
+
+        var s = CanvasSettings.Load(dir.Path);
+        Assert.Equal("", s.Error);
+        Assert.False(s.NeedsLogin);
+        Assert.All(sync.Crawl.Sections["CS 101"].Values, state => Assert.Equal("ok", state));
+        // The whole term's announcements, from the course's own list: never the 28-day /api/v1/announcements window.
+        Assert.DoesNotContain(canvas.Requested, u => u.Contains("/api/v1/announcements", StringComparison.Ordinal));
+        Assert.Contains(canvas.Requested, u => u.EndsWith("/discussion_topics?only_announcements=true&per_page=100", StringComparison.Ordinal));
+        Assert.All(canvas.Requested, u => Assert.StartsWith(FakeCanvas.Base + "/", u));
         Assert.Empty(sync.Work(force: false).Jobs); // synced just now: nothing until the next hour
-        await Task.CompletedTask;
     }
 
-    [Fact]
-    public void Canvas_sending_the_extension_to_sign_in_stops_the_sync_and_says_so()
+    [Theory]
+    [InlineData("unauthenticated")]
+    [InlineData("bounced to sign in")]
+    [InlineData("extension says signed out")]
+    public void Unauthenticated_or_a_bounce_to_sign_in_stops_the_sync(string how)
     {
         using var dir = new TempDir();
-        CanvasSettings.Update(dir.Path, s => { s.Url = "https://canvas.test"; s.Courses["CS 101"] = 42; });
-        var sync = new CanvasSync(dir.Path, c => dir[c], _ => { });
-        var jobs = sync.Work(force: true).Jobs;
-        sync.Results([new CanvasResult(jobs[0].Id, 401, "", "", "", "", "")]);
-        sync.Work(force: false);
+        var sync = FakeCanvas.Library(dir, () => FakeCanvas.DesignNow);
+        var canvas = FakeCanvas.Cs101();
+        const string path = "/api/v1/courses/4201/assignments";
+        _ = how switch
+        {
+            "unauthenticated" => canvas.Status(path, 401, """{"status":"unauthenticated","errors":[{"message":"user authorization required"}]}"""),
+            // An older extension reports Canvas's sign-in page as a bare 401.
+            "bounced to sign in" => canvas.On(path, j => new CanvasResult(j.Id, 401, "", "", "", "", FakeCanvas.Base + "/login/canvas")),
+            _ => canvas.On(path, j => new CanvasResult(j.Id, 401, "", "", "", "", FakeCanvas.Base + "/login/saml") { SignedOut = true }),
+        };
+        Assert.True(canvas.Run(sync));
+        Assert.Equal(4, canvas.Requested.Count); // the first four asks, then nothing more
+        Assert.False(sync.Crawl.Active);
+        Assert.False(Directory.Exists(Path.Combine(FakeCanvas.CanvasRoot(dir), "assignments")));
         var s = CanvasSettings.Load(dir.Path);
         Assert.True(s.NeedsLogin);
         Assert.Contains("sign in", s.Error, StringComparison.OrdinalIgnoreCase);
+
+        // Signed in again: the next sync reads everything and the warning goes.
+        canvas.Json(path, "cs101-assignments.json");
+        Assert.True(canvas.Run(sync));
+        s = CanvasSettings.Load(dir.Path);
+        Assert.False(s.NeedsLogin);
+        Assert.Equal("", s.Error);
+        Assert.Equal(5, Assignments.Load(dir.Path).Count);
     }
 
     [Fact]

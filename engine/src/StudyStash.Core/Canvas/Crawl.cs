@@ -10,16 +10,50 @@ namespace StudyStash.Core.Canvas;
 public sealed record CanvasJob(string Id, string Url, string Kind);
 
 /// <summary>What the extension read: the HTTP status, Canvas's paging header, and the text or bytes (base64). Status
-/// 401 means Chrome isn't signed in to Canvas.</summary>
+/// 401 with no text, or <see cref="SignedOut"/>, means Chrome isn't signed in to Canvas; 401 with Canvas's
+/// "unauthorized" JSON only means the student can't see that part of the course.</summary>
 public sealed record CanvasResult(string Id, int Status, string Link, string Text, string B64, string Error, string Final)
 {
+    /// <summary>Canvas sent the extension to its sign-in page (newer extensions say so; older ones answer 401).</summary>
+    public bool SignedOut { get; init; }
+    /// <summary>Canvas's X-Rate-Limit-Remaining: how much of its allowance is left. Null when it didn't say.</summary>
+    public double? Rate { get; init; }
+    /// <summary>Seconds Canvas asked to wait (Retry-After), when it asked.</summary>
+    public double? RetryAfter { get; init; }
+    /// <summary>The answer's content type.</summary>
+    public string Type { get; init; } = "";
+
     public static CanvasResult From(JsonObject o)
     {
         static string S(JsonNode? v) => v is JsonValue j && j.GetValueKind() == JsonValueKind.String ? j.GetValue<string>() : "";
+        // Header values arrive as text from the extension ("699.8"); numbers are fine too.
+        static double? N(JsonNode? v) => v is JsonValue j && j.GetValueKind() == JsonValueKind.Number ? j.GetValue<double>()
+            : double.TryParse(S(v), NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : null;
         int status = o["status"] is JsonValue sv && sv.GetValueKind() == JsonValueKind.Number ? (int)sv.GetValue<double>() : 0;
         return new CanvasResult(o["id"] is JsonValue iv && iv.GetValueKind() == JsonValueKind.Number ? iv.ToString() : S(o["id"]),
-            status, S(o["link"]), S(o["text"]), S(o["b64"]), S(o["error"]), S(o["final"]));
+            status, S(o["link"]), S(o["text"]), S(o["b64"]), S(o["error"]), S(o["final"]))
+        {
+            SignedOut = o["signed_out"] is JsonValue so && so.GetValueKind() == JsonValueKind.True,
+            Rate = N(o["rate"]), RetryAfter = N(o["retry_after"]), Type = S(o["type"]),
+        };
     }
+}
+
+/// <summary>What one of Canvas's answers means for the sync.</summary>
+public enum CanvasAnswer
+{
+    /// <summary>The data: file it.</summary>
+    Ok,
+    /// <summary>Chrome isn't signed in to Canvas: the sync stops until it is.</summary>
+    SignedOut,
+    /// <summary>The student can't see this (a hidden tab, a locked page, something removed): skipped quietly.</summary>
+    Hidden,
+    /// <summary>Canvas asked to slow down: the sync pauses and asks again.</summary>
+    RateLimited,
+    /// <summary>Canvas or the network hiccuped: asked again, a few times.</summary>
+    Transient,
+    /// <summary>It didn't work and won't by asking again.</summary>
+    Failed,
 }
 
 /// <summary>
@@ -34,27 +68,46 @@ public sealed record CanvasResult(string Id, int Status, string Link, string Tex
 /// Canvas/modules.md                      the module outline, linked to the copies
 /// Canvas/announcements.md                announcements, newest first
 /// </code>
-/// It keeps its queue in crawl.json, so a restart carries on where it was.
+/// It keeps its queue in crawl.json, so a restart carries on where it was. Each class's listings (assignments,
+/// submissions, modules, announcements) are sections: read completely (<c>ok</c>), not shown to the student
+/// (<c>hidden</c>) or <c>failed</c>, so a sync that couldn't read something never passes that off as "gone".
 /// </summary>
 public sealed partial class Crawl
 {
     public const long MaxBytes = 40L * 1024 * 1024;
     const double InflightSeconds = 600;
+    /// <summary>Asked this many times, a server error or a dropped connection counts as failed.</summary>
+    public const int MaxTries = 3;
+    /// <summary>The first pause when Canvas rate-limits, doubling each time it happens again, up to <see cref="MaxBackoff"/>.</summary>
+    public static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(10);
+
+    /// <summary>The listings each class is read through; each is a section of the sync.</summary>
+    public static readonly IReadOnlyList<string> Listings = ["assignments", "submissions", "modules", "announcements"];
+    // Listings whose pages only make sense together (an outline, a newest-first list): filed once the last page is in.
+    static readonly HashSet<string> Whole = ["modules", "announcements"];
 
     readonly string home;
     readonly Func<string, string> classDir;
+    readonly Func<DateTimeOffset> clock;
     readonly Lock gate = new();
     readonly JsonObject data;
 
     /// <param name="classDir">A class's folder in the library (created if missing).</param>
-    public Crawl(string home, Func<string, string> classDir)
+    public Crawl(string home, Func<string, string> classDir) : this(home, classDir, () => DateTimeOffset.Now)
+    {
+    }
+
+    /// <param name="clock">What time it is (tests set it).</param>
+    public Crawl(string home, Func<string, string> classDir, Func<DateTimeOffset> clock)
     {
         this.home = home;
         this.classDir = classDir;
+        this.clock = clock;
         data = Read() ?? [];
         foreach (string key in new[] { "jobs", "assignments" })
             if (data[key] is null) data[key] = key == "jobs" ? new JsonArray() : new JsonObject();
-        foreach (string key in new[] { "inflight", "changed", "manifest" })
+        foreach (string key in new[] { "inflight", "changed", "manifest", "sections", "pages" })
             if (data[key] is not JsonObject) data[key] = new JsonObject();
         if (data["errors"] is not JsonArray) data["errors"] = new JsonArray();
     }
@@ -85,6 +138,8 @@ public sealed partial class Crawl
     JsonObject Manifest => (JsonObject)data["manifest"]!;
     JsonObject Changed => (JsonObject)data["changed"]!;
     JsonArray Errors => (JsonArray)data["errors"]!;
+    JsonObject SectionStates => (JsonObject)data["sections"]!;
+    JsonObject PagesSoFar => (JsonObject)data["pages"]!;
 
     static bool Flag(JsonNode? v) => v is JsonValue j && j.GetValueKind() == JsonValueKind.True;
     static string S(JsonNode? v) => v is JsonValue j && j.GetValueKind() == JsonValueKind.String ? j.GetValue<string>() : "";
@@ -92,12 +147,32 @@ public sealed partial class Crawl
     static double? D(JsonNode? v) => v is JsonValue j && j.GetValueKind() == JsonValueKind.Number
         ? double.Parse(j.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture) : null;
 
+    /// <summary>Now, in seconds since 1970 (how crawl.json keeps times).</summary>
+    double Seconds() => clock().ToUnixTimeMilliseconds() / 1000.0;
+
     /// <summary>A sync is running.</summary>
     public bool Active { get { lock (gate) return Flag(data["active"]); } }
     /// <summary>A sync finished and its results are waiting for <see cref="TakeFinished"/>.</summary>
     public bool Ready { get { lock (gate) return Flag(data["ready"]); } }
     /// <summary>Jobs still to do, and being done.</summary>
     public (int Waiting, int Inflight) Left { get { lock (gate) return (Jobs.Count, Inflight.Count); } }
+
+    /// <summary>Canvas asked to slow down: nothing is handed out before this. Null when the sync isn't paused.</summary>
+    public DateTimeOffset? PausedUntil
+    {
+        get
+        {
+            lock (gate)
+                return D(data["pause_until"]) is double until && until > Seconds()
+                    ? DateTimeOffset.FromUnixTimeMilliseconds((long)(until * 1000)) : null;
+        }
+    }
+
+    /// <summary>How each class's listings went in this sync (or the last one): class → listing → reading | ok | hidden | failed.</summary>
+    public Dictionary<string, Dictionary<string, string>> Sections { get { lock (gate) return SectionsNow(); } }
+
+    Dictionary<string, Dictionary<string, string>> SectionsNow() =>
+        SectionStates.ToDictionary(kv => kv.Key, kv => (kv.Value as JsonObject ?? []).ToDictionary(x => x.Key, x => S(x.Value)));
 
     /// <summary>The extension was sent to Canvas's sign-in page: the sync stopped. Reading clears it.</summary>
     public bool TakeSignedOut()
@@ -125,8 +200,17 @@ public sealed partial class Crawl
         return t;
     }
 
+    /// <summary>A listing moves on from <c>reading</c> once: to ok, hidden or failed. What it became first stays.</summary>
+    void Section(string cls, string listing, string state)
+    {
+        if (!Listings.Contains(listing)) return;
+        if (SectionStates[cls] is not JsonObject mine) SectionStates[cls] = mine = [];
+        if (S(mine[listing]) is "" or "reading") mine[listing] = state;
+        if (state != "ok" && PagesSoFar[cls] is JsonObject kept) kept.Remove(listing);
+    }
+
     /// <summary>Start a sync of these classes (class → Canvas course id). False if one is already running.</summary>
-    public bool Start(string canvasUrl, IReadOnlyDictionary<string, long> courses, DateTime today)
+    public bool Start(string canvasUrl, IReadOnlyDictionary<string, long> courses)
     {
         lock (gate)
         {
@@ -136,13 +220,13 @@ public sealed partial class Crawl
             data["assignments"] = new JsonObject();
             data["changed"] = new JsonObject();
             data["errors"] = new JsonArray();
+            data["sections"] = new JsonObject();
+            data["pages"] = new JsonObject();
             data["active"] = true;
             data["ready"] = false;
             data["signed_out"] = false;
-            data["started"] = DateTimeOffset.Now.ToString("o", CultureInfo.InvariantCulture);
+            data["started"] = clock().ToString("o", CultureInfo.InvariantCulture);
             data["base"] = canvasUrl;
-            // Announcements from the start of this term: August for fall, January otherwise.
-            string since = today.Month >= 8 ? $"{today.Year}-08-01" : $"{today.Year}-01-01";
             foreach (var (cls, id) in courses)
             {
                 string api = $"{canvasUrl}/api/v1/courses/{id}";
@@ -150,33 +234,38 @@ public sealed partial class Crawl
                 Add($"{api}/students/submissions?student_ids[]=self&include[]=submission_comments&include[]=rubric_assessment&include[]=assignment&per_page=100",
                     "json", Tag("submissions", cls));
                 Add($"{api}/modules?include[]=items&per_page=100", "json", Tag("modules", cls));
-                Add($"{canvasUrl}/api/v1/announcements?context_codes[]=course_{id}&start_date={since}&per_page=50", "json", Tag("announcements", cls));
+                // Not /api/v1/announcements: without an end_date it stops 28 days after its start_date. The course's
+                // own list has the whole term, and whether the student has read each one.
+                Add($"{api}/discussion_topics?only_announcements=true&per_page=100", "json", Tag("announcements", cls));
+                foreach (string listing in Listings) Section(cls, listing, "reading");
             }
             Save();
             return true;
         }
     }
 
-    /// <summary>Up to <paramref name="n"/> jobs for the extension. Jobs it took and never answered (Chrome closed) go
-    /// back in the queue after ten minutes.</summary>
+    /// <summary>Up to <paramref name="n"/> jobs for the extension; none while Canvas has asked to slow down. Jobs it
+    /// took and never answered (Chrome closed) go back in the queue after ten minutes.</summary>
     public List<CanvasJob> Next(int n = 6)
     {
         lock (gate)
         {
-            double t = Py.Time();
+            double t = Seconds();
+            bool changed = false;
             foreach (var (id, rec) in Inflight.ToList())
                 if (t - (D(rec?["t"]) ?? 0) > InflightSeconds)
                 {
                     Jobs.Add(rec!["job"]!.DeepClone());
                     Inflight.Remove(id);
+                    changed = true;
                 }
-            var take = Jobs.Take(n).Select(j => j!.AsObject()).ToList();
+            var take = D(data["pause_until"]) is double until && until > t ? [] : Jobs.Take(n).Select(j => j!.AsObject()).ToList();
             foreach (var j in take)
             {
                 Jobs.Remove(j);
                 Inflight[S(j["id"])] = new JsonObject { ["job"] = j, ["t"] = t };
             }
-            if (take.Count > 0) Save();
+            if (take.Count > 0 || changed) Save();
             return take.Select(j => new CanvasJob(S(j["id"]), S(j["url"]), S(j["kind"]))).ToList();
         }
     }
@@ -197,6 +286,69 @@ public sealed partial class Crawl
         }
     }
 
+    [GeneratedRegex("\"status\"\\s*:\\s*\"unauthorized\"|not authorized", RegexOptions.IgnoreCase)]
+    private static partial Regex NotAuthorized();
+
+    /// <summary>
+    /// What an answer means. Canvas says 401 for two different things: "unauthenticated" (nobody is signed in, and
+    /// the extension also reports a bounce to the sign-in page as 401) and "unauthorized" (signed in, but this
+    /// student can't see that tab). Only the first stops the sync. "403 Forbidden (Rate Limit Exceeded)" asks the
+    /// sync to slow down; any other 403 or 404 is something the student can't see.
+    /// </summary>
+    public static CanvasAnswer Classify(CanvasResult r)
+    {
+        if (r.SignedOut) return CanvasAnswer.SignedOut;
+        string body = BodyText(r);
+        if (r.Status == 429 || r.Status == 403 && (body.Contains("Rate Limit Exceeded", StringComparison.OrdinalIgnoreCase) || r.Rate is <= 0))
+            return CanvasAnswer.RateLimited;
+        if (r.Status == 401) return NotAuthorized().IsMatch(body) ? CanvasAnswer.Hidden : CanvasAnswer.SignedOut;
+        if (r.Status is 403 or 404) return CanvasAnswer.Hidden;
+        if (r.Status >= 500) return CanvasAnswer.Transient;
+        if (r.Status == 0) return r.Error.StartsWith("refused", StringComparison.Ordinal) || r.Error == "too big" ? CanvasAnswer.Failed : CanvasAnswer.Transient;
+        return r.Error.Length > 0 || r.Status >= 400 ? CanvasAnswer.Failed : CanvasAnswer.Ok;
+    }
+
+    /// <summary>An answer's text: for a file, its bytes when they're short enough to be an error message.</summary>
+    static string BodyText(CanvasResult r)
+    {
+        if (r.Text.Length > 0 || r.B64.Length is 0 or > 64 * 1024) return r.Text;
+        try
+        {
+            return Encoding.UTF8.GetString(Convert.FromBase64String(r.B64));
+        }
+        catch (FormatException)
+        {
+            return "";
+        }
+    }
+
+    static string Why(CanvasResult r) => r.Error.Length > 0 ? r.Error : r.Status > 0 ? $"Canvas answered {r.Status}" : "no answer";
+
+    /// <summary>
+    /// Canvas asked to slow down: nothing goes out for a while, twice as long each time a job sent after the last
+    /// pause is refused again. The rest of the burst that caused a pause (sent before it) doesn't lengthen it.
+    /// </summary>
+    void Pause(double handedOut, double? retryAfter)
+    {
+        double until = D(data["pause_until"]) ?? 0, now = Seconds();
+        if (handedOut >= until)
+        {
+            double backoff = D(data["backoff"]) is double b && b > 0 ? Math.Min(b * 2, MaxBackoff.TotalSeconds) : FirstBackoff.TotalSeconds;
+            data["backoff"] = backoff;
+            until = now + backoff;
+        }
+        data["pause_until"] = Math.Max(until, now + (retryAfter ?? 0));
+    }
+
+    /// <summary>An answer came back fine: Canvas is calm again once a job sent after the last pause gets through.</summary>
+    void Calm(double handedOut, double? rate)
+    {
+        double until = D(data["pause_until"]) ?? 0;
+        // Canvas says its allowance is used up: this answer is good, the next ones wouldn't be.
+        if (rate is <= 0) data["pause_until"] = Math.Max(until, Seconds() + FirstBackoff.TotalSeconds);
+        else if (handedOut >= until) data["backoff"] = 0;
+    }
+
     /// <summary>File one answer. False when it isn't one of this crawl's jobs.</summary>
     public bool Handle(CanvasResult r)
     {
@@ -206,23 +358,42 @@ public sealed partial class Crawl
             Inflight.Remove(r.Id);
             var job = rec["job"]!.AsObject();
             var tag = job["tag"]!.AsObject();
+            string cls = S(tag["class"]), type = S(tag["type"]);
             try
             {
-                if (r.Status == 401)
+                switch (Classify(r))
                 {
-                    data["signed_out"] = true;
-                    data["jobs"] = new JsonArray();
-                    data["inflight"] = new JsonObject();
+                    case CanvasAnswer.SignedOut:
+                        data["signed_out"] = true;
+                        data["jobs"] = new JsonArray();
+                        data["inflight"] = new JsonObject();
+                        break;
+                    case CanvasAnswer.Hidden:
+                        Section(cls, type, "hidden");
+                        break;
+                    case CanvasAnswer.RateLimited:
+                        Jobs.Insert(0, job.DeepClone()); // first out when the pause is over: nothing is lost
+                        Pause(D(rec["t"]) ?? 0, r.RetryAfter);
+                        break;
+                    case CanvasAnswer.Transient when (D(tag["tries"]) ?? 0) + 1 < MaxTries:
+                        var again = job.DeepClone().AsObject();
+                        again["tag"]!["tries"] = (int)(D(tag["tries"]) ?? 0) + 1;
+                        Jobs.Add(again);
+                        break;
+                    case CanvasAnswer.Transient or CanvasAnswer.Failed:
+                        Errors.Add($"{cls} {type}: {Why(r)}");
+                        Section(cls, type, "failed");
+                        break;
+                    default:
+                        Calm(D(rec["t"]) ?? 0, r.Rate);
+                        Dispatch(job, tag, r);
+                        break;
                 }
-                else if (r.Error.Length > 0 || r.Status >= 400)
-                {
-                    if (r.Status is not (403 or 404)) Errors.Add($"{S(tag["type"])}: {(r.Error.Length > 0 ? r.Error : r.Status)}");
-                }
-                else Dispatch(job, tag, r);
             }
             catch (Exception e) when (e is JsonException or IOException or InvalidOperationException or FormatException or UnauthorizedAccessException)
             {
-                Errors.Add($"{S(tag["type"])}: {e.Message}"); // one odd item never stops the sync
+                Errors.Add($"{cls} {type}: {e.Message}"); // one odd item never stops the sync
+                Section(cls, type, "failed");
             }
             if (Flag(data["active"]) && Jobs.Count == 0 && Inflight.Count == 0)
             {
@@ -234,9 +405,11 @@ public sealed partial class Crawl
         }
     }
 
-    /// <summary>A finished sync's results, once: every assignment (class → Canvas's JSON) and the files that changed
-    /// (class → paths inside the class folder). Null while it's still running.</summary>
-    public (Dictionary<string, List<JsonObject>> Assignments, Dictionary<string, List<string>> Changed, List<string> Errors)? TakeFinished()
+    /// <summary>A finished sync's results, once: every assignment (class → Canvas's JSON), the files that changed
+    /// (class → paths inside the class folder), what couldn't be read, and how each class's listings went. Null while
+    /// it's still running.</summary>
+    public (Dictionary<string, List<JsonObject>> Assignments, Dictionary<string, List<string>> Changed, List<string> Errors,
+        Dictionary<string, Dictionary<string, string>> Sections)? TakeFinished()
     {
         lock (gate)
         {
@@ -247,8 +420,9 @@ public sealed partial class Crawl
             data["ready"] = false;
             data["assignments"] = new JsonObject();
             data["changed"] = new JsonObject();
+            data["pages"] = new JsonObject();
             Save();
-            return (assignments, changed, errors);
+            return (assignments, changed, errors, SectionsNow());
         }
     }
 
@@ -266,17 +440,33 @@ public sealed partial class Crawl
             return;
         }
         var body = JsonNode.Parse(r.Text.Length > 0 ? r.Text : "null");
-        if (body is JsonArray && NextLink().Match(r.Link) is { Success: true } m) Add(m.Groups[1].Value, "json", (JsonObject)tag.DeepClone());
+        bool more = false;
+        if (body is JsonArray && NextLink().Match(r.Link) is { Success: true } m)
+        {
+            var next = (JsonObject)tag.DeepClone();
+            next.Remove("tries"); // a new page gets its own tries
+            Add(m.Groups[1].Value, "json", next);
+            more = true;
+        }
         string cls = S(tag["class"]);
         switch (type)
         {
             case "assignments": AssignmentsPage(cls, body as JsonArray ?? []); break;
             case "submissions": Submissions(cls, body as JsonArray ?? []); break;
-            case "modules": Modules(cls, body as JsonArray ?? []); break;
-            case "announcements": Announcements(cls, body as JsonArray ?? []); break;
+            case var whole when Whole.Contains(whole):
+                if (S(SectionStates[cls]?[type]) is "failed" or "hidden") break; // an earlier page went wrong: never file part of it
+                if (PagesSoFar[cls] is not JsonObject mine) PagesSoFar[cls] = mine = [];
+                if (mine[type] is not JsonArray all) mine[type] = all = [];
+                foreach (var item in body as JsonArray ?? []) all.Add(item?.DeepClone());
+                if (more) break;
+                mine.Remove(type);
+                if (type == "modules") Modules(cls, all);
+                else Announcements(cls, all);
+                break;
             case "file_meta": if (body is JsonObject meta) WantFile(cls, meta, S(tag["dir"])); break;
             case "page": if (body is JsonObject page) Page(cls, page, S(tag["dir"])); break;
         }
+        if (!more) Section(cls, type, "ok");
     }
 
     string CanvasDir(string cls) => Path.Combine(classDir(cls), "Canvas");
@@ -311,19 +501,53 @@ public sealed partial class Crawl
         lock (gate) return S(Manifest[$"asgdir:{cls}:{id}"]) is { Length: > 0 } rel ? rel.Replace('\\', '/') : null;
     }
 
-    /// <summary>An assignment's folder: the one already made for its Canvas id, else a new one named after it.</summary>
+    /// <summary>The start of a spec.md, or null when there isn't one.</summary>
+    static string? SpecHead(string dir)
+    {
+        string spec = Path.Combine(dir, "spec.md");
+        if (!File.Exists(spec)) return null;
+        using var reader = new StreamReader(spec);
+        var buf = new char[1500];
+        return new string(buf, 0, reader.ReadBlock(buf, 0, buf.Length));
+    }
+
+    /// <summary>A spec's front matter, from its opening "---" to the closing one; "" when it has none.</summary>
+    static string FrontMatter(string head)
+    {
+        if (!head.StartsWith("---", StringComparison.Ordinal)) return "";
+        int end = head.IndexOf("\n---", 3, StringComparison.Ordinal);
+        return end < 0 ? head : head[..end];
+    }
+
+    /// <summary>An assignment's folder: the one already made for its Canvas id, one whose spec.md names it, else a new
+    /// one named after it. A spec the sync wrote names its assignment only by the canvas_id in its front matter; one
+    /// written by hand may name it by its Canvas id or its Canvas address anywhere.</summary>
     string AssignmentDir(string cls, JsonObject a)
     {
         string key = $"asgdir:{cls}:{D(a["id"]):0}";
         if (S(Manifest[key]) is { Length: > 0 } known) return Path.Combine(classDir(cls), known);
-        string root = Path.Combine(CanvasDir(cls), "assignments"), dir = Path.Combine(root, SafeName(S(a["name"]), 80));
-        // Two assignments with the same name (or one renamed on Canvas) get their own folders.
-        bool Taken(string d) => File.Exists(Path.Combine(d, "spec.md"))
-            && !File.ReadAllText(Path.Combine(d, "spec.md")).Contains($"canvas_id: {Num(D(a["id"]))}\n", StringComparison.Ordinal);
-        for (int i = 2; Taken(dir); i++) dir = Path.Combine(root, SafeName(S(a["name"]), 76) + $" {i}");
+        string root = Path.Combine(CanvasDir(cls), "assignments"), id = Num(D(a["id"])), url = S(a["html_url"]);
+        var byId = new Regex($"(?m)^canvas_id: {id}\\r?$");
+        // ".../assignments/900" must not claim the spec of ".../assignments/9001".
+        var byHand = new Regex($"canvas_id: {id}(?![0-9])" + (url.Length > 0 ? $"|{Regex.Escape(url)}(?![0-9])" : ""));
+        // Instructions the sync copied into a spec link other assignments by their full Canvas address, and a link
+        // must not hand the linking assignment's folder to the one it links.
+        bool Names(string head) => head.Contains(Generated, StringComparison.Ordinal) ? byId.IsMatch(FrontMatter(head)) : byHand.IsMatch(head);
+        string? dir = Directory.Exists(root)
+            ? Directory.EnumerateDirectories(root).Order(StringComparer.Ordinal).FirstOrDefault(d => SpecHead(d) is { } head && Names(head))
+            : null;
+        if (dir is null)
+        {
+            // Two assignments with the same name (or one renamed on Canvas) get their own folders.
+            dir = Path.Combine(root, SafeName(S(a["name"]), 80));
+            for (int i = 2; File.Exists(Path.Combine(dir, "spec.md")); i++) dir = Path.Combine(root, SafeName(S(a["name"]), 76) + $" {i}");
+        }
         Manifest[key] = Path.GetRelativePath(classDir(cls), dir);
         return dir;
     }
+
+    /// <summary>The marker in every spec.md the sync writes; one without it was written by hand and is left alone.</summary>
+    public const string Generated = "generated_by: study-stash";
 
     void AssignmentsPage(string cls, JsonArray list)
     {
@@ -332,7 +556,9 @@ public sealed partial class Crawl
         {
             all.Add(a.DeepClone());
             if (!Assignments.Published(a)) continue;
-            Write(cls, Path.Combine(AssignmentDir(cls, a), "spec.md"), SpecMd(cls, a));
+            string dir = AssignmentDir(cls, a);
+            if (SpecHead(dir) is { } head && !head.Contains(Generated, StringComparison.Ordinal)) continue;
+            Write(cls, Path.Combine(dir, "spec.md"), SpecMd(cls, a));
         }
     }
 
