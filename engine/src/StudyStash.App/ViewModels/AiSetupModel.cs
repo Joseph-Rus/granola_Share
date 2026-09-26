@@ -79,6 +79,7 @@ public sealed partial class AiSetupModel : ObservableObject
         SelectedNotes = overview.Notes;
         SelectedAsk = overview.Ask == overview.Notes ? SameAsNotes : overview.Ask;
         AskChoices = [new EngineChoice(SameAsNotes, "Same as notes"), .. overview.Engines.Select(e => new EngineChoice(e.Id, e.Name))];
+        foreach (var c in AskChoices) c.Pick = new RelayCommand(() => SelectedAsk = c.Id);
         OnPropertyChanged(nameof(AskChoices));
         OnPropertyChanged(nameof(SelectedAskName));
 

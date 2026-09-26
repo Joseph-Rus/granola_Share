@@ -6,8 +6,23 @@ using StudyStash.Core.Ai;
 
 namespace StudyStash.App.ViewModels;
 
-/// <summary>An engine in a select or a menu: what's shown, and the id posted.</summary>
-public sealed record EngineChoice(string Id, string Name);
+/// <summary>An engine in a select or a menu: what's shown, and picking it (each list makes its own <see cref="Pick"/>,
+/// so a menu's item binds it straight without reaching back to the model that built the list).</summary>
+public sealed class EngineChoice(string id, string name)
+{
+    public string Id { get; } = id;
+    public string Name { get; } = name;
+    public IRelayCommand Pick { get; internal set; } = null!;
+}
+
+/// <summary>One of an engine row's models, in its Options menu: picking it, and whether it's the one running now.</summary>
+public sealed class AiModelChoice(string id, string label, bool current, IAsyncRelayCommand pick)
+{
+    public string Id { get; } = id;
+    public string Label { get; } = label;
+    public bool Current { get; } = current;
+    public IAsyncRelayCommand Pick { get; } = pick;
+}
 
 /// <summary>One row of the AI engines pane: an installed engine (or Ollama, always) with its state and what its
 /// button does. The row owns its own commands, closed over its id, so a view binds them straight from the row.</summary>
@@ -28,14 +43,13 @@ public sealed partial class AiEngineRow : ObservableObject
     public bool NeedsOptions { get; init; }
     public string Model { get; init; } = "";
     public List<ModelOption> Models { get; init; } = [];
+    public List<AiModelChoice> ModelChoices { get; internal set; } = [];
     public string Site { get; init; } = "";
 
     /// <summary>Ready to shown rows: Sign in / Start / Download / Check / Get it, whichever this row's state needs.</summary>
     public IAsyncRelayCommand ActCommand { get; internal set; } = null!;
     /// <summary>"Check it works", from the Options menu (ready/limited/failed rows).</summary>
     public IAsyncRelayCommand CheckCommand { get; internal set; } = null!;
-    /// <summary>Picking a model from the Options menu.</summary>
-    public IAsyncRelayCommand<ModelOption> PickModelCommand { get; internal set; } = null!;
     /// <summary>Not-installed rows in the "Add an engine" menu: opens the engine's site.</summary>
     public IRelayCommand AddCommand { get; internal set; } = null!;
 }
@@ -123,7 +137,9 @@ public sealed partial class AiEnginesModel : ObservableObject
             OlderLibrary = false;
             Offline = false;
             NotesChoices = [.. overview.Engines.Select(e => new EngineChoice(e.Id, e.Name))];
-            AskChoices = NotesChoices;
+            foreach (var c in NotesChoices) c.Pick = new RelayCommand(() => SelectedNotes = c.Id);
+            AskChoices = [.. overview.Engines.Select(e => new EngineChoice(e.Id, e.Name))];
+            foreach (var c in AskChoices) c.Pick = new RelayCommand(() => SelectedAsk = c.Id);
             OnPropertyChanged(nameof(NotesChoices));
             OnPropertyChanged(nameof(AskChoices));
             SelectedNotes = overview.Notes;
@@ -168,7 +184,7 @@ public sealed partial class AiEnginesModel : ObservableObject
         };
         row.ActCommand = new AsyncRelayCommand(() => RunRowActionAsync(row));
         row.CheckCommand = new AsyncRelayCommand(() => CheckAsync(row.Id));
-        row.PickModelCommand = new AsyncRelayCommand<ModelOption>(m => m is null ? Task.CompletedTask : PickModelAsync(row.Id, m.Id));
+        row.ModelChoices = [.. e.Models.Select(m => new AiModelChoice(m.Id, m.Label, m.Id == e.Model, new AsyncRelayCommand(() => PickModelAsync(row.Id, m.Id))))];
         row.AddCommand = new RelayCommand(() =>
         {
             if (row.Site.Length > 0) OpenUrl?.Invoke(row.Site);
