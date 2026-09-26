@@ -50,6 +50,8 @@ public static partial class Shell
     /// <summary>The class Record will use, picked by hand; null follows the timetable.</summary>
     static string? chosenClass;
     static string? liveId;
+    /// <summary>What's wrong right now (from <see cref="Problems"/>), so the panel's Fix button knows what to do.</summary>
+    static AppProblem? currentProblem;
 
     public static AppHost Host => host;
 
@@ -243,6 +245,7 @@ public static partial class Shell
             ShowLibrary();
         };
         panel.OnSwitchClass = PickClass;
+        panel.OnFixProblem = FixProblem;
         panel.OnOpenLecture = item =>
         {
             panelWindow?.Hide();
@@ -356,6 +359,29 @@ public static partial class Shell
         };
         menu.Items.Add(follow);
         if (panelWindow?.Content is Control c) menu.Open(c);
+    }
+
+    /// <summary>The panel's Fix button: what to do depends on which problem is showing right now.</summary>
+    static void FixProblem()
+    {
+        switch (currentProblem?.Kind)
+        {
+            case ProblemKind.MicDenied:
+                Dialogs.OpenUrl(host.MicSettingsUrl);
+                break;
+            case ProblemKind.WhisperFailed:
+                _ = host.RedownloadModel();
+                break;
+            case ProblemKind.DownloadFailed or ProblemKind.NoModel:
+                _ = host.DownloadModelAsync();
+                break;
+            case ProblemKind.LibraryStopped:
+                _ = host.RefreshLocalLibraryAsync();
+                break;
+            case ProblemKind.WrongPassword or ProblemKind.NotSetUp:
+                ShowSettings();
+                break;
+        }
     }
 
     static void AddHeard(Lecture l, IReadOnlyList<Spoken> lines)
@@ -690,12 +716,18 @@ public static partial class Shell
         int color = host.ColorOf(cls);
         panel.ClassDot = recorder.ClassDot = color >= 0 ? Skin.ClassDot(color) : Brushes.Gray;
         var now = host.ClassNow();
+        var problem = Problems.For(host);
+        currentProblem = problem;
+        panel.ProblemTitle = problem?.Title;
+        panel.ProblemDetail = problem?.Detail;
+        panel.ProblemAction = problem is { HasAction: true } p ? p.ActionLabel : null;
+        panel.CanRecord = recording || (host.ModelReady && host.MicAccess() is not (MicAccess.Denied or MicAccess.Restricted));
         panel.Hint = recording ? null
+            : !panel.CanRecord && problem is not null ? problem.Title
             : chosenClass is { Length: > 0 } ? "Picked by you"
             : chosenClass is "" ? "The library will sort it"
             : now is not null ? $"From your timetable · {now.Time.Describe()}"
             : host.Timetable.Next(DateTime.Now) is { } next ? $"No class on now · next, {next.Class.Name} {next.Class.Time.Describe()}" : null;
-        panel.CanRecord = host.ModelReady || recording;
         var (status, good) = host.Status();
         panel.Status = status;
         panel.StatusGood = good;

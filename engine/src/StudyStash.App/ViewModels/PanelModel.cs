@@ -54,6 +54,13 @@ public sealed partial class PanelModel : ObservableObject
     /// <summary>Record can't start yet (no model, no microphone): why, in place of the timetable hint.</summary>
     [ObservableProperty] public partial bool CanRecord { get; set; } = true;
 
+    /// <summary>What's wrong right now (from <see cref="Services.Problems"/>), for the dropdown's own words and a
+    /// button to fix it. Null while all is well.</summary>
+    [ObservableProperty] public partial string? ProblemTitle { get; set; }
+    [ObservableProperty] public partial string? ProblemDetail { get; set; }
+    [ObservableProperty] public partial string? ProblemAction { get; set; }
+    public bool HasProblem => ProblemTitle is not null;
+
     public ObservableCollection<LectureItem> Recent { get; } = [];
 
     public string RecordLabel => ClassName.Length > 0 ? $"Record · {ClassName}" : "Record";
@@ -87,6 +94,7 @@ public sealed partial class PanelModel : ObservableObject
 
     partial void OnHintChanged(string? value) => OnPropertyChanged(nameof(HasHint));
     partial void OnLastLineChanged(string value) => OnPropertyChanged(nameof(HasLastLine));
+    partial void OnProblemTitleChanged(string? value) => OnPropertyChanged(nameof(HasProblem));
 
     // What the buttons do: the shell fills these in.
     public Action? OnRecord { get; set; }
@@ -97,8 +105,10 @@ public sealed partial class PanelModel : ObservableObject
     public Action? OnSearch { get; set; }
     public Action? OnOpenApp { get; set; }
     public Action<LectureItem>? OnOpenLecture { get; set; }
+    public Action? OnFixProblem { get; set; }
 
     [RelayCommand] void Record() => OnRecord?.Invoke();
+    [RelayCommand] void FixProblem() => OnFixProblem?.Invoke();
     [RelayCommand] void SwitchClass() => OnSwitchClass?.Invoke();
     [RelayCommand] void Pause() => OnPause?.Invoke();
     [RelayCommand] void Stop() => OnStop?.Invoke();

@@ -85,7 +85,7 @@ public enum LibraryState
 /// library's classes (asked for every 20 seconds, which also says whether it's reachable), the model and its
 /// download, and the timetable. The windows read it and are told when it changes.
 /// </summary>
-public sealed class AppHost : IDisposable
+public sealed class AppHost : IDisposable, IProblemSource
 {
     readonly CancellationTokenSource stop = new();
     readonly Action<string> log;
@@ -130,6 +130,11 @@ public sealed class AppHost : IDisposable
     public string? WhisperProblem => Whisper.Problem;
     /// <summary>Why the recording paused by itself (the microphone, the disk); null while all is well.</summary>
     public string? RecorderProblem => Recorder.LastProblem;
+
+    // IProblemSource: Problems.For reads AppHost through these, so a test can hand it a fake instead.
+    AppRole IProblemSource.Role => Settings.Role;
+    LibraryServiceState? IProblemSource.LocalLibraryState => LocalLibrary?.State;
+    string? IProblemSource.LocalLibraryFailure => LocalLibrary?.Failure;
 
     /// <summary>Anything the windows show changed (called on a worker thread).</summary>
     public event Action? Changed;
@@ -408,12 +413,13 @@ public sealed class AppHost : IDisposable
 
     public int ColorOf(string className) => Classes().FirstOrDefault(c => c.Name == className) is { Name.Length: > 0 } c ? c.Color : -1;
 
-    /// <summary>"Library connected · Model ready", or what needs doing, and whether all is well.</summary>
-    public (string Text, bool Good) Status()
+    /// <summary>"Library connected · Model ready", or what needs doing: pure, so a test needn't drive a real library
+    /// or download to check the words.</summary>
+    public static string StatusText(LibraryState library, bool localLibraryRunning, bool modelReady, DownloadProgress? downloading)
     {
-        string lib = Settings.Role != AppRole.Laptop && LocalLibrary?.State == LibraryServiceState.Running
+        string lib = localLibraryRunning
             ? $"Library running on this {(OperatingSystem.IsMacOS() ? "Mac" : "PC")}"
-            : Library switch
+            : library switch
         {
             LibraryState.Connected => "Library connected",
             LibraryState.Starting => "Starting your library…",
@@ -421,9 +427,14 @@ public sealed class AppHost : IDisposable
             LibraryState.WrongPassword => "Library password changed",
             _ => "No library yet",
         };
-        string model = ModelReady ? "Model ready" : Downloading is { } d ? $"Model {Math.Round(d.Fraction * 100)}%" : "No transcription model";
-        return ($"{lib} · {model}", Library == LibraryState.Connected && ModelReady);
+        string model = modelReady ? "Model ready" : downloading is { } d ? $"Model {Math.Round(d.Fraction * 100)}%" : "No transcription model";
+        return $"{lib} · {model}";
     }
+
+    /// <summary>"Library connected · Model ready", or what needs doing, and whether all is well.</summary>
+    public (string Text, bool Good) Status() =>
+        (StatusText(Library, Settings.Role != AppRole.Laptop && LocalLibrary?.State == LibraryServiceState.Running, ModelReady, Downloading),
+            Library == LibraryState.Connected && ModelReady);
 
     /// <summary>Change the settings and write them to app.json. A full disk (or a folder it can't write) is said, not
     /// thrown: the change still holds until the app quits.</summary>
