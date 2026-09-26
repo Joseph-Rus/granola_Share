@@ -66,7 +66,7 @@ Marginalia is Eli's original Python app (`marginalia/{crawl,canvas,canvas_browse
 | AI reads through the extension (json, text, bytes), only Canvas and its file store, bytes saved only inside the library | **Kept** | `canvas_api`, `canvas_page`, `canvas_download`. |
 | `canvas_page` converts HTML to Markdown only when the answer is HTML | **Missing in the port, restored in T2** | Bug 16. |
 | Course import read `include[]=term` and `course_code` | **Missing in the port, restored in T7** | Course info for matching "COMP 101 on Canvas" to class "CS 101". |
-| Read-only extension: refuses non-Canvas URLs, strips `while(1);`, reports a sign-in bounce or HTML for JSON as 401, reloads itself when its folder has a newer version | **Kept** | Eli added a per-library key (`X-Study-Stash-Key`), host permissions narrowed to this Canvas and this library, and the `public_url` fallback for downloads a service worker can't follow. |
+| Read-only extension: refuses non-Canvas URLs, strips `while(1);`, reports a sign-in bounce or HTML for JSON as 401, reloads itself when its folder has a newer version | **Kept**, extended in T2 | Eli added a per-library key (`X-Study-Stash-Key`), host permissions narrowed to this Canvas and this library, and the `public_url` fallback for downloads a service worker can't follow. 1.3 also says `signed_out`, passes on Canvas's rate limit, checks a file's size before reading it, checks its folder before every ask, and posts files one at a time (see "The extension"). |
 | `Requeue` when a fresh extension asks with `force` | **Added by Eli, kept** | An updated extension loses nothing. |
 | Course scout (AI explores a course, writes canvas-recipe.md) | **Kept** | T8 tells it what the sync now saves, so it only explores what's outside. |
 | Personal access token mode (`canvas.py`) | **Not ported** | Schools turn tokens off; the extension works at every school. |
@@ -101,7 +101,7 @@ Compared with the design's Canvas screens (06 settings, 07 connect, 08 states, 0
 
 ## What's on disk
 
-### Today (after T1)
+### Today (after T2)
 
 ```
 <class folder>/Canvas/
@@ -117,7 +117,7 @@ home/
   crawl.json                          the sync's queue, its sections, the manifest of saved files
   canvas_assignments.json             every assignment and where you stand, for the Due list
   canvas_key                          the extension's own key
-  chrome-extension/                   the extension's folder, for Chrome's "Load unpacked"
+  chrome-extension/                   the extension's folder, for Chrome's "Load unpacked" (brought up to date when the library starts)
 ```
 
 ### Target (after T8)
@@ -181,12 +181,99 @@ error "Chrome isn't signed in to Canvas.", and a file read that Canvas refused s
 
 ## The extension
 
-_Filled in by T2: protocol, version handshake, file hosts, size limits, reload._
+`extension/` is a Manifest V3 extension (version **1.3**; it has its own version, separate from the app's). The engine
+carries it as embedded resources (`extension/<file>` in `StudyStash.Core`), and `Extension.Prepare(dir, library, key,
+canvasUrl)` writes it out as a folder for Chrome's "Load unpacked": the scripts, a manifest, and `config.js`.
+
+**Permissions stay minimal.** `permissions` is `["alarms"]` (the one-minute alarm) and nothing else: no tabs, cookies,
+storage or content scripts. `host_permissions` is empty in the repo; `Prepare` fills in exactly three kinds: the
+school's Canvas (`https://school.instructure.com/*`), Canvas's file store (every host in `Extension.FileHosts`, today
+`https://*.inscloudgate.net/*`) and the library's own origin. A fetch with `credentials: 'include'` to a host it may
+reach carries the student's Canvas session; the extension refuses every other URL (`refused: not a Canvas URL`).
+
+**config.js** (owner-only): `const STUDY_STASH = {"app": <library>, "key": <extension key>, "canvas": <Canvas base>,
+"files": ["*.inscloudgate.net"], "protocol": 2};`. `files` is the one list of file hosts (`Extension.FileHosts`),
+shared with the manifest and the library's own check (`Extension.OnFileHost`, which `CanvasSync.CanvasUrl` uses for
+AIs' reads): https only, no port, no user name, the host itself or a subdomain of a `*.` entry. A config.js from before
+1.3 has no `files`, and background.js falls back to the old `*.inscloudgate.net` pattern. `protocol` is the protocol
+the Study Stash that wrote the folder speaks; the extension sends its own.
+
+### Protocol and handshake
+
+| Who | What |
+|---|---|
+| extension → library | `GET /api/v2/canvas/work?v=<its version>&p=<its protocol>[&force=1]`, header `X-Study-Stash-Key` (or the library password). 1.2 and earlier send no `p`, read as 1. `force=1` comes from a fresh start (installed, reloaded, the popup's "Sync Canvas now"). |
+| library → extension | `{"jobs":[{"id","url","kind":"json\|text\|bytes"}], "hot": bool, "ext": "<the library's extension version>", "p": 2}`. `hot`: ask again in 1.5 s (an AI is reading); false while Canvas has paused the sync. |
+| extension → library | `POST /api/v2/canvas/results {"results":[result]}`; result = `{"id","status","link","type","final","text" or "b64","error","signed_out","rate","retry_after"}`. The last three are new in protocol 2; the library reads their absence as an old extension. |
+
+**Every extension gets work.** The library hands jobs to any protocol ≥ 1, whatever its version (bug 9: 1.2 and
+earlier were given nothing while their version differed from the library's, so a folder that wasn't updated stalled
+the sync for good).
+
+What protocol 2 (1.3) does, answer by answer:
+
+- **Signed out, said plainly.** `signed_out: true` for a bounce to Canvas's `/login`, an HTML page where JSON was
+  asked for (a school's sign-on page on its own host), or a 401 whose body says `unauthenticated` / `user authorization
+  required`. Never for Canvas's `{"status":"unauthorized"}`, which only means the student can't see that tab. The
+  status is 401 in all three, so a library from before `signed_out` still stops the sync.
+- **Canvas's allowance.** `rate` (from `X-Rate-Limit-Remaining`) and `retry_after` (from `Retry-After`) are passed on
+  as Canvas wrote them, with `type` (the content type); the library parses them and pauses (see Robustness).
+- **Files.** The extension checks `Content-Length` before reading a body: over 40 MiB it answers `{status, error: "too
+  big"}` and never reads it (and checks the real length again after reading). When Canvas answers a file with an
+  error (`!r.ok`), no `b64` is sent: only the first 4,000 characters of the error as `text`, so the library tells a
+  hidden file from a sign-out the same way it does for JSON, and never saves an error page as the file.
+- **Kept from before:** `while(1);` stripped from JSON, text answers cut at 2,000,000 characters, and the `public_url`
+  fallback: when a service worker can't follow `/files/<id>/download`, it asks `/api/v1/files/<id>/public_url` and
+  fetches the signed link, only if that link is on a file host.
+- **Posting.** A round's JSON and text answers go in one POST; each file answer goes in a POST of its own (one big
+  body per request). A POST the library refuses stops the pump: those jobs go out again after the ten-minute in-flight
+  timeout, and the next alarm pumps again.
+
+### Versions, updates and reload
+
+- **Reload before work.** Before every ask for work the extension reads its folder's `manifest.json`
+  (`chrome.runtime.getURL`, `cache: 'no-store'`). When that version isn't the one running it calls
+  `chrome.runtime.reload()` without asking for work, so a reload never drops jobs it had taken. The reloaded copy
+  starts with `force=1`, and the library puts back whatever an older copy still held (`Crawl.Requeue`), so an update
+  loses nothing. (1.2 only looked at its folder after the library's `ext` differed, so it may take one batch before
+  reloading; the new copy's forced ask brings that batch back at once.)
+- **The library keeps its folder current.** `Extension.Refresh(dir)` rewrites the scripts and pages and rebuilds
+  `manifest.json` with this engine's version and the folder's own `host_permissions`, and leaves `config.js` (the key,
+  the library's address) alone; it does nothing to a folder without both `manifest.json` and `config.js`, rewrites
+  only files that differ, and returns whether the version changed. The library calls it once on
+  `<home>/chrome-extension` when it maps its routes (`LibraryWeb.MapCanvas`), so a library update reaches Chrome
+  within a minute.
+- **The update is noted once.** Each visit records the running version (`canvas.json` `extension_version`). When it
+  goes up from a known older version, `extension_update = {from, to, at, dismissed}` is set, and `GET /api/v2/canvas`
+  shows `"extension_update": {"from","to","at"}` until `POST /api/v2/canvas {"dismiss_update": true}` (design 08's
+  "Extension updated" state: "The Chrome extension updated itself", "Now version 1.4. Nothing to do.", Dismiss; the
+  version is `to`). `extension_latest` is the library's version and
+  `extension_outdated` is true while the running one is older, compared as versions (1.10 is newer than 1.9).
+
+**For WS3/WS6 (the app).** The laptop app makes its own folder with `Extension.Prepare(Extension.Folder(home),
+serverUrl, key, canvasUrl)` (unchanged). It should also call `Extension.Refresh(Extension.Folder(home))` once when it
+starts (catching `IOException` and `UnauthorizedAccessException`), so a new app version reaches Chrome without the
+student making the folder again. The Canvas screens read `extension_version`, `extension_latest`,
+`extension_outdated` and `extension_update` from `GET /api/v2/canvas` (T7 also puts them in `/api/v2/canvas/state`)
+and dismiss the update with `POST /api/v2/canvas {"dismiss_update": true}`.
+
+### Size limits
+
+| Limit | Value | Where |
+|---|---|---|
+| Biggest file mirrored | 40 MiB (41,943,040 bytes) | `Crawl.MaxBytes` (not queued when Canvas says it's bigger) and background.js `MAX_BYTES` (Content-Length, then the real length) |
+| One POST to `/api/v2/canvas/results` | 256 MiB | Raised from Kestrel's 30,000,000-byte default for that route only, after the key check. A 40 MiB file is about 56 MB of base64 in JSON; an old extension posting up to four such files together fits too. |
+| A text answer | 2,000,000 characters | background.js; an AI's `canvas_page` keeps the first 60,000 |
+| An error page for a file | 4,000 characters | background.js |
+
+**AIs' page reads** (`kind: "text"`, `canvas_page`) come back as Markdown only when Canvas's content type says HTML;
+plain text, CSV or JSON come back as Canvas sent them (Marginalia's rule, bug 16).
 
 ## The JSON API for the Canvas screens
 
 _Filled in by T7._ Until then the app reads `GET /api/v2/canvas` (keys `url`, `courses`, `available`, `last_sync`,
-`error`, `needs_login`, `extension_seen`, `extension_version`, `syncing`, `left`, `exploring`, `scouts`, `changes`) and
+`error`, `needs_login`, `extension_seen`, `extension_version`, `extension_latest`, `extension_outdated`,
+`extension_update`, `syncing`, `left`, `exploring`, `scouts`, `changes`) and
 `GET /api/v2/assignments` (keys `class`, `id`, `name`, `due`, `points`, `status`, `score`, `submitted`, `url`,
 `done`, `folder`). The extension's door is `/api/v2/canvas/work`, `/results` and `/status`; AIs read through
 `/api/v2/canvas/fetch`, `/agent-courses` and `/courses`.
@@ -203,5 +290,7 @@ headers), `Status`, `Bytes`, `FailTimes`, `On`, Canvas's own 404 for anything el
 asked for" checks, and `Run(sync)`, which plays the extension until the sync is done. Fixtures are in
 `Fixtures/canvas/`: COMP 101 (course 4201) with the design's data on the 2025 calendar (Lab 3 due Tue 30 Sep,
 Problem set 4 graded 18/20 by Dr. Okafor with the rubric comment "The frame for n = 1 is missing in 3b.", Week 3 and
-Week 4 modules, four announcements with one unread). Tests fix the clock at the design's "now", Thu 25 Sep 2025,
+Week 4 modules, four announcements with one unread). `ExtensionScriptTests` runs the real `background.js` (the copy
+the engine carries) in Jint, with `importScripts`, `chrome.*`, `fetch`, `btoa`, `URL` and `setTimeout` stood in for;
+`CanvasExtensionTests` covers the folder, the handshake and a 40 MB file through real Kestrel. Tests fix the clock at the design's "now", Thu 25 Sep 2025,
 10:24 in California (`2025-09-25T17:24:00Z`), and never assert times in the machine's own zone. Made-up people only.

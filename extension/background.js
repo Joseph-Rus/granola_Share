@@ -2,13 +2,27 @@
 // The library decides what to read (assignments, submissions, modules, pages, files, or whatever a course's
 // scout asks for); this extension only fetches those Canvas URLs with the session you're already
 // signed into and hands the answers back. It never writes to Canvas, and it refuses any URL outside Canvas
-// and its file CDN. It checks every second or two only while the library has work queued.
-importScripts('config.js'); // STUDY_STASH = {app, key, canvas}, written by Study Stash
+// and its file store. It checks every second or two only while the library has work queued.
+importScripts('config.js'); // STUDY_STASH = {app, key, canvas, files, protocol}, written by Study Stash
 
 const MAX_BYTES = 40 * 1024 * 1024;
+// What this copy of the extension does, told to the library on every visit (docs/canvas.md, "The extension"):
+// 2 = says when Chrome is signed out, passes on Canvas's rate limit, never hands over an error page or an
+// oversized file as a file, reloads itself before taking work when its folder is newer, posts files one at a time.
+const PROTOCOL = 2;
+// Canvas sent us to its sign-in page, or answered as if nobody were signed in. Canvas's other 401,
+// {"status":"unauthorized"}, only means this student can't see that part of the course.
+const SIGN_IN = /\/login(\/|\?|$)/;
+const UNAUTHENTICATED = /unauthenticated|user authorization required/i;
 
+// Canvas itself, and the hosts Canvas keeps file bodies on (a download redirects there).
 function allowed(url) {
-  return url.startsWith(STUDY_STASH.canvas + '/') || /^https:\/\/[a-z0-9.-]+\.inscloudgate\.net\//.test(url);
+  if (url.startsWith(STUDY_STASH.canvas + '/')) return true;
+  if (!Array.isArray(STUDY_STASH.files)) return /^https:\/\/[a-z0-9.-]+\.inscloudgate\.net\//.test(url); // a config.js from before 1.3
+  let u;
+  try { u = new URL(url); } catch (e) { return false; }
+  if (u.protocol !== 'https:' || u.username || u.password || u.port) return false;
+  return STUDY_STASH.files.some(h => h.startsWith('*.') ? u.hostname.endsWith(h.slice(1)) : u.hostname === h);
 }
 
 async function app(path, body) {
@@ -50,19 +64,39 @@ async function run(job) {
       if (job.kind !== 'bytes') throw e;
       r = await viaPublicUrl(job.url);
     }
-    const out = {id: job.id, status: r.status, link: r.headers.get('link') || '', type: r.headers.get('content-type') || '',
-                 final: r.url};
-    if (/\/login(\/|\?|$)/.test(new URL(r.url).pathname)) return {...out, status: 401};  // bounced to sign-in
-    if (job.kind === 'bytes') {
+    const h = name => r.headers.get(name) || '';
+    const out = {id: job.id, status: r.status, link: h('link'), type: h('content-type'), final: r.url};
+    // How much of Canvas's allowance is left, and how long it asked us to wait: the library slows down.
+    if (h('x-rate-limit-remaining')) out.rate = h('x-rate-limit-remaining');
+    if (h('retry-after')) out.retry_after = h('retry-after');
+    // Status 401 as well, for a library from before signed_out.
+    if (r.url && SIGN_IN.test(new URL(r.url).pathname)) return {...out, status: 401, signed_out: true};
+    if (job.kind === 'bytes' && r.ok) {
+      // Canvas says how big a file is before sending it: a file too big to hand over is never read.
+      if (Number(h('content-length')) > MAX_BYTES) return {...out, error: 'too big'};
       const buf = await r.arrayBuffer();
       if (buf.byteLength > MAX_BYTES) return {...out, error: 'too big'};
       return {...out, b64: b64(buf)};
     }
     const text = await r.text();
-    if (job.kind === 'json' && r.ok && text.trimStart().startsWith('<')) return {...out, status: 401};
+    if (job.kind === 'json' && r.ok && text.trimStart().startsWith('<')) return {...out, status: 401, signed_out: true}; // a sign-in page, not data
+    if (r.status === 401 && UNAUTHENTICATED.test(text)) out.signed_out = true;
+    // A file Canvas refused: its words, so the library can tell why, never saved as the file.
+    if (job.kind === 'bytes') return {...out, text: text.slice(0, 4000)};
     return {...out, text: job.kind === 'json' ? text.replace(/^while\(1\);/, '') : text.slice(0, 2000000)};
   } catch (e) {
     return {id: job.id, error: String(e)};
+  }
+}
+
+// Study Stash rewrites this folder when it updates: when the manifest there isn't the one running, reload to pick up
+// the new files. Checked before asking for work, so a reload never drops work already taken.
+async function newerOnDisk() {
+  try {
+    const onDisk = await (await fetch(chrome.runtime.getURL('manifest.json'), {cache: 'no-store'})).json();
+    return !!onDisk.version && onDisk.version !== chrome.runtime.getManifest().version;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -73,19 +107,24 @@ async function pump(force) {
   try {
     let idle = 0;
     for (let round = 0; round < 5000; round++) {
+      if (await newerOnDisk()) { chrome.runtime.reload(); return; }
       let work;
-      try { work = await app('/api/v2/canvas/work?v=' + chrome.runtime.getManifest().version + (force && round === 0 ? '&force=1' : '')); } catch (e) { return; }
-      // Study Stash keeps this folder up to date; when it holds a newer version, reload from disk to pick it up
-      if (work.ext && work.ext !== chrome.runtime.getManifest().version) {
-        try {
-          const onDisk = await (await fetch(chrome.runtime.getURL('manifest.json'), {cache: 'no-store'})).json();
-          if (onDisk.version === work.ext) { chrome.runtime.reload(); return; }  // only when the new files are really there
-        } catch (e) {}
-      }
+      try {
+        work = await app('/api/v2/canvas/work?v=' + chrome.runtime.getManifest().version + '&p=' + PROTOCOL
+                         + (force && round === 0 ? '&force=1' : ''));
+      } catch (e) { return; }
       if (work.jobs.length) {
         idle = 0;
         const results = await Promise.all(work.jobs.map(run));
-        await app('/api/v2/canvas/results', {results});
+        // Answers together, but each file on its own: one big file per request stays under the library's limit.
+        const files = results.filter((_, i) => work.jobs[i].kind === 'bytes');
+        const rest = results.filter((_, i) => work.jobs[i].kind !== 'bytes');
+        try {
+          if (rest.length) await app('/api/v2/canvas/results', {results: rest});
+          for (const f of files) await app('/api/v2/canvas/results', {results: [f]});
+        } catch (e) {
+          return; // the library didn't take them: it hands those jobs out again in ten minutes
+        }
         continue;
       }
       if (!work.hot || ++idle > 60) return;           // nothing queued and no agent exploring: sleep until the alarm

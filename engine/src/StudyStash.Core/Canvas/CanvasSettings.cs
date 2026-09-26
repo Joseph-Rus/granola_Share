@@ -22,7 +22,11 @@ public sealed class CanvasSettings
     /// <summary>When the last sync started (ISO), and when the extension last asked for work.</summary>
     public string LastSync { get; set; } = "";
     public string ExtensionSeen { get; set; } = "";
+    /// <summary>The version of the extension Chrome last ran ("1.3").</summary>
     public string ExtensionVersion { get; set; } = "";
+    /// <summary>Chrome's extension updated itself (it reloads from a folder Study Stash keeps up to date): Settings
+    /// says so ("The Chrome extension updated itself. Now version 1.3.") until it's dismissed.</summary>
+    public ExtensionUpdate? ExtensionUpdate { get; set; }
     /// <summary>What went wrong last, for Settings; empty when all is well.</summary>
     public string Error { get; set; } = "";
     /// <summary>Chrome isn't signed in to Canvas: syncing waits until it is.</summary>
@@ -35,6 +39,10 @@ public sealed class CanvasSettings
     public Dictionary<string, ScoutReport> Scouts { get; set; } = [];
 
     [JsonIgnore] public bool On => Url.Length > 0;
+
+    /// <summary>The extension Chrome runs is older than this library's: its folder wasn't brought up to date (one the
+    /// laptop app made, say), so it can't reload into the new version by itself.</summary>
+    [JsonIgnore] public bool ExtensionOutdated => Extension.IsOlder(ExtensionVersion, Extension.Version());
 
     public static string PathIn(string home) => Path.Combine(home, "canvas.json");
 
@@ -116,3 +124,7 @@ public sealed class CanvasSettings
 
 /// <summary>What the course scout found last time: whether it finished, its summary, and how many files it saved.</summary>
 public sealed record ScoutReport(bool Ok, string Report, string When, int Files);
+
+/// <summary>Chrome's extension went from one version to a newer one at <paramref name="At"/> (ISO); dismissed once the
+/// student has seen it.</summary>
+public sealed record ExtensionUpdate(string From, string To, string At, bool Dismissed);

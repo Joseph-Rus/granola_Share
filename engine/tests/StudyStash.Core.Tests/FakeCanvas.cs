@@ -105,13 +105,16 @@ public sealed partial class FakeCanvas
         return Make(job, routes.GetValueOrDefault(key) ?? new Reply(404, Missing));
     }
 
-    // Like the extension: a file's body comes back as base64 whatever the status, JSON as text.
-    static CanvasResult Make(CanvasJob job, Reply r) =>
-        new(job.Id, r.Status, r.Link, job.Kind == "bytes" ? "" : Encoding.UTF8.GetString(r.Body),
-            job.Kind == "bytes" ? Convert.ToBase64String(r.Body) : "", r.Error, job.Url)
+    // Like the extension (protocol 2): a file Canvas sent comes back as base64, an error page for a file as its text,
+    // JSON as text.
+    static CanvasResult Make(CanvasJob job, Reply r)
+    {
+        bool file = job.Kind == "bytes" && r.Status is >= 200 and < 300;
+        return new(job.Id, r.Status, r.Link, file ? "" : Encoding.UTF8.GetString(r.Body), file ? Convert.ToBase64String(r.Body) : "", r.Error, job.Url)
         {
             Rate = r.Rate, RetryAfter = r.RetryAfter, SignedOut = r.SignedOut, Type = r.Type,
         };
+    }
 
     /// <summary>
     /// Be the extension until the sync is done: ask for work, answer it, hand the answers back. True when the sync

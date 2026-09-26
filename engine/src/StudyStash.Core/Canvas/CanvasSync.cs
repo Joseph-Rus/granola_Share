@@ -38,22 +38,29 @@ public sealed partial class CanvasSync
     public CanvasSettings Settings => CanvasSettings.Load(home);
 
     /// <summary>The extension asks for work: start a sync when one is due (or asked for), then give it the AI's
-    /// reads first and the sync's after. While Canvas has asked the sync to slow down, it isn't told to hurry back.</summary>
-    public CanvasWork Work(bool force, string? extVersion = null)
+    /// reads first and the sync's after. While Canvas has asked the sync to slow down, it isn't told to hurry back.
+    /// <paramref name="extVersion"/> and <paramref name="protocol"/> are the extension's own (an extension from
+    /// before protocol 2 sends none); every extension so far can do every job, whatever its version.</summary>
+    public CanvasWork Work(bool force, string? extVersion = null, int protocol = 1)
     {
         var now = Clock();
+        string at = now.ToString("o", CultureInfo.InvariantCulture);
         var s = CanvasSettings.Update(home, st =>
         {
-            st.ExtensionSeen = now.ToString("o", CultureInfo.InvariantCulture);
-            if (extVersion is { Length: > 0 }) st.ExtensionVersion = extVersion;
+            st.ExtensionSeen = at;
+            if (extVersion is not { Length: > 0 } || extVersion == st.ExtensionVersion) return;
+            // Chrome reloaded a newer copy from the folder Study Stash keeps up to date: worth a word, once.
+            if (Extension.IsOlder(st.ExtensionVersion, extVersion)) st.ExtensionUpdate = new ExtensionUpdate(st.ExtensionVersion, extVersion, at, false);
+            st.ExtensionVersion = extVersion;
         });
+        if (protocol < 1) return new CanvasWork([], false, Extension.Version()); // nothing this library knows how to hand it
         if (!Crawl.Active && !Crawl.Ready && (force || s.Due(now)) && s.On && s.Courses.Count > 0
             && Crawl.Start(s.Url, s.Courses))
         {
             CanvasSettings.Update(home, st =>
             {
                 st.SyncNow = false;
-                st.LastSync = now.ToString("o", CultureInfo.InvariantCulture);
+                st.LastSync = at;
             });
             log($"[canvas] syncing {s.Courses.Count} class(es)");
         }
@@ -63,8 +70,8 @@ public sealed partial class CanvasSync
                 st.NeedsLogin = true;
                 st.Error = "Chrome isn't signed in to Canvas. Open Canvas in Chrome and sign in; it syncs again within the hour.";
             });
-        // An extension older than the one here reloads itself as soon as it hears the version: give it nothing to lose.
-        if (extVersion is { Length: > 0 } && extVersion != Extension.Version()) return new CanvasWork([], true, Extension.Version());
+        // A fresh extension (installed, reloaded into a new version, or asked to sync) lost whatever its old copy had
+        // taken: that goes out again now instead of in ten minutes.
         if (force) Crawl.Requeue();
         var jobs = Agents.Take();
         if (jobs.Count == 0) jobs = Crawl.Next();
@@ -125,11 +132,8 @@ public sealed partial class CanvasSync
         string url = Py.Strip(given), b = Settings.Url.TrimEnd('/');
         if (b.Length == 0) return null;
         if (url.StartsWith('/')) url = b + url;
-        return url.StartsWith(b + "/", StringComparison.Ordinal) || FileStore().IsMatch(url) ? url : null;
+        return url.StartsWith(b + "/", StringComparison.Ordinal) || Extension.OnFileHost(url) ? url : null;
     }
-
-    [GeneratedRegex("^https://[a-z0-9.-]+\\.inscloudgate\\.net/")]
-    private static partial Regex FileStore();
 
     [GeneratedRegex("<([^>]+)>;\\s*rel=\"next\"")]
     private static partial Regex NextLink();
@@ -161,7 +165,8 @@ public sealed partial class CanvasSync
                 result["bytes"] = body.Length;
                 break;
             case "text":
-                result["markdown"] = Py.Head(HtmlText.ToMarkdown(r.Text), 60_000);
+                // A web page reads as Markdown; anything else (plain text, CSV, JSON) as Canvas sent it.
+                result["markdown"] = Py.Head(r.Type.Contains("html", StringComparison.OrdinalIgnoreCase) ? HtmlText.ToMarkdown(r.Text) : r.Text, 60_000);
                 break;
             default:
                 result["json"] = Py.Head(r.Text, 200_000);
