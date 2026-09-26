@@ -89,6 +89,7 @@ public static partial class Shell
         if (host.PretendMic) Program.Log("[app] recording from a pretend microphone (STUDYSTASH_MIC_FILE)");
         Wire();
         host.Start();
+        AppUpdates.Start(host, stop.Token);
         MakeTray();
         if (host.Settings.Shortcuts && !Hotkeys.Register(OnShortcut)) Program.Log("[app] the shortcuts are taken by another app");
         ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => Tick());
