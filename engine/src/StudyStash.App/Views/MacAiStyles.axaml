@@ -2,7 +2,8 @@
      dot, a toggle switch and a radio, all in Liquid Glass. Included from each AI UserControl, never from Styles.axaml
      (WS2's). -->
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:StudyStash.App.Controls">
   <Style Selector="TextBlock.ai-title">
     <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
     <Setter Property="FontSize" Value="26" />
@@ -167,5 +168,143 @@
   <Style Selector="Border.ai-radio.on">
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- The "Answer with" / "Rewrite notes with" menu (16/17): glass, 260/280 wide, r18. -->
+  <Style Selector="TextBlock.ai-menu-header">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="Padding" Value="10,6,10,4" />
+  </Style>
+  <Style Selector="Border.ai-menu-item">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.selected">
+    <Setter Property="Background" Value="{DynamicResource Tint}" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.selected TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.selected TextBlock.ai-menu-sub">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.selected c|Icon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector="TextBlock.ai-menu-title">
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="TextBlock.ai-menu-sub">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="Button.ai-menu-footer">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="32,6,10,6" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.ai-menu-footer TextBlock">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+
+  <!-- The ask bar (16): glass 560×48 r24, an engine chip, a scope chip and a round send button. -->
+  <Style Selector="Border.ai-chip">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="BoxShadow" Value="{DynamicResource EdgeSoft}" />
+  </Style>
+  <Style Selector="Border.ai-chip TextBlock">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.ai-chip-engine">
+    <Setter Property="Background" Value="{DynamicResource Fill2}" />
+    <Setter Property="Padding" Value="10,0,8,0" />
+  </Style>
+  <Style Selector="Border.ai-chip-scope">
+    <Setter Property="Background" Value="{DynamicResource Fill}" />
+    <Setter Property="Padding" Value="12,0,8,0" />
+  </Style>
+  <Style Selector="Border.ai-chip-scope TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="Button.ai-chipbtn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="15" />
+  </Style>
+  <Style Selector="Button.ai-send">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.ai-send">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Background" Value="{DynamicResource Fill2}" />
+  </Style>
+
+  <!-- The chat's bubbles and field, and the ask bar's floating answer card (16). -->
+  <Style Selector="Border.ai-bubble-q">
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="Background" Value="{DynamicResource Tint}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource EdgeTint}" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+  <Style Selector="Border.ai-bubble-q TextBlock">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="Border.ai-bubble-a">
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="Background" Value="{DynamicResource Fill}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource EdgeSoft}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="TextBlock.ai-answer">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18.85" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.ai-byline">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="TextBlock.ai-thinking">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="Border.ai-field">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Background" Value="{DynamicResource Fill}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource EdgeSoft}" />
+    <Setter Property="Padding" Value="16,0,6,0" />
+  </Style>
+  <Style Selector="Border.ai-field-chip">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource Fill2}" />
+    <Setter Property="Padding" Value="8,0,6,0" />
+  </Style>
+  <Style Selector="Border.ai-field-chip TextBlock">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.ai-field-send">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Background" Value="{DynamicResource Fill2}" />
   </Style>
 </Styles>

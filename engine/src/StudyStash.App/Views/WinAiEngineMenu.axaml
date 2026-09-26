@@ -1,0 +1,41 @@
+<!-- The "Answer with" / "Rewrite notes with" menu (16/17): Acrylic, a checked default, a Subtle2 current pick, a
+     dimmed disabled row, and an optional footer link. Positioned by its host as a Flyout, or drawn inline in shots. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinAiEngineMenu"
+             x:DataType="vm:EngineMenuModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <Border Width="{Binding Width}" CornerRadius="8" Background="{DynamicResource Acrylic}" BorderBrush="{DynamicResource FlyStroke}"
+          BorderThickness="1" BoxShadow="{DynamicResource ShadowLg}" Padding="4">
+    <StackPanel Spacing="0">
+      <TextBlock Classes="ai-menu-header" Text="{Binding Header}" />
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:EngineMenuItem">
+            <Button Theme="{StaticResource Surface}" CornerRadius="4" HorizontalContentAlignment="Stretch"
+                    Command="{Binding Command}" IsEnabled="{Binding Enabled}">
+              <Border Classes="ai-menu-item" Classes.selected="{Binding Selected}" Classes.disabled="{Binding !Enabled}">
+                <Grid ColumnDefinitions="16,10,*">
+                  <c:Icon Glyph="check" Size="14" IsVisible="{Binding Checked}" />
+                  <StackPanel Grid.Column="2" Spacing="1">
+                    <TextBlock Classes="ai-menu-title" Text="{Binding Name}" />
+                    <TextBlock Classes="ai-menu-sub" Text="{Binding Subtitle}" IsVisible="{Binding Subtitle, Converter={x:Static c:Converters.NotEmpty}}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Border Height="1" Background="{DynamicResource Sep}" Margin="0,4" IsVisible="{Binding FooterText, Converter={x:Static c:Converters.NotEmpty}}" />
+      <Button Classes="ai-menu-footer" Command="{Binding FooterCommand}" IsVisible="{Binding FooterText, Converter={x:Static c:Converters.NotEmpty}}">
+        <TextBlock Text="{Binding FooterText}" />
+      </Button>
+    </StackPanel>
+  </Border>
+</UserControl>

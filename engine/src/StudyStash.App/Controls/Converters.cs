@@ -13,4 +13,7 @@ public static class Converters
 
     /// <summary>Windows toggle label: "On" or "Off" next to the switch.</summary>
     public static readonly IValueConverter OnOff = new FuncValueConverter<bool, string>(on => on ? "On" : "Off");
+
+    /// <summary>A row that only shows when it has something to say: an engine's subtitle, a menu's footer.</summary>
+    public static readonly IValueConverter NotEmpty = new FuncValueConverter<string?, bool>(s => !string.IsNullOrEmpty(s));
 }

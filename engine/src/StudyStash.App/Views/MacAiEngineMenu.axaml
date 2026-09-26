@@ -1,0 +1,41 @@
+<!-- The "Answer with" / "Rewrite notes with" menu (16/17): glass, a checked default, a tinted current pick, a
+     dimmed disabled row, and an optional footer link. The design's own control (`c:Glass`), positioned by its host
+     as a Popup in the app, or drawn inline in shots (popups don't render into a capture). -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.MacAiEngineMenu"
+             x:DataType="vm:EngineMenuModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/MacAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <c:Glass CornerRadius="18" Padding="6" ClipToBounds="False">
+    <StackPanel Width="{Binding Width}" Spacing="0">
+      <TextBlock Classes="ai-menu-header" Text="{Binding Header}" />
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:EngineMenuItem">
+            <Button Theme="{StaticResource Surface}" CornerRadius="10" HorizontalContentAlignment="Stretch"
+                    Command="{Binding Command}" IsEnabled="{Binding Enabled}">
+              <Border Classes="ai-menu-item" Classes.selected="{Binding Selected}" Classes.disabled="{Binding !Enabled}">
+                <Grid ColumnDefinitions="14,8,*">
+                  <c:Icon Glyph="check" Size="13" IsVisible="{Binding Checked}" />
+                  <StackPanel Grid.Column="2" Spacing="2">
+                    <TextBlock Classes="ai-menu-title" Text="{Binding Name}" />
+                    <TextBlock Classes="ai-menu-sub" Text="{Binding Subtitle}" IsVisible="{Binding Subtitle, Converter={x:Static c:Converters.NotEmpty}}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Border Classes="ai-sep" Margin="10,4" IsVisible="{Binding FooterText, Converter={x:Static c:Converters.NotEmpty}}" />
+      <Button Classes="ai-menu-footer" Command="{Binding FooterCommand}" IsVisible="{Binding FooterText, Converter={x:Static c:Converters.NotEmpty}}">
+        <TextBlock Text="{Binding FooterText}" />
+      </Button>
+    </StackPanel>
+  </c:Glass>
+</UserControl>

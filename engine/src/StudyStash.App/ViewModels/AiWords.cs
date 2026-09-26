@@ -1,4 +1,6 @@
 using System.Globalization;
+using StudyStash.Core;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.App.ViewModels;
 
@@ -98,4 +100,39 @@ public static class AiWords
         DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t) ? t : null;
 
     public const string OlderLibraryWords = "Your library runs an older Study Stash: update it to pick engines here.";
+
+    /// <summary>Whether an engine is worth offering to ask or write with: ready, or installed but never checked. A
+    /// down/limited/unsignedin/missing-model engine is skipped (not_installed already never reaches the ask menu).</summary>
+    public static bool EngineUsable(string state) => state is "ready" or "unchecked";
+
+    /// <summary>The "Answer with" menu's row subtitle: the ask default says so; Ollama says it's private; a signed-
+    /// out row says so; everything else (a ready, non-default CLI) says nothing extra.</summary>
+    public static string AskEngineSubtitle(string id, string state, bool isDefault) =>
+        isDefault ? "Default for questions"
+        : id == "ollama" ? "Private, on your library"
+        : state == "not_signed_in" ? "Not signed in"
+        : "";
+
+    /// <summary>The ask field's placeholder for a scope: This lecture/class/all your classes.</summary>
+    public static string AskPlaceholder(string scope) => scope switch
+    {
+        "class" => "Ask about this class",
+        "all" => "Ask about all your classes",
+        _ => "Ask about this lecture",
+    };
+
+    /// <summary>While waiting: "Asking Claude Code…".</summary>
+    public static string Thinking(string engineName) => $"Asking {engineName}…";
+
+    /// <summary>An answer's byline: the engine, then each source's moment in the lecture ("Ollama · 18:05, 18:40"),
+    /// or just the engine when nothing carries a moment.</summary>
+    public static string AskByline(string engineName, IEnumerable<AskSource> sources)
+    {
+        var times = sources.Where(s => s.At is not null).Select(s => TimedText.Clock(s.At!.Value)).ToList();
+        return times.Count > 0 ? $"{engineName} · {string.Join(", ", times)}" : engineName;
+    }
+
+    /// <summary>"This answer came from Ollama. Claude Code didn't respond in time." — why already reads as a full
+    /// sentence about the engine that was asked.</summary>
+    public static string FellBackNote(string engineName, string why) => $"This answer came from {engineName}. {why}";
 }

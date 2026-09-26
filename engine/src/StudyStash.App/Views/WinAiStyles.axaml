@@ -161,4 +161,119 @@
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
+
+  <!-- The "Answer with" / "Rewrite notes with" menu (16/17): Acrylic, 260/290 wide, r8. -->
+  <Style Selector="TextBlock.ai-menu-header">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="Padding" Value="12,8,12,4" />
+  </Style>
+  <Style Selector="Border.ai-menu-item">
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="12,6" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.selected">
+    <Setter Property="Background" Value="{DynamicResource Subtle2}" />
+  </Style>
+  <Style Selector="Border.ai-menu-item.disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector="TextBlock.ai-menu-title">
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="TextBlock.ai-menu-sub">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="Button.ai-menu-footer">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="38,8,12,8" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.ai-menu-footer TextBlock">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+
+  <!-- The ask bar (16): Acrylic 600×52 r8, an engine chip, a scope chip and a send icon. -->
+  <Style Selector="Border.ai-chip-engine">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="Padding" Value="10,0,8,0" />
+  </Style>
+  <Style Selector="Border.ai-chip-engine.open">
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Border.ai-chip-scope">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="Padding" Value="11,0,8,0" />
+  </Style>
+  <Style Selector="Border.ai-chip-engine TextBlock, Border.ai-chip-scope TextBlock">
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="Button.ai-chipbtn">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+  <Style Selector="Button.ai-send">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- The chat's bubbles and field (16). -->
+  <Style Selector="Border.ai-bubble-q">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+  <Style Selector="Border.ai-bubble-q TextBlock">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="Border.ai-bubble-a">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="Background" Value="{DynamicResource Card}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="TextBlock.ai-answer">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20.3" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.ai-byline">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="TextBlock.ai-thinking">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="Border.ai-field">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource Ctrl}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}" />
+    <Setter Property="Padding" Value="11,0,4,0" />
+  </Style>
+  <Style Selector="Border.ai-field TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}" />
+  </Style>
 </Styles>
