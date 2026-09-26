@@ -218,12 +218,14 @@ public sealed class AssignmentInfo
         ? double.Parse(j.ToJsonString(), CultureInfo.InvariantCulture) : null;
     static long? L(JsonNode? v) => D(v) is double d ? (long)d : null;
 
-    /// <summary>An assignment from Canvas's JSON (with its <c>submission</c> summary when Canvas included one).</summary>
-    public static AssignmentInfo From(JsonObject a, string folder)
+    /// <summary>An assignment from Canvas's JSON (with its <c>submission</c> summary when Canvas included one), and
+    /// the Canvas files its instructions link to (queued by the caller into the assignment's own <c>files/</c>).</summary>
+    public static (AssignmentInfo Info, List<CanvasFileLink> Files) From(JsonObject a, string folder, HtmlContext ctx)
     {
         var types = (a["submission_types"] as JsonArray ?? []).Select(S).Where(t => t.Length > 0).ToList();
         long? quiz = L(a["quiz_id"]), topic = L(a["discussion_topic"]?["id"]);
-        return new AssignmentInfo
+        var (instructions, files) = HtmlText.Convert(S(a["description"]), ctx);
+        var info = new AssignmentInfo
         {
             Id = L(a["id"]) ?? 0,
             Name = Py.Strip(S(a["name"])),
@@ -234,7 +236,7 @@ public sealed class AssignmentInfo
             SubmissionTypes = types,
             AllowedAttempts = D(a["allowed_attempts"]) is double n ? (int)n : null,
             HtmlUrl = S(a["html_url"]),
-            Instructions = HtmlText.ToMarkdown(S(a["description"])),
+            Instructions = instructions,
             Rubric = (a["rubric"] as JsonArray ?? []).OfType<JsonObject>().Select(r => new RubricCriterion
             {
                 Id = S(r["id"]), Description = Py.Strip(S(r["description"])), LongDescription = Py.Strip(S(r["long_description"])), Points = D(r["points"]),
@@ -245,6 +247,7 @@ public sealed class AssignmentInfo
             Folder = folder,
             Submission = a["submission"] is JsonObject s ? SubmissionInfo.Summary(s) : null,
         };
+        return (info, files);
     }
 }
 

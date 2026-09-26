@@ -101,6 +101,17 @@ public sealed partial class Crawl
     // Each class's index as this sync has read it so far (home/canvas/<class>.sync.json), and the ones to save.
     readonly Dictionary<string, CourseIndex> staging = [];
     readonly HashSet<string> dirty = [];
+    // Pages, the front page and the syllabus are rendered when the sync finishes (like spec.md/feedback.md), so a
+    // file they link can point at where it really landed: their Markdown (file links not yet resolved) waits here.
+    // This sync's memory only; lost on a restart, but the next sync reads the same pages again.
+    readonly Dictionary<string, Dictionary<string, PendingPage>> pendingPages = [];
+    readonly Dictionary<string, PendingPage> pendingFrontPage = [];
+    readonly Dictionary<string, PendingPage> pendingSyllabus = [];
+    // A module's Page items (by slug), so the pages listing outside modules doesn't save them a second time.
+    readonly Dictionary<string, HashSet<string>> modulePageSlugs = [];
+
+    /// <summary>A page's Markdown before its file links are resolved, and where it belongs.</summary>
+    sealed record PendingPage(string Title, string Body, string Dir, string HtmlUrl, string? UpdatedAt);
 
     /// <param name="classDir">A class's folder in the library (created if missing).</param>
     public Crawl(string home, Func<string, string> classDir) : this(home, classDir, () => DateTimeOffset.Now)
@@ -225,13 +236,29 @@ public sealed partial class Crawl
         return t;
     }
 
-    /// <summary>A listing moves on from <c>reading</c> once: to ok, hidden or failed. What it became first stays.</summary>
+    /// <summary>A listing moves on from <c>reading</c> once: to ok, hidden or failed. What it became first stays.
+    /// Once modules ends (however it went), the syllabus, the pages outside modules and the front page are asked
+    /// for too: modules must be read first so a module's own page isn't saved again outside it.</summary>
     void Section(string cls, string listing, string state)
     {
         if (!Listings.Contains(listing)) return;
         if (SectionStates[cls] is not JsonObject mine) SectionStates[cls] = mine = [];
-        if (S(mine[listing]) is "" or "reading") mine[listing] = state;
+        bool wasReading = S(mine[listing]) is "" or "reading";
+        if (wasReading) mine[listing] = state;
         if (state != "ok" && PagesSoFar[cls] is JsonObject kept) kept.Remove(listing);
+        if (wasReading && listing == "modules" && state != "reading") AfterModules(cls);
+    }
+
+    /// <summary>Ask for what only makes sense once modules are known: the syllabus and course info, the pages
+    /// outside modules, and the front page.</summary>
+    void AfterModules(string cls)
+    {
+        string canvasUrl = S(data["base"]);
+        long id = Staged(cls).CourseId;
+        string api = $"{canvasUrl}/api/v1/courses/{id}";
+        Add($"{api}?include[]=syllabus_body&include[]=term", "json", Tag("course", cls));
+        Add($"{api}/pages?per_page=100&sort=title", "json", Tag("pages", cls));
+        Add($"{api}/front_page", "json", Tag("front_page", cls));
     }
 
     /// <summary>Start a sync of these classes (class → Canvas course id). False if one is already running.</summary>
@@ -254,6 +281,10 @@ public sealed partial class Crawl
             CourseIndex.DropStaged(home);
             staging.Clear();
             dirty.Clear();
+            pendingPages.Clear();
+            pendingFrontPage.Clear();
+            pendingSyllabus.Clear();
+            modulePageSlugs.Clear();
             foreach (var (cls, id) in courses)
             {
                 staging[cls] = new CourseIndex { Class = cls, CourseId = id, Staged = new SyncParts() };
@@ -463,7 +494,7 @@ public sealed partial class Crawl
                 try
                 {
                     before[cls] = CourseIndex.Load(home, cls);
-                    after[cls] = CourseIndex.Promote(home, cls, states, at, index => Forget(cls, index));
+                    after[cls] = CourseIndex.Promote(home, cls, states, at, index => { Forget(cls, index); FinishPages(cls, index); });
                     Render(cls, after[cls]);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -553,8 +584,12 @@ public sealed partial class Crawl
                 if (type == "modules") Modules(cls, all);
                 else Announcements(cls, all);
                 break;
-            case "file_meta": if (body is JsonObject meta) WantFile(cls, meta, S(tag["dir"])); break;
+            case "file_meta": if (body is JsonObject meta) Attach(cls, tag, WantFile(cls, meta, S(tag["dir"]))); break;
             case "page": if (body is JsonObject page) Page(cls, page, S(tag["dir"])); break;
+            case "course": if (body is JsonObject course) Course(cls, course); break;
+            case "pages": PagesListing(cls, body as JsonArray ?? []); break;
+            case "front_page": if (body is JsonObject front) FrontPage(cls, front); break;
+            case "outside_page": if (body is JsonObject op) OutsidePage(cls, op, S(tag["slug"])); break;
         }
         if (!more) Section(cls, type, "ok");
     }
@@ -651,11 +686,42 @@ public sealed partial class Crawl
         var index = Staged(cls);
         foreach (var a in list.OfType<JsonObject>().Where(Assignments.Published))
         {
-            var info = AssignmentInfo.From(a, Rel(cls, AssignmentDir(cls, a)));
+            string dir = AssignmentDir(cls, a);
+            var (info, files) = AssignmentInfo.From(a, Rel(cls, dir), BuildContext(cls, index.CourseId, Rel(cls, dir)));
             int at = index.Assignments.FindIndex(x => x.Id == info.Id);
             if (at >= 0) index.Assignments[at] = info;
             else index.Assignments.Add(info);
+            QueueFileLinks(cls, files, Path.Combine(dir, "files"), "assignment", Num(info.Id));
         }
+    }
+
+    // --- Canvas file links inside HTML (instructions, pages, the syllabus): AngleSharp/ReverseMarkdown does the
+    // conversion (HtmlText); Crawl asks for the files it finds and remembers where each landed. --------------------
+
+    /// <summary>Everything <see cref="HtmlText.Convert"/> needs for one document: absolute links, and any Canvas file
+    /// already wanted rewritten to its local copy, relative to <paramref name="fromFolder"/> (the document's own
+    /// folder, inside the class, with /).</summary>
+    HtmlContext BuildContext(string cls, long courseId, string fromFolder) =>
+        new(S(data["base"]), courseId, id => LocalOf(cls, id) is { } p ? CanvasMarkdown.RelativeLink(fromFolder, p) : null);
+
+    /// <summary>Where a Canvas file id has already landed, inside the class's folder ("Canvas/assignments/Lab 1/files/x.pdf"), or null.</summary>
+    string? LocalOf(string cls, long fileId) => S(Manifest[$"fileloc:{cls}:{fileId}"]) is { Length: > 0 } p ? p : null;
+
+    /// <summary>Ask for the metadata of any linked file this class doesn't already have a copy of.</summary>
+    void QueueFileLinks(string cls, IEnumerable<CanvasFileLink> links, string destDir, string owner = "", string ownerId = "")
+    {
+        foreach (var link in links)
+            if (LocalOf(cls, link.FileId) is null)
+                Add(link.ApiUrl, "json", owner.Length > 0 ? Tag("file_meta", cls, ("dir", destDir), ("owner", owner), ("ownerId", ownerId)) : Tag("file_meta", cls, ("dir", destDir)));
+    }
+
+    /// <summary>A file wanted for an assignment's instructions is remembered on that assignment too (so
+    /// <see cref="Forget"/> notices if it never arrives).</summary>
+    void Attach(string cls, JsonObject tag, FileRef f)
+    {
+        if (S(tag["owner"]) != "assignment" || !long.TryParse(S(tag["ownerId"]), out long id)) return;
+        var index = Staged(cls);
+        (index.Assignments.FirstOrDefault(x => x.Id == id) ?? index.Staged?.Assignments.GetValueOrDefault(id))?.InstructionFiles.Add(f);
     }
 
     static string Num(double? d) => (d ?? 0).ToString("0.##", CultureInfo.InvariantCulture);
@@ -671,7 +737,12 @@ public sealed partial class Crawl
             string? dir = a is not null ? AssignmentDir(cls, a)
                 : S(Manifest[$"asgdir:{cls}:{id}"]) is { Length: > 0 } known ? Path.Combine(classDir(cls), known) : null;
             index.Staged!.Submissions[id] = Submission(cls, s, dir);
-            if (a is not null && dir is not null && Assignments.Published(a)) index.Staged.Assignments[id] = AssignmentInfo.From(a, Rel(cls, dir));
+            if (a is not null && dir is not null && Assignments.Published(a))
+            {
+                var (info, files) = AssignmentInfo.From(a, Rel(cls, dir), BuildContext(cls, index.CourseId, Rel(cls, dir)));
+                index.Staged.Assignments[id] = info;
+                QueueFileLinks(cls, files, Path.Combine(dir, "files"), "assignment", Num(info.Id));
+            }
         }
     }
 
@@ -754,17 +825,35 @@ public sealed partial class Crawl
         };
     }
 
-    /// <summary>Queue a file's bytes into <paramref name="destDir"/>, unless this version is already there, and say
-    /// where it goes (or why it won't).</summary>
+    /// <summary>One copy per Canvas file id: the first place a file was wanted is remembered
+    /// (<c>fileloc:{class}:{fileId}</c>, stable across syncs), so a later want for the same id (a module, the Files
+    /// area, a link in a page) points at that copy instead of downloading it again. A different file wanting a path
+    /// already taken gets "name (2).ext".</summary>
+    string ClaimedPath(string cls, long fileId, string destDir, string name)
+    {
+        string locKey = $"fileloc:{cls}:{fileId}";
+        if (S(Manifest[locKey]) is { Length: > 0 } known) return Path.Combine(classDir(cls), known.Replace('/', Path.DirectorySeparatorChar));
+        var taken = Manifest.Where(kv => kv.Key.StartsWith("fileloc:" + cls + ":", StringComparison.Ordinal)).Select(kv => S(kv.Value)).ToHashSet(StringComparer.Ordinal);
+        string ext = Path.GetExtension(name), stem = Path.GetFileNameWithoutExtension(name), path = Path.Combine(destDir, name);
+        for (int i = 2; taken.Contains(Rel(cls, path)); i++) path = Path.Combine(destDir, $"{stem} ({i}){ext}");
+        Manifest[locKey] = Rel(cls, path);
+        return path;
+    }
+
+    /// <summary>Queue a file's bytes into <paramref name="destDir"/> (or wherever it already landed, for the same
+    /// Canvas file id), unless this version is already there or already asked for, and say where it goes (or why it
+    /// won't).</summary>
     FileRef WantFile(string cls, JsonObject meta, string destDir, string? name = null)
     {
         var f = Describe(meta);
         if (f.Skipped is not null) return f;
-        string path = Path.Combine(destDir, SafeName(name ?? f.Name));
+        string path = ClaimedPath(cls, f.Id, destDir, SafeName(name ?? f.Name));
         f.Local = Rel(cls, path);
-        string key = $"file:{Num(D(meta["id"]))}:{Path.GetRelativePath(classDir(cls), path)}";
-        if (S(Manifest[key]) == S(meta["updated_at"]) && File.Exists(path)) return f;
-        Add(S(meta["url"]), "bytes", Tag("file_bytes", cls, ("path", path), ("key", key), ("updated", S(meta["updated_at"]))));
+        string key = $"file:{f.Id}:{Rel(cls, path)}", updated = S(meta["updated_at"]);
+        string have = S(Manifest[key]);
+        if (have == updated || have == "queued:" + updated) return f; // already have it, or someone else already asked
+        Manifest[key] = "queued:" + updated;
+        Add(S(meta["url"]), "bytes", Tag("file_bytes", cls, ("path", path), ("key", key), ("updated", updated)));
         return f;
     }
 
@@ -798,6 +887,8 @@ public sealed partial class Crawl
                     case "Page":
                         Add(S(it["url"]), "json", Tag("page", cls, ("dir", folder)));
                         outline.Append(indent).Append($"- [{title}]({Link(SafeName(title) + ".md")})\n");
+                        if (S(it["page_url"]) is { Length: > 0 } slug)
+                            (modulePageSlugs.TryGetValue(cls, out var known) ? known : modulePageSlugs[cls] = []).Add(slug);
                         break;
                     case "ExternalUrl" or "ExternalTool":
                         outline.Append(indent).Append($"- [{title}]({(S(it["external_url"]) is { Length: > 0 } ext ? ext : S(it["html_url"]))}) (link)\n");
@@ -827,5 +918,115 @@ public sealed partial class Crawl
             sb.Append("## ").Append(S(a["title"])).Append("\n_").Append(CanvasMarkdown.When(S(a["posted_at"]), zone())).Append(" · ")
                 .Append(S(a["author"]?["display_name"])).Append("_\n\n").Append(HtmlText.ToMarkdown(S(a["message"]))).Append("\n\n");
         Write(cls, Path.Combine(CanvasDir(cls), "announcements.md"), sb.ToString().TrimEnd() + "\n");
+    }
+
+    // --- the syllabus, pages outside modules, and the front page: rendered when the sync finishes, from what's
+    // staged here, so their file links can point at where a file really landed (FinishPages). -----------------------
+
+    static string? Opt(JsonNode? v) => S(v) is { Length: > 0 } s ? s : null;
+
+    void Course(string cls, JsonObject c)
+    {
+        var index = Staged(cls);
+        index.Code = S(c["course_code"]);
+        index.Name = S(c["name"]);
+        index.Term = S(c["term"]?["name"]);
+        index.HtmlUrl = S(c["html_url"]);
+        if (S(c["syllabus_body"]) is not { Length: > 0 } syllabus) return;
+        string root = Rel(cls, CanvasDir(cls));
+        var (md, links) = HtmlText.Convert(syllabus, BuildContext(cls, index.CourseId, root));
+        QueueFileLinks(cls, links, Path.Combine(CanvasDir(cls), "pages", "files"));
+        pendingSyllabus[cls] = new PendingPage("", md, CanvasDir(cls), S(c["html_url"]), null);
+    }
+
+    void PagesListing(string cls, JsonArray list)
+    {
+        string canvasUrl = S(data["base"]);
+        long id = Staged(cls).CourseId;
+        var known = modulePageSlugs.GetValueOrDefault(cls) ?? [];
+        foreach (var p in list.OfType<JsonObject>())
+        {
+            string slug = S(p["url"]);
+            if (slug.Length == 0 || known.Contains(slug) || Flag(p["front_page"])) continue; // a module's own page, or handled by front_page
+            Add($"{canvasUrl}/api/v1/courses/{id}/pages/{slug}", "json", Tag("outside_page", cls, ("slug", slug)));
+        }
+    }
+
+    static void Upsert(List<PageInfo> list, string slug, PageInfo info)
+    {
+        int at = list.FindIndex(x => x.Url == slug);
+        if (at >= 0) list[at] = info;
+        else list.Add(info);
+    }
+
+    void OutsidePage(string cls, JsonObject page, string slug)
+    {
+        string title = Py.Strip(S(page["title"])) is { Length: > 0 } t ? t : "untitled";
+        string htmlUrl = S(page["html_url"]);
+        string? updated = Opt(page["updated_at"]);
+        if (Flag(page["locked_for_user"]))
+        {
+            Upsert(Staged(cls).Pages, slug, new PageInfo { Title = title, Url = slug, HtmlUrl = htmlUrl, UpdatedAt = updated, Locked = true });
+            return;
+        }
+        string dir = Path.Combine(CanvasDir(cls), "pages");
+        var (md, links) = HtmlText.Convert(S(page["body"]), BuildContext(cls, Staged(cls).CourseId, Rel(cls, dir)));
+        QueueFileLinks(cls, links, Path.Combine(dir, "files"));
+        (pendingPages.TryGetValue(cls, out var mine) ? mine : pendingPages[cls] = [])[slug] = new PendingPage(title, md, dir, htmlUrl, updated);
+        Upsert(Staged(cls).Pages, slug, new PageInfo { Title = title, Url = slug, HtmlUrl = htmlUrl, UpdatedAt = updated });
+    }
+
+    void FrontPage(string cls, JsonObject page)
+    {
+        string slug = S(page["url"]), title = Py.Strip(S(page["title"])) is { Length: > 0 } t ? t : "Front page";
+        string htmlUrl = S(page["html_url"]);
+        string? updated = Opt(page["updated_at"]);
+        if (Flag(page["locked_for_user"]))
+        {
+            Staged(cls).FrontPage = new PageInfo { Title = title, Url = slug, HtmlUrl = htmlUrl, UpdatedAt = updated, Locked = true, FrontPage = true };
+            return;
+        }
+        string dir = Path.Combine(CanvasDir(cls), "pages");
+        var (md, links) = HtmlText.Convert(S(page["body"]), BuildContext(cls, Staged(cls).CourseId, Rel(cls, dir)));
+        QueueFileLinks(cls, links, Path.Combine(dir, "files"));
+        pendingFrontPage[cls] = new PendingPage(title, md, dir, htmlUrl, updated);
+        Staged(cls).FrontPage = new PageInfo { Title = title, Url = slug, HtmlUrl = htmlUrl, UpdatedAt = updated, FrontPage = true };
+    }
+
+    string WritePageFile(string cls, PendingPage p, Func<long, string?> local)
+    {
+        string body = HtmlText.ResolveLinks(p.Body, local);
+        string text = $"# {p.Title}\n\n_From Canvas ({p.HtmlUrl}), updated {CanvasMarkdown.When(p.UpdatedAt, zone())}._\n\n{body}\n";
+        string path = Path.Combine(p.Dir, SafeName(p.Title) + ".md");
+        Write(cls, path, text);
+        return path;
+    }
+
+    /// <summary>Write the syllabus, the pages outside modules and the front page (whatever this sync staged for the
+    /// class), now that every file it wanted has either landed or failed to. Called before a class's index is saved,
+    /// so <see cref="CourseIndex.Syllabus"/>, <see cref="CourseIndex.Pages"/> and <see cref="CourseIndex.FrontPage"/>
+    /// hold where each one really went. Also fixes up any Canvas-file link an assignment's instructions still point
+    /// at Canvas for, now that the file it names may have finished downloading.</summary>
+    void FinishPages(string cls, CourseIndex index)
+    {
+        string pagesRoot = Rel(cls, Path.Combine(CanvasDir(cls), "pages")), classRoot = Rel(cls, CanvasDir(cls));
+        Func<long, string?> LocalIn(string fromFolder) => id => LocalOf(cls, id) is { } p ? CanvasMarkdown.RelativeLink(fromFolder, p) : null;
+
+        if (pendingSyllabus.Remove(cls, out var syllabus))
+        {
+            string body = HtmlText.ResolveLinks(syllabus.Body, LocalIn(classRoot));
+            Write(cls, Path.Combine(CanvasDir(cls), "syllabus.md"), $"# {cls}: syllabus\n\n_From Canvas ({syllabus.HtmlUrl})._\n\n{body}\n");
+            index.Syllabus = Rel(cls, Path.Combine(CanvasDir(cls), "syllabus.md"));
+        }
+        if (pendingFrontPage.Remove(cls, out var front) && index.FrontPage is not null)
+            index.FrontPage.Local = Rel(cls, WritePageFile(cls, front, LocalIn(pagesRoot)));
+        if (pendingPages.Remove(cls, out var pages))
+            foreach (var (slug, p) in pages)
+                if (index.Pages.FirstOrDefault(x => x.Url == slug) is { } info)
+                    info.Local = Rel(cls, WritePageFile(cls, p, LocalIn(pagesRoot)));
+
+        foreach (var a in index.Assignments)
+            if (a.Instructions.Length > 0)
+                a.Instructions = HtmlText.ResolveLinks(a.Instructions, LocalIn(a.Folder));
     }
 }

@@ -30,7 +30,7 @@ public class CanvasAssignmentTests
     [InlineData("""{"points_possible":20,"submission":{"workflow_state":"graded","score":17,"submitted_at":"2025-09-12T15:20:00Z","late":true}}""", "graded", "Submitted late", "17/20")]
     public void An_assignment_s_status_label_and_mark_read_like_the_design(string json, string status, string label, string mark)
     {
-        var info = AssignmentInfo.From(A(json), "");
+        var (info, _) = AssignmentInfo.From(A(json), "", HtmlContext.None);
         var row = Assignments.From("CS 101", info, FakeCanvas.DesignNow, FakeCanvas.Zone);
         Assert.Equal(status, row.Status);
         Assert.Equal(status, Assignments.StatusOf(A(json), FakeCanvas.DesignNow));
