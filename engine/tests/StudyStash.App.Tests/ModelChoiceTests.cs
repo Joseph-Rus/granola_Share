@@ -173,6 +173,14 @@ public class ModelChoiceTests
     }
 
     [Fact]
+    public void Setup_says_the_size_the_way_the_design_does()
+    {
+        Assert.Equal("3 GB", Setup.About(WhisperModels.LargeV3.Bytes));
+        Assert.Equal("1.6 GB", Setup.About(WhisperModels.LargeV3Turbo.Bytes));
+        Assert.Equal("574 MB", Setup.About(WhisperModels.LargeV3TurboSmall.Bytes));
+    }
+
+    [Fact]
     public void A_download_that_stopped_tries_again_less_and_less_often()
     {
         Assert.Equal([30, 60, 120, 300, 300, 300], Enumerable.Range(0, 6).Select(n => AppHost.RetryAfter(n).TotalSeconds));

@@ -29,7 +29,7 @@ public static class Setup
         m.Address = cc.ServerUrl;
         m.LibraryName = $"{Person()}'s library";
         m.ModelName = host.Model.Name;
-        m.ModelSize = host.Model.Size.Replace(".0 ", " ");
+        m.ModelSize = About(host.Model.Bytes);
         if (cc.ServerUrl.Length > 0 && host.Library == LibraryState.Connected)
         {
             m.LibraryOk = true;
@@ -85,6 +85,9 @@ public static class Setup
             m.ModelLeft = d.Left() ?? "";
         }
     }
+
+    /// <summary>A model's size for "The model is about 3 GB": whole gigabytes for the big ones, as the design says it.</summary>
+    public static string About(long bytes) => bytes >= 2_500_000_000 ? $"{Math.Round(bytes / 1e9)} GB" : WhisperModel.SizeOf(bytes);
 
     static async Task ConnectAsync(SetupModel m, AppHost host)
     {
