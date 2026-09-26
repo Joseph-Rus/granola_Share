@@ -17,7 +17,9 @@ public interface ILibrarySource
     Task<JsonObject> SearchAsync(string query, string? className, int limit);
 
     /// <summary>Canvas, read through the Chrome extension: the linked courses ("courses"), a read ("fetch": url,
-    /// kind, save_to), or the assignments ("assignments": class, days). Libraries without Canvas say so.</summary>
+    /// kind, save_to), the assignments ("assignments": class, days), one assignment's whole detail ("assignment":
+    /// class, id or name), a class's modules ("modules": class), its files ("files": class) or its announcements
+    /// ("announcements": class, limit). Libraries without Canvas say so.</summary>
     bool HasCanvas => false;
 
     /// <summary>Files that aren't lectures, and readable folders' files, matching a search ([] where unsupported).</summary>
@@ -35,22 +37,55 @@ public sealed class LocalLibrary(LibraryReader reader, Canvas.CanvasSync? canvas
 
     public bool HasCanvas => canvas is not null;
 
+    static JsonObject CanvasErr(string msg) => new() { ["error"] = msg };
+
     public async Task<JsonNode> CanvasAsync(string what, JsonObject? body = null)
     {
         if (canvas is null) return new JsonObject { ["error"] = "This library can't read Canvas." };
         static string S(JsonNode? n) => n is JsonValue v && v.TryGetValue(out string? s) ? s ?? "" : "";
+        string? cls = S(body?["class"]) is { Length: > 0 } c ? c : null;
         switch (what)
         {
             case "courses": return canvas.Courses();
             case "fetch": return await canvas.FetchAsync(S(body?["url"]), S(body?["kind"]) is { Length: > 0 } k ? k : "json", S(body?["save_to"]));
-            default:
+            case "assignment":
+            {
+                if (cls is null) return CanvasErr("Give a class name.");
+                var index = Canvas.CourseIndex.Load(home ?? "", cls);
+                if (index is null) return CanvasErr($"{cls} hasn't synced with Canvas yet.");
+                long? id = body?["id"] is JsonValue idv && idv.TryGetValue(out long idl) ? idl : null;
+                string name = S(body?["name"]);
+                if (id is null && name.Length > 0)
+                {
+                    var matches = index.Assignments.Where(a => a.Name.Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (matches.Count == 0) return CanvasErr($"No assignment in {cls} matches \"{name}\".");
+                    if (matches.Count > 1)
+                        return new JsonObject { ["candidates"] = new JsonArray(matches.Select(m => (JsonNode)new JsonObject { ["id"] = m.Id, ["name"] = m.Name }).ToArray()) };
+                    id = matches[0].Id;
+                }
+                if (id is null) return CanvasErr("Give an assignment id or words of its name.");
+                var found = Canvas.CanvasView.Assignment(index, id.Value, canvas.Clock(), canvas.Crawl.AssignmentFolder(cls, id.Value));
+                return found is null ? CanvasErr($"No assignment {id} in {cls}.") : found;
+            }
+            case "modules":
+                return cls is null ? CanvasErr("Give a class name.") : Canvas.CanvasView.Modules(Canvas.CourseIndex.Load(home ?? "", cls));
+            case "files":
+                return cls is null ? CanvasErr("Give a class name.") : Canvas.CanvasView.Files(Canvas.CourseIndex.Load(home ?? "", cls));
+            case "announcements":
+            {
+                if (cls is null) return CanvasErr("Give a class name.");
+                var result = Canvas.CanvasView.Announcements(Canvas.CourseIndex.Load(home ?? "", cls), Canvas.CanvasSeen.For(home ?? "", cls));
+                if (body?["limit"] is JsonValue lv && lv.TryGetValue(out int limit) && result["items"] is JsonArray items)
+                    while (items.Count > limit) items.RemoveAt(items.Count - 1);
+                return result;
+            }
+            default: // "assignments": what's still due, everywhere or in one class
                 var all = Canvas.Assignments.Load(home ?? "");
-                string? cls = S(body?["class"]) is { Length: > 0 } c ? c : null;
                 var list = Canvas.Assignments.Upcoming(all, DateTime.Now, body?["days"] is JsonValue d && d.TryGetValue(out int n) ? n : 14, cls);
                 return new JsonArray(list.Select(a => (JsonNode)new JsonObject
                 {
                     ["class"] = a.ClassName, ["name"] = a.Name, ["due"] = a.Due, ["status"] = a.Status, ["points"] = a.Points,
-                    ["folder"] = canvas.Crawl.AssignmentFolder(a.ClassName, a.Id), ["url"] = a.Url,
+                    ["label"] = Canvas.Assignments.Label(a.Status, a.Late), ["folder"] = canvas.Crawl.AssignmentFolder(a.ClassName, a.Id), ["url"] = a.Url,
                 }).ToArray());
         }
     }
@@ -138,17 +173,53 @@ public sealed class RemoteLibrary(string serverUrl, string key, HttpClient? http
         }
     }
 
+    static JsonObject CanvasErr(string msg) => new() { ["error"] = msg };
+    const string OlderLibrary = "The library runs an older Study Stash, without this.";
+
+    static string S(JsonNode? n) => n is JsonValue v && v.TryGetValue(out string? s) ? s ?? "" : "";
+
     public async Task<JsonNode> CanvasAsync(string what, JsonObject? body = null)
     {
+        string? cls = S(body?["class"]) is { Length: > 0 } c ? c : null;
         try
         {
-            return what switch
+            switch (what)
             {
-                "courses" => await SendAsync(HttpMethod.Get, "/canvas/agent-courses"),
-                "fetch" => await SendAsync(HttpMethod.Post, "/canvas/fetch", body),
-                _ => await SendAsync(HttpMethod.Get, $"/assignments?days={(body?["days"] is JsonValue d && d.TryGetValue(out int n) ? n : 14)}"
-                    + (body?["class"] is JsonValue c && c.TryGetValue(out string? cls) && cls is { Length: > 0 } ? "&class=" + Q(cls) : "")),
-            } ?? new JsonObject { ["error"] = "The library runs an older Study Stash, without Canvas." };
+                case "courses": return await SendAsync(HttpMethod.Get, "/canvas/agent-courses") ?? CanvasErr("The library runs an older Study Stash, without Canvas.");
+                case "fetch": return await SendAsync(HttpMethod.Post, "/canvas/fetch", body) ?? CanvasErr("The library runs an older Study Stash, without Canvas.");
+                case "assignment":
+                {
+                    if (cls is null) return CanvasErr("Give a class name.");
+                    long? id = body?["id"] is JsonValue idv && idv.TryGetValue(out long idl) ? idl : null;
+                    string name = S(body?["name"]);
+                    if (id is null && name.Length > 0)
+                    {
+                        var listAll = await SendAsync(HttpMethod.Get, $"/assignments?class={Q(cls)}") as JsonArray ?? [];
+                        var matches = listAll.OfType<JsonObject>().Where(o => S(o["name"]).Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (matches.Count == 0) return CanvasErr($"No assignment in {cls} matches \"{name}\".");
+                        if (matches.Count > 1)
+                            return new JsonObject { ["candidates"] = new JsonArray(matches.Select(m => (JsonNode)new JsonObject { ["id"] = m["id"]!.DeepClone(), ["name"] = m["name"]!.DeepClone() }).ToArray()) };
+                        id = matches[0]["id"]!.GetValue<long>();
+                    }
+                    if (id is null) return CanvasErr("Give an assignment id or words of its name.");
+                    return await SendAsync(HttpMethod.Get, $"/canvas/assignment?class={Q(cls)}&id={id}") ?? CanvasErr(OlderLibrary);
+                }
+                case "modules":
+                    return cls is null ? CanvasErr("Give a class name.") : await SendAsync(HttpMethod.Get, $"/canvas/modules?class={Q(cls)}") ?? CanvasErr(OlderLibrary);
+                case "files":
+                    return cls is null ? CanvasErr("Give a class name.") : await SendAsync(HttpMethod.Get, $"/canvas/files?class={Q(cls)}") ?? CanvasErr(OlderLibrary);
+                case "announcements":
+                {
+                    if (cls is null) return CanvasErr("Give a class name.");
+                    if (await SendAsync(HttpMethod.Get, $"/canvas/announcements?class={Q(cls)}") is not JsonObject result) return CanvasErr(OlderLibrary);
+                    if (body?["limit"] is JsonValue lv && lv.TryGetValue(out int limit) && result["items"] is JsonArray items)
+                        while (items.Count > limit) items.RemoveAt(items.Count - 1);
+                    return result;
+                }
+                default:
+                    return await SendAsync(HttpMethod.Get, $"/assignments?days={(body?["days"] is JsonValue d && d.TryGetValue(out int n) ? n : 14)}"
+                        + (cls is null ? "" : "&class=" + Q(cls))) ?? CanvasErr("The library runs an older Study Stash, without Canvas.");
+            }
         }
         catch (LibraryRefusedException e)
         {
@@ -216,7 +287,9 @@ public static class ClaudeTools
         "Study Stash is the user's own lecture library: lectures they recorded, transcribed on their laptop, with notes "
         + "written from each transcript. Search it before answering anything about their classes, lectures, exams or "
         + "assignments, and say which lecture (and the time in it) an answer comes from. Lecture ids look like rec-... "
-        + "or a long hex string; pass them to get_lecture and get_transcript.";
+        + "or a long hex string; pass them to get_lecture and get_transcript. When Canvas is linked, due_assignments, "
+        + "get_assignment, class_modules, class_files and class_announcements read what Study Stash already mirrors from "
+        + "Canvas; canvas_api, canvas_page and canvas_download read Canvas directly and never other students' data.";
 
     static string Day(string? date)
     {
@@ -351,6 +424,176 @@ public static class ClaudeTools
         return r.ToJsonString();
     }
 
+    static string Num(JsonNode? n) => n is JsonValue v && v.TryGetValue(out double d) ? d.ToString("0.##", CultureInfo.InvariantCulture) : "";
+
+    static bool Bool(JsonNode? n) => n is JsonValue v && v.TryGetValue(out bool b) && b;
+
+    static string FileLine(JsonObject f)
+    {
+        string name = S(f["name"]);
+        string size = f["size"] is JsonValue sv && sv.TryGetValue(out long bytes) && bytes > 0 ? $" ({Canvas.CanvasMarkdown.Size(bytes)})" : "";
+        string local = S(f["local"]), skipped = S(f["skipped"]), url = S(f["url"]);
+        if (local.Length > 0) return $"- {name}{size}: {local}";
+        if (skipped.Length > 0) return $"- {name}{size}: not saved ({skipped})" + (url.Length > 0 ? " — " + url : "");
+        return $"- {name}{size}" + (url.Length > 0 ? ": " + url : "");
+    }
+
+    static string RubricLine(JsonObject c)
+    {
+        string crit = S(c["criterion"]), max = Num(c["points"]);
+        if (c["mark"] is not JsonObject mark) return $"- {crit}: not yet marked ({max} pts)";
+        string comment = S(mark["comment"]);
+        return $"- {crit}: {Num(mark["points"])} / {max}" + (comment.Length > 0 ? " · " + comment : "");
+    }
+
+    /// <summary>The Due list, grouped and labelled the way the app shows it: overdue first, then everything else
+    /// with a due date, then work with none.</summary>
+    public static async Task<string> DueAssignmentsAsync(ILibrarySource lib, string? className, int days)
+    {
+        var r = await lib.CanvasAsync("assignments", new JsonObject { ["class"] = className, ["days"] = days });
+        if (r is JsonObject err && err["error"] is not null) return "Couldn't: " + S(err["error"]);
+        var items = (r as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (items.Count == 0) return className is null ? "Nothing due." : $"Nothing due in {className}.";
+        var overdue = items.Where(o => S(o["status"]) is "past due" or "missing").ToList();
+        var soon = items.Where(o => !overdue.Contains(o) && S(o["due"]).Length > 0).ToList();
+        var undated = items.Where(o => !overdue.Contains(o) && S(o["due"]).Length == 0).ToList();
+        string Row(JsonObject o)
+        {
+            string due = S(o["due"]), pts = Num(o["points"]), folder = S(o["folder"]);
+            return $"- {S(o["class"])} · {S(o["name"])} · {S(o["label"])}"
+                + (due.Length > 0 ? " · due " + Canvas.Assignments.Say(due, DateTime.Now) : "")
+                + (pts.Length > 0 ? $" · {pts} pts" : "") + (folder.Length > 0 ? $" · {folder}" : "");
+        }
+        var sb = new StringBuilder();
+        void Section(string label, List<JsonObject> list)
+        {
+            if (list.Count == 0) return;
+            sb.Append(label).Append(":\n").Append(string.Join("\n", list.Select(Row))).Append("\n\n");
+        }
+        Section("Overdue", overdue);
+        Section("Due soon", soon);
+        Section("No due date", undated);
+        return sb.ToString().TrimEnd();
+    }
+
+    static string FormatAssignment(JsonObject a)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"# {S(a["name"])} — {S(a["class"])}\n\n");
+        string due = S(a["due_at"]).Length > 0 ? Canvas.CanvasMarkdown.When(S(a["due_at"]), TimeZoneInfo.Local) : "";
+        sb.Append("Due: ").Append(due.Length > 0 ? due : "No due date").Append('\n');
+        string pts = Num(a["points"]);
+        if (pts.Length > 0) sb.Append("Points: ").Append(pts).Append('\n');
+        sb.Append("Status: ").Append(S(a["label"]));
+        if (S(a["score_text"]) is { Length: > 0 } score) sb.Append(" · ").Append(score);
+        sb.Append('\n');
+        if (a["submission"] is JsonObject subm && S(subm["submitted_at"]) is { Length: > 0 } submittedAt)
+            sb.Append("Submitted: ").Append(Canvas.CanvasMarkdown.When(submittedAt, TimeZoneInfo.Local)).Append('\n');
+        if (S(a["instructions"]) is { Length: > 0 } instructions)
+            sb.Append("\nInstructions:\n").Append(Py.Head(instructions, 4000).Trim()).Append('\n');
+        var files = (a["files"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (files.Count > 0) sb.Append("\nFiles:\n").Append(string.Join("\n", files.Select(FileLine))).Append('\n');
+        var rubric = (a["rubric"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (rubric.Count > 0) sb.Append("\nRubric:\n").Append(string.Join("\n", rubric.Select(RubricLine))).Append('\n');
+        if (a["submission"] is JsonObject sub2 && (sub2["files"] as JsonArray ?? []).OfType<JsonObject>().ToList() is { Count: > 0 } subFiles)
+            sb.Append("\nSubmission:\n").Append(string.Join("\n", subFiles.Select(FileLine))).Append('\n');
+        var comments = (a["comments"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (comments.Count > 0)
+        {
+            sb.Append("\nComments:\n");
+            foreach (var c in comments)
+            {
+                string at = S(c["at"]);
+                sb.Append($"- {S(c["author"])}").Append(at.Length > 0 ? $" ({Canvas.CanvasMarkdown.When(at, TimeZoneInfo.Local)})" : "").Append(": ").Append(S(c["text"])).Append('\n');
+            }
+        }
+        if (S(a["spec"]) is { Length: > 0 } spec) sb.Append("\nSpec: ").Append(spec).Append('\n');
+        if (S(a["feedback"]) is { Length: > 0 } feedback) sb.Append("Feedback: ").Append(feedback).Append('\n');
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>One assignment's whole story: instructions, rubric with marks and comments, submission and files,
+    /// grader comments with author and date. <paramref name="assignment"/> is its id, or words of its name (several
+    /// matches are listed instead).</summary>
+    public static async Task<string> GetAssignmentAsync(ILibrarySource lib, string class_name, string assignment)
+    {
+        var body = new JsonObject { ["class"] = class_name };
+        if (long.TryParse(assignment, out long id)) body["id"] = id; else body["name"] = assignment;
+        var r = await lib.CanvasAsync("assignment", body);
+        if (r is not JsonObject o) return "Couldn't read that assignment.";
+        if (o["error"] is not null) return "Couldn't: " + S(o["error"]);
+        if (o["candidates"] is JsonArray cands)
+            return "Several assignments match: " + string.Join("; ", cands.OfType<JsonObject>().Select(c => $"{S(c["name"])} (id {c["id"]})"));
+        return FormatAssignment(o);
+    }
+
+    static string FormatModules(JsonObject m)
+    {
+        var modules = (m["modules"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (modules.Count == 0) return "No modules.";
+        var sb = new StringBuilder();
+        foreach (var mod in modules)
+        {
+            sb.Append("## ").Append(S(mod["name"])).Append('\n');
+            foreach (var it in (mod["items"] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                string kind = S(it["kind"]), source = S(it["source"]);
+                string extra = kind == "file" && S(it["format"]) is { Length: > 0 } fmt ? $" ({fmt})"
+                    : kind == "link" ? source.Length > 0 ? $" (saved from {char.ToUpperInvariant(source[0])}{source[1..]})" : Bool(it["saved"]) ? " (saved)" : " (link)"
+                    : "";
+                sb.Append("- ").Append(S(it["title"])).Append(extra).Append(Bool(it["locked"]) ? " · locked" : "").Append('\n');
+            }
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    public static async Task<string> ClassModulesAsync(ILibrarySource lib, string class_name)
+    {
+        var r = await lib.CanvasAsync("modules", new JsonObject { ["class"] = class_name });
+        if (r is JsonObject err && err["error"] is not null) return "Couldn't: " + S(err["error"]);
+        return r is JsonObject m ? FormatModules(m) : "Couldn't read this class's modules.";
+    }
+
+    static string FileRow(JsonObject f)
+    {
+        string folder = S(f["folder"]);
+        string name = (folder.Length > 0 ? folder + "/" : "") + S(f["name"]);
+        string size = f["size"] is JsonValue sv && sv.TryGetValue(out long bytes) && bytes > 0 ? $" ({Canvas.CanvasMarkdown.Size(bytes)})" : "";
+        string local = S(f["local"]);
+        return $"- {name}{size}" + (local.Length > 0 ? $": {local}" : "");
+    }
+
+    /// <summary>The class's Files area, with its own words when Canvas hides it from the student.</summary>
+    public static async Task<string> ClassFilesAsync(ILibrarySource lib, string class_name)
+    {
+        var r = await lib.CanvasAsync("files", new JsonObject { ["class"] = class_name });
+        if (r is JsonObject err && err["error"] is not null) return "Couldn't: " + S(err["error"]);
+        if (r is not JsonObject f) return "Couldn't read this class's files.";
+        bool allowed = f["allowed"] is not JsonValue av || !av.TryGetValue(out bool a) || a;
+        var files = (f["files"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        string header = allowed ? "" : "Canvas hides this class's Files area from the student; showing what's known from modules and links.\n";
+        if (files.Count == 0) return header.Length > 0 ? header.TrimEnd() : "No files.";
+        return header + string.Join("\n", files.Select(FileRow));
+    }
+
+    /// <summary>A class's announcements, newest first, with bodies cut short.</summary>
+    public static async Task<string> ClassAnnouncementsAsync(ILibrarySource lib, string class_name, int limit)
+    {
+        var r = await lib.CanvasAsync("announcements", new JsonObject { ["class"] = class_name, ["limit"] = Math.Clamp(limit, 1, 30) });
+        if (r is JsonObject err && err["error"] is not null) return "Couldn't: " + S(err["error"]);
+        if (r is not JsonObject a) return "Couldn't read this class's announcements.";
+        var items = (a["items"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        if (items.Count == 0) return "No announcements.";
+        var sb = new StringBuilder();
+        foreach (var it in items)
+        {
+            string when = Canvas.CanvasMarkdown.When(S(it["posted_at"]), TimeZoneInfo.Local);
+            sb.Append($"- {S(it["title"])} — {S(it["author"])}, {when}").Append(Bool(it["new"]) ? " (new)" : "").Append('\n');
+            if (S(it["body"]) is { Length: > 0 } body) sb.Append("  ").Append(Py.Head(body, 300).ReplaceLineEndings(" ").Trim()).Append('\n');
+        }
+        return sb.ToString().TrimEnd();
+    }
+
     public static List<McpServerTool> Tools(ILibrarySource lib)
     {
         static McpServerToolCreateOptions Named(string name, string title, string description, bool readOnly = true) =>
@@ -395,19 +638,39 @@ public static class ClaudeTools
                 McpServerTool.Create(
                     ([Description("Only this class. Leave out for every class.")] string? class_name = null,
                      [Description("Due within this many days (overdue ones are included).")] int days = 14) =>
-                        CanvasText(lib, "assignments", new JsonObject { ["class"] = class_name, ["days"] = days }),
-                    Named("due_assignments", "What's due", "Canvas assignments still to hand in, soonest first: class, name, due date, status, "
-                        + "and the folder in the class with its instructions (spec.md) and any feedback (feedback.md).")),
+                        DueAssignmentsAsync(lib, class_name, days),
+                    Named("due_assignments", "What's due", "Canvas assignments still to hand in, grouped (Overdue, Due soon, No due date) and "
+                        + "labelled the way the app shows them, soonest first: class, name, status, due date, points, and the folder in the "
+                        + "class with its instructions (spec.md) and any feedback (feedback.md).")),
                 McpServerTool.Create(() => CanvasText(lib, "courses"),
                     Named("canvas_courses", "Canvas courses", "The classes linked to Canvas: each one's Canvas course id, and whether a "
                         + "course recipe (Canvas/canvas-recipe.md: where this instructor puts things) has been written.")),
+                McpServerTool.Create(
+                    ([Description("A class from list_classes.")] string class_name,
+                     [Description("The assignment's id, or words of its name (\"problem set 4\"). Several matches are listed instead.")] string assignment) =>
+                        GetAssignmentAsync(lib, class_name, assignment),
+                    Named("get_assignment", "Read an assignment", "One assignment's whole story: instructions, points, due date, status, rubric "
+                        + "with your marks and the grader's comments, what you submitted and its files, and the grader's comments with author "
+                        + "and date.")),
+                McpServerTool.Create(([Description("A class from list_classes.")] string class_name) => ClassModulesAsync(lib, class_name),
+                    Named("class_modules", "Read a class's modules", "A class's Canvas modules, in order: each item's kind (file, page, "
+                        + "assignment, quiz, discussion, link, tool) and whether it's saved locally.")),
+                McpServerTool.Create(([Description("A class from list_classes.")] string class_name) => ClassFilesAsync(lib, class_name),
+                    Named("class_files", "Read a class's Files area", "A class's Canvas Files area (folders and files, with sizes and local "
+                        + "paths), or says when Canvas hides it from the student.")),
+                McpServerTool.Create(
+                    ([Description("A class from list_classes.")] string class_name, [Description("How many, newest first (1 to 30).")] int limit = 10) =>
+                        ClassAnnouncementsAsync(lib, class_name, limit),
+                    Named("class_announcements", "Read a class's announcements", "A class's Canvas announcements, newest first, with the "
+                        + "author, date, whether it's new, and the body cut short.")),
                 McpServerTool.Create(
                     ([Description("A Canvas REST API path, like /api/v1/courses/123/modules?include[]=items&per_page=100.")] string path) =>
                         CanvasText(lib, "fetch", new JsonObject { ["url"] = path, ["kind"] = "json" }),
                     Named("canvas_api", "Read Canvas's API", "GET a Canvas REST API path, through the user's own Chrome sign-in (read-only). "
                         + "Returns JSON text; when there's more, next_page is the address to read next. Useful paths: /api/v1/courses/<id>/pages, "
                         + "/api/v1/courses/<id>/front_page, /api/v1/courses/<id>?include[]=syllabus_body, /api/v1/courses/<id>/files, "
-                        + "/api/v1/courses/<id>/discussion_topics.")),
+                        + "/api/v1/courses/<id>/discussion_topics. Refuses paths that would read other people's data (rosters, other "
+                        + "students' posts, conversations).")),
                 McpServerTool.Create(
                     ([Description("A Canvas web page, like /courses/123 or /courses/123/pages/syllabus.")] string url) =>
                         CanvasText(lib, "fetch", new JsonObject { ["url"] = url, ["kind"] = "text" }),

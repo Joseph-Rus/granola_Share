@@ -158,6 +158,29 @@ public sealed partial class CanvasSync
     [GeneratedRegex("<([^>]+)>;\\s*rel=\"next\"")]
     private static partial Regex NextLink();
 
+    /// <summary>Refuses another student's data by path, ignoring the query string (like everything else here): a
+    /// roster (<c>/users</c> except <c>/users/self</c>), <c>/enrollments</c>, <c>/peer_reviews</c>,
+    /// <c>/search/recipients</c>, <c>/conversations</c>, a discussion's <c>entries</c>/<c>view</c>/<c>entry_list</c>,
+    /// or a course's <c>/students</c> (its own <c>/students/submissions</c> — the student's own grades — is fine).</summary>
+    public static bool DeniesOtherPeople(string urlOrPath)
+    {
+        string path = Uri.TryCreate(urlOrPath, UriKind.Absolute, out var uri) ? uri.AbsolutePath : urlOrPath;
+        var segs = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < segs.Length; i++)
+        {
+            string s = segs[i];
+            bool Next(string word) => i + 1 < segs.Length && segs[i + 1].Equals(word, StringComparison.OrdinalIgnoreCase);
+            if (s.Equals("enrollments", StringComparison.OrdinalIgnoreCase) || s.Equals("peer_reviews", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("conversations", StringComparison.OrdinalIgnoreCase)) return true;
+            if (s.Equals("users", StringComparison.OrdinalIgnoreCase) && !Next("self")) return true;
+            if (s.Equals("search", StringComparison.OrdinalIgnoreCase) && Next("recipients")) return true;
+            if (s.Equals("students", StringComparison.OrdinalIgnoreCase) && !Next("submissions")) return true;
+            if (s.Equals("discussion_topics", StringComparison.OrdinalIgnoreCase) && i + 2 < segs.Length
+                && segs[i + 2] is "entries" or "view" or "entry_list") return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Read Canvas for an AI: <c>json</c> (the API, as text), <c>text</c> (a web page as Markdown) or <c>bytes</c>
     /// (a file, saved into a class's folder). <paramref name="saveTo"/> is "Class name/path inside its folder".
@@ -165,6 +188,7 @@ public sealed partial class CanvasSync
     public async Task<JsonObject> FetchAsync(string given, string kind, string saveTo = "", CancellationToken ct = default)
     {
         if (CanvasUrl(given) is not string url) return new JsonObject { ["error"] = "Only Canvas addresses (or /api/v1/... paths) can be read." };
+        if (DeniesOtherPeople(url)) return new JsonObject { ["error"] = "Study Stash doesn't read other people's Canvas data." };
         string? dest = null;
         if (kind == "bytes" && (dest = SavePath(saveTo)) is null)
             return new JsonObject { ["error"] = "save_to must be \"<class>/<path in its folder>\", with a class this library has." };

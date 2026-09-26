@@ -24,21 +24,27 @@ public sealed class Scout(string home, Func<string, string> classDir, AiJobs ai,
         $"""
         AUTO MODE: Study Stash is running you unattended; nobody can answer questions.
         You are the Canvas scout for the class "{cls}" (Canvas course id {courseId}). Your working folder is that class's folder in the
-        user's Study Stash library. Its lectures are the .md files here; Canvas/ is what Study Stash mirrors from Canvas on every
-        sync: assignment specs and the user's submissions and feedback (Canvas/assignments/*/spec.md, feedback.md, submission/),
-        module files and pages (Canvas/modules/NN Module/, outline in Canvas/modules.md) and Canvas/announcements.md. Look at what's there first.
+        user's Study Stash library. Its lectures are the .md files here; Canvas/ is what Study Stash already mirrors on every sync —
+        look at what's there first, and never write over any of it: assignments/*/spec.md, feedback.md, submission/, files/ (instructions,
+        your grade and feedback, what you handed in); modules.md and modules/NN Module/ (the outline, and each module's own files and
+        pages); syllabus.md; pages/*.md and pages/files/ (the syllabus and pages outside modules); files/<folder>/<file> (the course's
+        Files area, when Canvas lets you see it); announcements.md; quizzes/*.md and discussions/*.md (the ungraded ones).
         Your job is everything that mirror misses, because every instructor lays Canvas out differently. With the canvas tools
-        (canvas_api, canvas_page, canvas_download), explore: the course front page (/api/v1/courses/{courseId}/front_page), the syllabus
-        (/api/v1/courses/{courseId}?include[]=syllabus_body), pages not in modules (/api/v1/courses/{courseId}/pages), the Files area
-        (/api/v1/courses/{courseId}/folders and /files, if allowed), discussions with instructions, module items that are external links
-        or tools, and links inside pages (Box, Google Drive, OneDrive, YouTube, zyBooks, GitHub).
+        (canvas_api, canvas_page, canvas_download), explore: links inside pages, announcements and assignment instructions that point
+        outside Canvas (Box, Google Drive, OneDrive, YouTube, zyBooks, GitHub, a course website); module items that are external links
+        or tools your mirror couldn't reach; anything an instructor keeps off Canvas entirely.
         1. Canvas/canvas-recipe.md {(recipeExists ? "exists: follow it, then update it with anything that changed" : "doesn't exist yet: write it")}: a short, specific
            map of where this instructor puts slides, readings, assignment instructions, solutions, grades and announcements; naming
            patterns; what lives outside Canvas (with links) and can't be downloaded; and exactly how to check for new material next time.
-        2. Download course material that isn't here yet (slides, handouts, readings, starter files, study guides) with canvas_download,
+        2. A module item that links outside Canvas (Box, Drive, OneDrive) and isn't saved yet: download it with canvas_download into
+           that module's own folder (Canvas/modules/<the module's folder>/), named exactly after the item's title — an item titled
+           "Tracing worksheet" is saved as "Tracing worksheet.pdf" — that's how the app knows it's been saved and can say "Saved from Box".
+        3. Other course material that isn't here yet (slides, handouts, readings, starter files, study guides) with canvas_download,
            save_to "{cls}/Canvas/files/<the instructor's own folder or module name>/<file>". Skip videos, files already here, and anything over 40 MB.
-        3. Save useful text-only pages (a syllabus or policy page) as Markdown under Canvas/pages/.
-        Don't change the lecture notes, or the files the sync writes (spec.md, feedback.md, Canvas/modules/, modules.md, announcements.md).
+        4. Save a useful text-only page the mirror doesn't already save (a policy page linked from an announcement, say) as Markdown
+           under Canvas/pages/.
+        Never change the lecture notes, or any file the sync writes (everything listed above): write only canvas-recipe.md and new
+        files under Canvas/modules/, Canvas/files/ or Canvas/pages/ that the mirror hasn't already created.
         Finish with up to 8 lines: the recipe in one line, what you downloaded, and what lives outside Canvas.
         """;
 
