@@ -4,22 +4,20 @@
 <dict>
     <key>CFBundleName</key><string>Study Stash</string>
     <key>CFBundleDisplayName</key><string>Study Stash</string>
-    <key>CFBundleIdentifier</key><string>com.granola-share.mac</string>
-    <key>CFBundleExecutable</key><string>Study Stash</string>
+    <key>CFBundleIdentifier</key><string>com.study-stash.app</string>
+    <key>CFBundleExecutable</key><string>StudyStash</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>__VERSION__</string>
     <key>CFBundleVersion</key><string>__VERSION__</string>
-    <key>LSMinimumSystemVersion</key><string>12.0</string>
+    <key>LSMinimumSystemVersion</key><string>__MINOS__</string>
+    <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.education</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Your Granola lectures, in your own library. An independent project, not affiliated with or endorsed by Granola. MIT License.</string>
+    <key>NSHumanReadableCopyright</key><string>MIT License.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Study Stash records your lectures so it can write them down. The recording stays on this computer.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>Study Stash can also record what this computer plays, like a lecture on Zoom.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Study Stash opens your library on your Mac mini.</string>
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <!-- The library is plain http inside your own Tailscale network or home Wi-Fi. Only this key:
-             adding NSAllowsLocalNetworking (or the web-content one) makes macOS ignore it. -->
-        <key>NSAllowsArbitraryLoads</key><true/>
-    </dict>
+    <key>StudyStashRole</key><string>__ROLE__</string>
 </dict>
 </plist>
