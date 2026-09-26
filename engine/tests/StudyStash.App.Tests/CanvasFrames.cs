@@ -198,7 +198,10 @@ public static class CanvasFrames
             Orientation = Orientation.Horizontal, Height = 44, Spacing = 8, Margin = new Thickness(10, 0, 0, 0),
             Children = { Dot("#FF5F57"), Dot("#FEBC2E"), Dot("#28C840") },
         };
-        var nav = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 0, 0), Children = { trafficLights, SidebarBody(selected, mac: true) } };
+        var nav = new DockPanel();
+        DockPanel.SetDock(trafficLights, Dock.Top);
+        nav.Children.Add(trafficLights);
+        nav.Children.Add(SidebarBody(selected, mac: true)); // fills the rest, so its status line docks to the true bottom
         var sidebar = new Border { CornerRadius = new CornerRadius(18), Padding = new Thickness(0, 0, 0, 10), Child = nav };
         sidebar.Bind(Border.BackgroundProperty, sidebar.GetResourceObservable("Glass"));
         var sidebarPad = new Border { Padding = new Thickness(8, 8, 0, 8), Child = sidebar };
