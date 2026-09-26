@@ -66,7 +66,7 @@
     <Style Selector="Button.choice">
       <Setter Property="Theme" Value="{StaticResource Surface}" />
       <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Padding" Value="14,10" />
       <Setter Property="Background" Value="{DynamicResource Card}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardStroke}" />
       <Setter Property="BorderThickness" Value="1" />
@@ -136,7 +136,8 @@
                 <Button Classes="push default" Command="{Binding NextCommand}"><TextBlock Text="{Binding ContinueLabel}" FontSize="14" /></Button>
               </StackPanel>
             </Border>
-            <StackPanel Margin="36,36,36,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="36,30,36,4">
               <TextBlock Text="{Binding StepLabel}" FontSize="12" Foreground="{DynamicResource Fg2}" />
 
           <!-- 1: the microphone -->
@@ -175,7 +176,7 @@
             <TextBlock Text="Where your notes live" FontFamily="{DynamicResource DisplayFont}" FontSize="28" FontWeight="SemiBold" Margin="0,4,0,0" />
             <TextBlock Text="Your library is the computer that writes the notes and keeps them: a Mac mini or a PC at home, or this PC."
                        FontSize="14" LineHeight="21" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left" Margin="0,8,0,0" />
-            <Grid ColumnDefinitions="*,10,*" Margin="0,20,0,0" MaxWidth="440" HorizontalAlignment="Left">
+            <Grid ColumnDefinitions="*,10,*" Margin="0,16,0,0" MaxWidth="440" HorizontalAlignment="Left">
               <Button Classes="choice" Classes.on="{Binding OtherComputer}" Command="{Binding PickOtherCommand}">
                 <StackPanel Spacing="4">
                   <c:Icon Glyph="dns" Size="20" Foreground="{DynamicResource Fg2}" HorizontalAlignment="Left" />
@@ -201,7 +202,7 @@
                 <Border Classes="field"><TextBox Classes="bare" Text="{Binding Password}" PasswordChar="•" FontSize="14" /></Border>
               </StackPanel>
             </Grid>
-            <Grid ColumnDefinitions="*,10,*" Margin="0,16,0,0" MaxWidth="440" HorizontalAlignment="Left" IsVisible="{Binding ThisComputer}">
+            <Grid ColumnDefinitions="*,10,*" Margin="0,10,0,0" MaxWidth="440" HorizontalAlignment="Left" IsVisible="{Binding ThisComputer}">
               <StackPanel>
                 <TextBlock Classes="label" Text="Library name" />
                 <Border Classes="field"><TextBox Classes="bare" Text="{Binding LibraryName}" PlaceholderText="Sam's library" FontSize="14" /></Border>
@@ -211,7 +212,7 @@
                 <Border Classes="field"><TextBox Classes="bare" Text="{Binding Password}" PasswordChar="•" FontSize="14" /></Border>
               </StackPanel>
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,14,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
               <Button Classes="push" Command="{Binding ConnectCommand}" IsEnabled="{Binding !Connecting}">
                 <TextBlock Text="{Binding ThisComputer, Converter={x:Static c:Converters.CreateOrConnect}}" FontSize="14" />
               </Button>
@@ -220,10 +221,10 @@
               </Button>
               <c:Spinner IsVisible="{Binding Connecting}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
               <c:Spinner IsVisible="{Binding Finding}" Width="14" Height="14" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center" />
-              <TextBlock IsVisible="{Binding HasLibraryResult}" Text="{Binding LibraryResult}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300"
+              <TextBlock IsVisible="{Binding HasLibraryResult}" Text="{Binding LibraryResult}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="170"
                          Foreground="{Binding LibraryOk, Converter={x:Static c:Converters.OkText}}" />
             </StackPanel>
-            <CheckBox IsChecked="{Binding StartAtLogin}" IsVisible="{Binding ShowStartAtLogin}" Margin="0,12,0,0">
+            <CheckBox IsChecked="{Binding StartAtLogin}" IsVisible="{Binding ShowStartAtLogin}" Margin="0,6,0,0">
               <TextBlock Text="Start Study Stash when I log in, so the library keeps running" FontSize="14" />
             </CheckBox>
           </StackPanel>
@@ -307,6 +308,7 @@
                 </Button>
               </StackPanel>
             </StackPanel>
+            </ScrollViewer>
           </DockPanel>
         </Border>
       </Grid>
