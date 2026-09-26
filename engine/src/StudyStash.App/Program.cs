@@ -10,7 +10,7 @@ namespace StudyStash.App;
 /// </summary>
 static class Program
 {
-    /// <summary>Where settings, recordings and the model live (~/.granola-share, or --home).</summary>
+    /// <summary>Where settings, recordings and the model live (~/.study-stash, an older ~/.granola-share, or --home).</summary>
     public static string Home { get; private set; } = Configs.DefaultHome;
 
     /// <summary>Started at login: stay in the menu bar or tray, open no window.</summary>

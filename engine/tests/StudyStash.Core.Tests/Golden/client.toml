@@ -1,20 +1,7 @@
-# granola-share laptop config. Change it in the Study Stash app, or rerun `granola-share client setup`.
+# Study Stash laptop settings. Change them in the Study Stash app.
 server_url = "http://mini.example.ts.net:8787"
 pool_key = "tulip 2027"
 pool_name = "Fall"
 display_name = "Sam \u2615"
-# "auto" sends every finished lecture; "ask" pops up Send/Skip for each one.
-mode = "ask"
-poll_interval_seconds = 60
-include_transcripts = true
-share_lookback_days = 7
-dialog_timeout_seconds = 300
-# Install new releases automatically (checked every few hours by the background watcher).
+# Install new releases of Study Stash automatically.
 auto_update = true
-# macOS: copy each transcript from the Granola window while it's in front (Granola's API only shares
-# transcripts on paid plans). Needs Accessibility access for python3.12.
-copy_transcripts = true
-mcp_url = "https://mcp.granola.ai/mcp"
-oauth_callback_port = 3334
-# "login" always shows Granola's account picker when signing in, so the right account connects.
-oauth_prompt = "login"

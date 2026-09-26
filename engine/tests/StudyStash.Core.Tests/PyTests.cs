@@ -86,7 +86,7 @@ public class PyTests
     [Fact]
     public void Tilde_means_your_home_folder()
     {
-        Assert.Equal(Py.NormPath(Path.Combine(Py.UserHome(), "GranolaShare")), Py.ExpandUser("~/GranolaShare"));
+        Assert.Equal(Py.NormPath(Path.Combine(Py.UserHome(), "Study Stash")), Py.ExpandUser("~/Study Stash"));
         Assert.Equal(Py.NormPath(Py.UserHome()), Py.ExpandUser("~"));
         Assert.Equal(Py.NormPath("~other/x"), Py.ExpandUser("~other/x"));
     }
