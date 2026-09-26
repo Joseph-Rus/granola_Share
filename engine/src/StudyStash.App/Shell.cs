@@ -729,8 +729,16 @@ public static partial class Shell
         Desktop.ShowInDock(!quitting && (mainWindow?.IsVisible == true || setupWindow?.IsVisible == true || settingsWindow?.IsVisible == true));
 
     /// <summary>A notification in the design's look: top right on a Mac, above the tray on Windows. It goes by itself.</summary>
+    /// <summary>Toasts on screen right now, oldest first: how they stack, and what stops the same title firing twice
+    /// in a row.</summary>
+    static readonly List<(string Title, DateTime At, Floating Window)> toasts = [];
+
     public static void Toast(string title, string text, string? action, Action? run)
     {
+        if (quitting) return;
+        var now = DateTime.UtcNow;
+        toasts.RemoveAll(t => !t.Window.IsVisible);
+        if (toasts.Any(t => t.Title == title && now - t.At < TimeSpan.FromSeconds(10))) return;
         var view = new ToastView { Title = title, Text = text, ActionLabel = action };
         var w = new Floating { Content = view, Title = title, ShowActivated = false };
         view.Acted += () =>
@@ -739,12 +747,18 @@ public static partial class Shell
             run?.Invoke();
         };
         view.Dismissed += w.Close;
+        w.Closed += (_, _) => toasts.RemoveAll(t => t.Window == w);
         var (area, scale) = w.WorkArea();
         var size = w.Measured(scale);
         int room = (int)(Floating.ShadowRoom * scale);
-        w.Position = OperatingSystem.IsMacOS()
-            ? new PixelPoint(area.Right - size.Width - (int)(12 * scale) + room, area.Y + (int)(12 * scale) - room)
-            : new PixelPoint(area.Right - size.Width - (int)(12 * scale) + room, area.Bottom - size.Height - (int)(12 * scale) + room);
+        // Stacked below (a Mac, top right) or above (Windows, bottom right) whichever toasts are already showing.
+        int stacked = toasts.Sum(t => (int)t.Window.Measured(scale).Height + (int)(8 * scale));
+        int x = area.Right - size.Width - (int)(12 * scale) + room;
+        int y = OperatingSystem.IsMacOS()
+            ? area.Y + (int)(12 * scale) - room + stacked
+            : area.Bottom - size.Height - (int)(12 * scale) + room - stacked;
+        w.Position = new PixelPoint(x, y);
+        toasts.Add((title, now, w));
         w.Show();
         DispatcherTimer.RunOnce(() =>
         {
