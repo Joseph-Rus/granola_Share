@@ -48,6 +48,8 @@ public sealed class LibraryService : IDisposable
     public LibraryServiceState State { get; private set; } = LibraryServiceState.Stopped;
     /// <summary>Why it's <see cref="LibraryServiceState.Failed"/> or <see cref="LibraryServiceState.PortTaken"/>; null otherwise.</summary>
     public string? Failure { get; private set; }
+    /// <summary>The child's process id while we're running one we started; null otherwise (a test kills it by this).</summary>
+    public int? Pid { get { lock (gate) return proc?.Id; } }
     /// <summary>Called (on a worker thread) whenever <see cref="State"/> or <see cref="Failure"/> changes.</summary>
     public event Action? Changed;
 
