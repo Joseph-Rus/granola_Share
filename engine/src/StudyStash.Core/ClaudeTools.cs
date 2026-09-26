@@ -451,10 +451,18 @@ public static class ClaudeTools
         };
     }
 
-    /// <summary>The MCP server over stdin and stdout: what Claude Code and Claude Desktop start (<c>Study Stash mcp</c>).</summary>
-    public static async Task RunStdioAsync(ILibrarySource lib, CancellationToken stop)
+    /// <summary>The MCP server over stdin and stdout: what Claude Code and Claude Desktop start (<c>Study Stash mcp</c>).
+    /// <paramref name="wrapTools"/> lets a caller guard which tools may actually run (AI tool access, read from the
+    /// library); left out, every tool runs as listed.</summary>
+    public static async Task RunStdioAsync(ILibrarySource lib, CancellationToken stop, Func<List<McpServerTool>, List<McpServerTool>>? wrapTools = null)
     {
         var options = Options(lib);
+        if (wrapTools is not null)
+        {
+            var tools = new McpServerPrimitiveCollection<McpServerTool>();
+            foreach (var t in wrapTools(Tools(lib))) tools.Add(t);
+            options.ToolCollection = tools;
+        }
         await using var server = McpServer.Create(new StdioServerTransport(ServerName), options);
         await server.RunAsync(stop);
     }

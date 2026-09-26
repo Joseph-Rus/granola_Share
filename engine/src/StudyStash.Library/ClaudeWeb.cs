@@ -29,7 +29,7 @@ public static class ClaudeWeb
             o.ServerInstructions = ClaudeTools.Instructions;
         })
             .WithHttpTransport(o => o.Stateless = true)
-            .WithTools(ClaudeTools.Tools(source))
+            .WithTools(StudyStash.Core.Ai.ToolAccess.Guard(ClaudeTools.Tools(source), () => Task.FromResult((access.ToolsOn, access.Reading))))
             .WithPrompts(ClaudeTools.Prompts());
         var app = builder.Build();
 
@@ -41,6 +41,11 @@ public static class ClaudeWeb
             if (!ctx.Request.Path.StartsWithSegments(McpPath))
             {
                 await next();
+                return;
+            }
+            if (!access.ToolsOn)
+            {
+                await Http.Detail(403, "AI tool access is off in Study Stash.").ExecuteAsync(ctx);
                 return;
             }
             string auth = ctx.Request.Headers.Authorization.ToString();

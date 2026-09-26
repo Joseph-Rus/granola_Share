@@ -178,5 +178,26 @@ public sealed partial class LibraryWeb
 
         app.MapPost("/api/v2/ai/rewrite/{lecture}/use", Http.Handle(ctx => ApiAsync(ctx, () =>
             Task.FromResult(RewriteResult(() => Rewrites.Use((string)ctx.Request.RouteValues["lecture"]!))))));
+
+        app.MapGet("/api/v2/ai/access", Http.Handle(ctx => ApiAsync(ctx, () => Task.FromResult(AiJson(ToolAccessJson())))));
+        app.MapPost("/api/v2/ai/access", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            var body = await Http.JsonBodyAsync(ctx.Request);
+            if (body?["on"] is JsonValue ov && ov.TryGetValue(out bool on)) Claude.ToolsOn = on;
+            if (body?["reading"] is JsonObject r)
+            {
+                bool Flag(string key, bool was) => r[key] is JsonValue fv && fv.TryGetValue(out bool f) ? f : was;
+                var was = Claude.Reading;
+                Claude.Reading = new ReadingScopes(Flag("lectures", was.Lectures), Flag("notes", was.Notes), Flag("canvas", was.Canvas), Flag("audio", was.Audio));
+            }
+            return AiJson(ToolAccessJson());
+        })));
     }
+
+    ToolAccessInfo ToolAccessJson() => new(Claude.ToolsOn, Claude.Reading,
+        [.. Claude.Grants().Select(g => new ToolConnection(g.Id, g.Name, g.Kind) { Created = g.Created, LastUsed = g.LastUsed > 0 ? g.LastUsed : null })])
+    {
+        PublicUrl = Claude.PublicUrl.Length > 0 ? Claude.PublicUrl : Claude.TailnetUrl,
+        HasPassword = cfg.PoolPassword.Length > 0,
+    };
 }

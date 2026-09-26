@@ -17,12 +17,12 @@ public static class AiDemo
         ],
         Notes: "ollama", Ask: "claude", Fallback: true, Problems: []);
 
-    /// <summary>The design's connected tools: Claude Code on this computer, and Claude signed in from the web.</summary>
+    /// <summary>The design's connected tools: an MCP client with a token, and Claude signed in from the web.</summary>
     public static ToolAccessInfo Access() => new(
         On: true, Reading: new ReadingScopes(),
         Connections:
         [
-            new ToolConnection("this-computer", "Claude Code", "local") { Created = 1_726_000_000 },
+            new ToolConnection("tok-1", "Cursor", "token") { Created = 1_726_000_000 },
             new ToolConnection("sam-web", "Claude", "signin") { Created = 1_726_000_000, LastUsed = 1_726_600_000 },
         ])
     { PublicUrl = "https://sams-mini.tailnet.ts.net", HasPassword = true };

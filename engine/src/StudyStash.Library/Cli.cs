@@ -178,12 +178,28 @@ public static class Cli
         // --- Claude -------------------------------------------------------------------------------------------------------
 
         // The MCP server over stdin/stdout, for Claude Code and Claude Desktop on this computer. A laptop reads its library
-        // with the password it already has; the library's own computer reads itself.
+        // with the password it already has; the library's own computer reads itself. Each call re-checks AI tool
+        // access (cached briefly, so the off switch and the reading toggles take effect without reconnecting).
         async Task<int> Mcp()
         {
             var (url, key) = McpTarget(home);
             if (url is null) return Print("Study Stash isn't set up on this computer yet: open the Study Stash app first.", 1);
-            await ClaudeTools.RunStdioAsync(new RemoteLibrary(url, key), stop.Token);
+            var ai = new AiRemote(url, key);
+            (bool On, ReadingScopes Reading) cached = (true, new ReadingScopes());
+            DateTime cachedAt = DateTime.MinValue;
+            async Task<(bool, ReadingScopes)> Access()
+            {
+                if (DateTime.UtcNow - cachedAt < TimeSpan.FromSeconds(30)) return cached;
+                try
+                {
+                    var info = await ai.AccessAsync(); // null: an older library, without this route — no limits
+                    cached = info is null ? (true, new ReadingScopes()) : (info.On, info.Reading);
+                }
+                catch (LibraryRefusedException) { /* keep the last known answer */ }
+                cachedAt = DateTime.UtcNow;
+                return cached;
+            }
+            await ClaudeTools.RunStdioAsync(new RemoteLibrary(url, key), stop.Token, tools => ToolAccess.Guard(tools, Access));
             return 0;
         }
 
