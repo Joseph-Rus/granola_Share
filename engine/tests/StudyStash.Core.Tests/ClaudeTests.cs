@@ -460,4 +460,52 @@ public class ClaudeTests
         Assert.Equal("https://mini.tail1234.ts.net/mcp", on["public_url"]!.GetValue<string>());
         Assert.Equal("https://mini.tail1234.ts.net", new ClaudeAccess(cfg.Home).PublicUrl);
     }
+
+    // --- AI tool access --------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Turning_tool_access_off_refuses_the_whole_door_at_once()
+    {
+        using var dir = new TempDir();
+        var (cfg, store) = Library(dir);
+        using var _s = store;
+        var (site, access) = await Door(cfg, store);
+        await using var _site = site;
+        var (token, _) = access.CreateToken("Cursor");
+        access.ToolsOn = false;
+
+        var refused = await site.Client.SendAsync(new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Headers = { Authorization = new("Bearer", token), Accept = { new("application/json"), new("text/event-stream") } },
+            Content = JsonContent.Create(new { jsonrpc = "2.0", id = 1, method = "tools/list" }),
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Contains("AI tool access is off", await refused.Content.ReadAsStringAsync());
+
+        access.ToolsOn = true;
+        await using var mcp = await Connect(site, token);
+        Assert.Equal(5, (await mcp.ListToolsAsync()).Count);
+    }
+
+    [Fact]
+    public async Task A_reading_toggle_off_refuses_only_the_tools_that_need_it()
+    {
+        using var dir = new TempDir();
+        var (cfg, store) = Library(dir);
+        using var _s = store;
+        var (site, access) = await Door(cfg, store);
+        await using var _site = site;
+        var (token, _) = access.CreateToken("Cursor");
+        access.Reading = access.Reading with { Notes = false };
+
+        await using var mcp = await Connect(site, token);
+        var refused = await mcp.CallToolAsync("get_lecture", new Dictionary<string, object?> { ["lecture_id"] = "rec-1" });
+        Assert.Equal(true, refused.IsError);
+        Assert.Contains("don't let AI tools read that", ((TextContentBlock)refused.Content[0]).Text);
+
+        var ok = await mcp.CallToolAsync("search_notes", new Dictionary<string, object?> { ["query"] = "osmosis" });
+        Assert.True(ok.IsError is null or false);
+        var tools = await mcp.ListToolsAsync(); // still listed: it's refused at call time, not hidden
+        Assert.Contains("get_lecture", tools.Select(t => t.Name));
+    }
 }
