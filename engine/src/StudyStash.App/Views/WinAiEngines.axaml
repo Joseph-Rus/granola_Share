@@ -18,6 +18,9 @@
       <TextBlock Classes="ai-sub" MaxWidth="560" Margin="0,4,0,0"
                  Text="Notes are written after each lecture. Answers come while you ask. Engines run on your library, and you can set them up there or from this laptop." />
 
+      <TextBlock Text="{Binding OlderLibraryWords}" Classes="ai-sub" Margin="0,8,0,0" IsVisible="{Binding OlderLibrary}" />
+      <TextBlock Text="Your library isn't answering. Check it's on and connected." Classes="ai-sub" Margin="0,8,0,0" IsVisible="{Binding Offline}" />
+
       <!-- Who does what -->
       <TextBlock Classes="ai-section" Text="Who does what" Margin="0,18,0,8" />
       <Border Classes="ai-card">

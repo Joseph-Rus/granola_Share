@@ -15,6 +15,8 @@ public sealed partial class AiSetupRow : ObservableObject
     public string About { get; init; } = "";
     public bool Recommended { get; init; }
     public bool ShowSignIn { get; init; }
+    /// <summary>The first row in the list shows no separator above it.</summary>
+    public bool First { get; internal set; }
     [ObservableProperty] public partial bool Selected { get; set; }
 
     public IRelayCommand SelectCommand { get; internal set; } = null!;
@@ -94,6 +96,7 @@ public sealed partial class AiSetupModel : ObservableObject
                 Recommended = e.Id == "ollama",
                 ShowSignIn = e.State == "not_signed_in",
                 Selected = e.Id == SelectedNotes,
+                First = Engines.Count == 0,
             };
             row.SelectCommand = new RelayCommand(() => SelectedNotes = row.Id);
             row.SignInCommand = new AsyncRelayCommand(() => SignInAsync(row.Id));

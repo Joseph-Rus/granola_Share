@@ -19,6 +19,9 @@
                    Text="Notes are written after each lecture. Answers come while you ask. Engines run on your library, and you can set them up there or from this laptop." />
       </StackPanel>
 
+      <TextBlock Text="{Binding OlderLibraryWords}" Classes="ai-sub" IsVisible="{Binding OlderLibrary}" />
+      <TextBlock Text="Your library isn't answering. Check it's on and connected." Classes="ai-sub" IsVisible="{Binding Offline}" />
+
       <!-- Who does what -->
       <StackPanel Spacing="8">
         <TextBlock Classes="ai-section" Text="Who does what" Margin="4,0" />

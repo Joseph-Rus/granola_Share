@@ -1,0 +1,84 @@
+<!-- Library setup's AI step (design 15, Windows): "Choose who writes your notes" (a card list of the engines on this
+     computer, Ollama recommended, a not-signed-in CLI offering to sign in right there) and "Who answers your
+     questions" (starts as Same as notes). The step's body only: the host draws "Library setup · step 3 of 4", the
+     nav and the Back/Next footer, and calls SaveAsync on Next. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StudyStash.App.ViewModels"
+             xmlns:c="using:StudyStash.App.Controls"
+             x:Class="StudyStash.App.Views.WinAiSetup"
+             x:DataType="vm:AiSetupModel">
+  <UserControl.Styles>
+    <StyleInclude Source="avares://StudyStash/Views/WinAiStyles.axaml" />
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="32,0,32,20" Spacing="4" MaxWidth="640">
+
+      <TextBlock Classes="ai-title" Text="Choose who writes your notes" />
+      <TextBlock Classes="ai-sub" MaxWidth="520" Margin="0,0,0,12"
+                 Text="This computer is your library, so the engines run here. You can change this later from any of your computers." />
+
+      <TextBlock Text="{Binding OlderLibraryWords}" Classes="ai-sub" IsVisible="{Binding OlderLibrary}" />
+      <TextBlock Text="Your library isn't answering. Check it's on and connected." Classes="ai-sub" IsVisible="{Binding Offline}" />
+
+      <ItemsControl ItemsSource="{Binding Engines}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AiSetupRow">
+            <Border Classes="ai-card" Margin="{Binding First, Converter={x:Static c:Converters.FirstCardMargin}}">
+              <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+                <Button Grid.ColumnSpan="3" Classes="ai-textbtn" Command="{Binding SelectCommand}" HorizontalContentAlignment="Stretch" Padding="0">
+                  <Grid ColumnDefinitions="Auto,16,*">
+                    <Border Classes="ai-radio" Classes.on="{Binding Selected}" VerticalAlignment="Center">
+                      <Ellipse Width="10" Height="10" Fill="{DynamicResource OnAccent}" IsVisible="{Binding Selected}" />
+                    </Border>
+                    <StackPanel Grid.Column="2" Classes="ai-row-text" VerticalAlignment="Center">
+                      <TextBlock Classes="ai-row-title" Text="{Binding Name}" />
+                      <TextBlock Classes="ai-row-sub" Text="{Binding About}" />
+                    </StackPanel>
+                  </Grid>
+                </Button>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <TextBlock Classes="ai-row-sub" Text="Recommended" IsVisible="{Binding Recommended}" />
+                  <Button Classes="ai-pillbtn" Command="{Binding SignInCommand}" IsVisible="{Binding ShowSignIn}">
+                    <Border Classes="ai-pill">
+                      <TextBlock Text="Sign in" />
+                    </Border>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Classes="ai-card" Margin="0,12,0,0">
+        <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
+          <c:Icon Glyph="forum" Size="20" />
+          <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Classes="ai-row-title" Text="Who answers your questions" />
+            <TextBlock Classes="ai-row-sub" Text="You can pick per question too" />
+          </StackPanel>
+          <Button Grid.Column="3" Classes="ai-select-btn" VerticalAlignment="Center">
+            <Border Classes="ai-select">
+              <Grid ColumnDefinitions="*,8,Auto">
+                <TextBlock Text="{Binding SelectedAskName}" TextTrimming="CharacterEllipsis" />
+                <c:Icon Grid.Column="2" Glyph="expand_more" Size="16" Foreground="{DynamicResource Fg2}" />
+              </Grid>
+            </Border>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource AiMenuFlyout}" ItemsSource="{Binding AskChoices}">
+                <MenuFlyout.ItemTemplate>
+                  <DataTemplate x:DataType="vm:EngineChoice">
+                    <MenuItem Classes="ai-item" Header="{Binding Name}" Command="{Binding Pick}" />
+                  </DataTemplate>
+                </MenuFlyout.ItemTemplate>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
