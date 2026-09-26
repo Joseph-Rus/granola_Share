@@ -273,40 +273,6 @@
    ""
   ]
  ],
- "invite": [
-  [
-   "http://mini.tail.ts.net:8787",
-   "maple-otter",
-   {
-    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://mini.tail.ts.net:8787 GRANOLA_SHARE_KEY=maple-otter sh",
-    "windows": "$env:GRANOLA_SHARE_SERVER='http://mini.tail.ts.net:8787'; $env:GRANOLA_SHARE_KEY='maple-otter'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
-   }
-  ],
-  [
-   "http://100.64.0.9:8787",
-   "it's a \"pass\" $word",
-   {
-    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://100.64.0.9:8787 GRANOLA_SHARE_KEY='it'\"'\"'s a \"pass\" $word' sh",
-    "windows": "$env:GRANOLA_SHARE_SERVER='http://100.64.0.9:8787'; $env:GRANOLA_SHARE_KEY='it''s a \"pass\" $word'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
-   }
-  ],
-  [
-   "http://pc:8787",
-   "",
-   {
-    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://pc:8787 GRANOLA_SHARE_KEY='' sh",
-    "windows": "$env:GRANOLA_SHARE_SERVER='http://pc:8787'; $env:GRANOLA_SHARE_KEY=''; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
-   }
-  ],
-  [
-   "http://x:1",
-   "a b;c",
-   {
-    "mac": "curl -fsSL https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.sh | GRANOLA_SHARE_SERVER=http://x:1 GRANOLA_SHARE_KEY='a b;c' sh",
-    "windows": "$env:GRANOLA_SHARE_SERVER='http://x:1'; $env:GRANOLA_SHARE_KEY='a b;c'; irm https://raw.githubusercontent.com/Joseph-Rus/study-stash/main/install.ps1 | iex"
-   }
-  ]
- ],
  "parse_version": [
   [
    "v0.4.4",

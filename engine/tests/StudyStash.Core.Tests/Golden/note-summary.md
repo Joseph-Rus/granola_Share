@@ -4,8 +4,8 @@ lecture_title: "Recursion and trees"
 class: "CS 101"
 date: "2026-09-14T10:00:00"
 source: "Sam"
-granola_id: "not_1a2b3c4d5e6f"
-granola_folder: "CS101 Fall"
+id: "not_1a2b3c4d5e6f"
+folder: "CS101 Fall"
 attendees: ["Sam", "Dr. Ada Lovelace"]
 topics: ["recursion", "trees", "base case"]
 classified_by: ollama (0.88)
@@ -29,16 +29,6 @@ We met recursion.
 ###### Six
 
 _Written by big:35b from the transcript._
-
-## Granola's notes
-
-## Recursion
-- base case
-```python
-# not a heading
-def f(n): ...
-```
-#### Trees
 
 ## Private notes
 
