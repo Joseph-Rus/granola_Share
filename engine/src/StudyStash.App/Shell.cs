@@ -246,12 +246,7 @@ public static partial class Shell
         };
         panel.OnSwitchClass = PickClass;
         panel.OnFixProblem = FixProblem;
-        panel.OnOpenLecture = item =>
-        {
-            panelWindow?.Hide();
-            if (item.Id == liveId) ShowRecorder(expanded: true);
-            else OpenLecture(item.Id);
-        };
+        panel.OnOpenLecture = OpenRecentLecture;
 
         recorder.OnPause = TogglePause;
         recorder.OnStop = () => StopRecording();
@@ -380,6 +375,31 @@ public static partial class Shell
                 break;
             case ProblemKind.WrongPassword or ProblemKind.NotSetUp:
                 ShowSettings();
+                break;
+        }
+    }
+
+    /// <summary>A click on one of the dropdown's recent lectures: the live one opens the recorder, a failed one is
+    /// tried again, one still on its way just says where it is, and a filed one (or one being written up) opens.</summary>
+    static void OpenRecentLecture(LectureItem item)
+    {
+        panelWindow?.Hide();
+        if (item.Id == liveId)
+        {
+            ShowRecorder(expanded: true);
+            return;
+        }
+        switch (item.State)
+        {
+            case LectureState.Failed:
+                host.Retry(item.Id);
+                Toast("Trying again", item.Title, null, null);
+                break;
+            case LectureState.Transcribing or LectureState.Sending:
+                Toast(item.Title, item.Detail, null, null);
+                break;
+            default:
+                OpenLecture(item.Id);
                 break;
         }
     }
@@ -799,6 +819,7 @@ public static partial class Shell
             return new LectureItem
             {
                 Id = l.Id,
+                State = l.State,
                 Title = l.FiledTitle.Length > 0 ? l.FiledTitle : l.ClassName.Length > 0 ? $"{l.ClassName} lecture" : "Lecture",
                 Detail = l.State switch
                 {

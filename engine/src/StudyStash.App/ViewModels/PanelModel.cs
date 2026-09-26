@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StudyStash.Core;
 
 namespace StudyStash.App.ViewModels;
 
@@ -9,6 +10,9 @@ namespace StudyStash.App.ViewModels;
 public sealed partial class LectureItem : ObservableObject
 {
     public string Id { get; init; } = "";
+    /// <summary>Where it is right now, so a click on it does the right thing: opens it, retries it, or just says
+    /// where it is.</summary>
+    public LectureState State { get; init; }
     [ObservableProperty] public partial string Title { get; set; } = "";
     [ObservableProperty] public partial string Detail { get; set; } = "";
     [ObservableProperty] public partial string Time { get; set; } = "";
