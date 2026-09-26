@@ -76,6 +76,22 @@ public static class SelfTest
         await Until(() => host.Library != Services.LibraryState.NotSetUp || host.Client().ServerUrl.Length == 0, 10);
         await Wait(2);
         Shot(Shell.Windows.Main, "library");
+        if (Shell.HasDue)
+        {
+            await Shell.ShowDuePublic();
+            await Wait(2);
+            Shot(Shell.Windows.Main, "library-due");
+        }
+
+        // STUDYSTASH_SELFTEST_ASK: ask the library's AI in the full app, and picture the answer.
+        if (Environment.GetEnvironmentVariable("STUDYSTASH_SELFTEST_ASK") is { Length: > 0 } question)
+        {
+            var asking = Shell.AskForSelfTest(question);
+            bool answered = await Until(() => asking.IsCompleted, 120);
+            await Wait(1);
+            Say(answered ? $"answered: {Py.Head(Shell.AnswerForSelfTest ?? "", 120)}" : "no answer in 120 s");
+            Shot(Shell.Windows.Main, "library-answer");
+        }
 
         Shell.Windows.TogglePanel();
         await Wait(1);
@@ -90,6 +106,13 @@ public static class SelfTest
         Shell.ShowSettings();
         await Wait(1);
         Shot(Shell.Windows.Settings, "settings");
+        foreach (string section in new[] { "AI", "Canvas" })
+        {
+            if ((Shell.Windows.Settings?.Content as Control)?.DataContext is not Services.SettingsModel sm) break;
+            sm.Section = section;
+            await Wait(2);
+            Shot(Shell.Windows.Settings, "settings-" + section.ToLowerInvariant());
+        }
         Shell.Windows.Settings?.Close();
 
         if (!host.ModelReady)

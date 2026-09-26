@@ -270,8 +270,9 @@
                   <StackPanel Spacing="8" Margin="0,0,8,0">
                     <TextBlock Text="{Binding AskedQuestion}" FontSize="12" Foreground="{DynamicResource Fg2}" TextTrimming="CharacterEllipsis" />
                     <c:Spinner IsVisible="{Binding Thinking}" Width="16" Height="16" HorizontalAlignment="Left" Foreground="{DynamicResource Fg2}" />
-                    <SelectableTextBlock Text="{Binding Answer}" FontSize="15" LineHeight="23.25" TextWrapping="Wrap"
-                                         SelectionBrush="{DynamicResource Hl}" />
+                    <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                      <c:NoteView Markdown="{Binding Answer}" />
+                    </ScrollViewer>
                     <ItemsControl ItemsSource="{Binding Sources}" IsVisible="{Binding HasSources}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>

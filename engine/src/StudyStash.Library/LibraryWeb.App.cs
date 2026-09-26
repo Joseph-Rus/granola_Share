@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using StudyStash.Core;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.Library;
 
@@ -80,6 +81,43 @@ public sealed partial class LibraryWeb
                 Configs.Save(cfg);
             }
             return Http.Json(Reader.Overview());
+        })));
+
+        // Which AI does the work: one for everything, and optionally another per kind of work (ai.json).
+        app.MapGet("/api/v2/ai", (HttpContext ctx) => Api(ctx, () => Http.Json(AiSettings.Load(cfg.Home).ToJson())));
+        app.MapPost("/api/v2/ai", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            var body = await Http.JsonBodyAsync(ctx.Request);
+            var ai = AiSettings.Load(cfg.Home);
+            var known = AiProviders.All().Select(p => p.Id).ToHashSet();
+            string? provider = Str(body, "provider"), job = Str(body, "job"), model = body?["model"] is JsonValue mv && mv.TryGetValue(out string? m) ? m.Trim() : null;
+            if (provider is not null && provider != "default" && !known.Contains(provider)) return Http.Detail(400, $"there's no AI called {provider}");
+            if (job is not null && !AiSettings.Jobs.Contains(job)) return Http.Detail(400, $"there's no kind of work called {job}");
+            if (job is null)
+            {
+                if (provider is not null) ai.Provider = provider;
+                if (model is not null) ai.Models[ai.Provider] = model;
+            }
+            else if (provider == "default") ai.ByJob.Remove(job); // back to the one for everything
+            else if (provider is not null || model is not null)
+            {
+                var was = ai.ByJob.GetValueOrDefault(job) ?? new AiChoice(ai.Provider);
+                ai.ByJob[job] = new AiChoice(provider ?? was.Provider, model ?? (provider is null ? was.Model : ""));
+            }
+            ai.Save(cfg.Home);
+            return Http.Json(ai.ToJson());
+        })));
+        app.MapPost("/api/v2/ai/test", Http.Handle(ctx => ApiAsync(ctx, async () =>
+        {
+            var body = await Http.JsonBodyAsync(ctx.Request);
+            string provider = Str(body, "provider") ?? AiSettings.Load(cfg.Home).Provider;
+            var jobs = options.Ai ?? new AiJobs(cfg.Home, () => cfg.OllamaHost);
+            var (ok, why) = await jobs.TestAsync(provider, Str(body, "model") ?? "");
+            var result = AiSettings.Load(cfg.Home).ToJson();
+            result["tested"] = provider;
+            result["ok"] = ok;
+            result["why"] = why;
+            return Http.Json(result);
         })));
 
         // Connecting Claude: what's on, the connections that can read, and turning the web address on or off.

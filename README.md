@@ -173,6 +173,30 @@ PC** (Ctrl+1) and **Library** (Ctrl+2), F5 reloads, Ctrl+plus and Ctrl+minus zoo
 Windows' light or dark mode. It's built on WebView2, the Edge engine that comes with Windows 10
 and 11. (On Linux, Study Stash opens in its own Chrome or Edge window instead.)
 
+## Beyond lecture notes
+
+These run on the library, and show in its web page and the app.
+
+- **Pick the AI.** Settings → AI: the library's Ollama model (free, private), or Claude, ChatGPT or Gemini
+  through their own command-line apps on the library's computer (Claude Code, Codex, Antigravity), signed in
+  with your own account and plan. One AI for everything, or another for notes, sorting or questions.
+  `granola-share ai` (the engine's `studystash ai`) shows, picks, tests and asks from a terminal.
+- **Canvas.** Settings → Canvas: your school's Canvas address and which course each class is. A small Chrome
+  extension reads Canvas with your own sign-in (no Canvas token, which many schools turn off) and hands it to
+  the library, which mirrors each class into its `Canvas/` folder: assignment instructions and rubrics, your
+  submissions with scores and comments, module files and pages, announcements. The sidebar gets **Due**, and
+  each class lists what's still to hand in. After a sync, the AI explores each class's Canvas once and writes
+  `Canvas/canvas-recipe.md`, a map of where that instructor puts things.
+- **Chat.** Talk to the AI about everything, a class, or a lecture. It reads your lectures, Canvas and any
+  folders you allow, and remembers the conversation. With "Let it write files" on, it can make you a study
+  guide; every change it makes is listed under **What the AI changed**, with Undo.
+- **Capture.** Jot something down (the Capture page, or ⌥Space → Capture); the AI files it under its class.
+- **Search files** as well as lectures: Canvas PDFs and slides, the AI's files, and the folders you add under
+  Settings → Folders it may read (private ones by name only).
+- **Open in Claude Code:** on the library's computer, a class opens in Ghostty (or the terminal you pick)
+  with Claude Code, briefed on the class and with the library's tools.
+- **Granola's free plan** shares no folders: the laptop files a Granola lecture by its timetable instead.
+
 ## When a lecture finishes
 
 There's nothing to learn. Record in Granola, stop, and carry on. When Granola has finished the

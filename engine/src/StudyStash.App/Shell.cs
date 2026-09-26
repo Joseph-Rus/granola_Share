@@ -192,7 +192,8 @@ public static partial class Shell
         quick.OnOpen = OpenQuickRow;
         quick.OnClose = () => quickWindow?.Hide();
 
-        library.OnClass = c => _ = ShowClassAsync(c.Name);
+        library.OnCloseAnswer = () => chatId = null;
+        library.OnClass = c => _ = c.IsDue ? ShowDueAsync() : ShowClassAsync(c.Name);
         library.OnLecture = l => _ = ShowLectureAsync(l.Id);
         library.OnAsk = AskLibrary;
         library.OnSearch = ToggleQuick;
@@ -200,7 +201,7 @@ public static partial class Shell
         library.OnMove = MoveLecture;
         library.OnExport = () => _ = ExportAsync();
         library.OnScope = CycleScope;
-        library.OnMore = ShowSettings;
+        library.OnMore = MoreMenu;
         library.OnSource = chip => Play(chip.LectureId, chip.At);
     }
 

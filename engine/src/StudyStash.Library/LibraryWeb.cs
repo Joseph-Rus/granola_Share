@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using StudyStash.Core;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.Library;
 
@@ -29,6 +30,16 @@ public sealed class LibraryWebOptions
     public ClaudeReach Reach { get; init; } = new();
     /// <summary>Asking your notes: the model's answer to a prompt. Null asks the library's Ollama.</summary>
     public LibraryReader.AskChatFn? AskChat { get; init; }
+    /// <summary>The AI picked for each kind of work (ai.json): Settings shows and tests it. Null: kept beside the config.</summary>
+    public StudyStash.Core.Ai.AiJobs? Ai { get; init; }
+    /// <summary>Canvas through the Chrome extension. Null: made here, with the library's class folders.</summary>
+    public StudyStash.Core.Canvas.CanvasSync? Canvas { get; init; }
+    /// <summary>The course scout. Null: exploring isn't offered (tests, and `serve` without an AI).</summary>
+    public StudyStash.Core.Canvas.Scout? Scout { get; init; }
+    /// <summary>File search. Null: made here (and brought up to date only when folders change).</summary>
+    public StudyStash.Core.Ai.FileIndex? Files { get; init; }
+    /// <summary>Capture's Inbox. Null: made here.</summary>
+    public StudyStash.Core.Ai.Inbox? Inbox { get; init; }
 }
 
 /// <summary>Small pieces of HTTP the Python engine got from its web framework.</summary>
@@ -215,6 +226,9 @@ public sealed partial class LibraryWeb
         {
             PoolName = cfg.PoolName, Classes = classes, Total = counts.Values.Sum(), Processing = store.Processing().Count,
             Admin = role == "admin", Current = current, Password = cfg.PoolPassword.Length > 0, Back = back, Nonce = options.Nonce(),
+            Chat = ChatOn,
+            Inbox = ChatOn ? (Directory.Exists(Path.Combine(cfg.PoolDir, "Inbox")) ? Directory.EnumerateFiles(Path.Combine(cfg.PoolDir, "Inbox"), "*.md").Count() : 0) : null,
+            Due = CanvasOn ? StudyStash.Core.Canvas.Assignments.Upcoming(StudyStash.Core.Canvas.Assignments.Load(cfg.Home), DateTime.Now, 7).Count : null,
         };
     }
 
@@ -227,11 +241,14 @@ public sealed partial class LibraryWeb
 
     static string Plural(int n, string one, string many) => n != 1 ? many : one;
 
+    /// <summary>What writes the notes: the Ollama model, or the AI picked in Settings.</summary>
+    string NotesWriter => options.Ai?.Describe("notes", cfg) ?? cfg.EffectiveSummaryModel;
+
     string QueuePanel(bool adminView)
     {
         var rows = store.Processing();
         if (rows.Count == 0) return "";
-        string model = cfg.EffectiveSummaryModel;
+        string model = NotesWriter;
         var items = new List<string>();
         foreach (var r in rows)
         {
@@ -365,10 +382,14 @@ public sealed partial class LibraryWeb
         app.MapGet("/api/status", (HttpContext ctx) => WithMember(ctx, _ => Http.Json(new JsonObject
         {
             ["counts"] = new JsonObject(store.StatusCounts().Select(kv => KeyValuePair.Create(kv.Key, (JsonNode?)kv.Value))),
-            ["working_on"] = pipeline.Current, ["summary_model"] = cfg.EffectiveSummaryModel, ["version"] = Engine.Version,
+            ["working_on"] = pipeline.Current, ["summary_model"] = NotesWriter, ["version"] = Engine.Version,
         })));
 
         MapApp(app);
+        MapCanvas(app);
+        MapChat(app);
+        MapFiles(app);
+        MapInbox(app);
         app.MapFallback(() => Http.Detail(404, "Not Found"));
     }
 
@@ -438,18 +459,27 @@ public sealed partial class LibraryWeb
         return Show(cfg.PoolName, body, c);
     });
 
-    IResult ClassPage(string name, string role, string current, string lede)
+    IResult ClassPage(string name, string role, string current, string lede, bool terminal = false, string? said = null)
     {
         var c = Context(role, current, ("/", cfg.PoolName));
         var rows = store.ListNotes(name);
-        string zip = rows.Count > 0
-            ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\"><a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a></div>"
+        string canvasPart = ClassCanvas(name) + ClassFiles(name);
+        // On the library's own computer, a class can open in a terminal with the AI (Claude Code by default).
+        string open = terminal
+            ? $"<form method=\"post\" action=\"/terminal\"><input type=\"hidden\" name=\"class\" value=\"{Ui.Esc(name)}\"><button>Open in {Ui.Esc(AgentCli)}</button></form>"
+            : "";
+        string zip = rows.Count > 0 || open.Length > 0
+            ? $"<div class=\"toolbar\" style=\"margin:0 0 1.4rem\">{(rows.Count > 0 ? $"<a class=\"btn\" href=\"{Ui.ClassUrl(name)}/zip\">Download all as .zip</a>" : "")}{open}</div>"
+              + (said is not null ? $"<div class=\"notice\"><div>{Ui.Esc(said)}</div></div>" : "")
             : "";
         string body = $"<h1>{Ui.Esc(name)}</h1><p class=\"sub\"><span class=\"tag\" style=\"{Ui.HueStyle(name)}\">{lede}</span></p>"
-            + zip + Ui.NoteList(rows, "Nothing here yet",
+            + zip + canvasPart + (canvasPart.Length > 0 ? "<h2>Lectures</h2>" : "") + Ui.NoteList(rows, "Nothing here yet",
                 name != Configs.Unsorted ? "Lectures sorted into this class show up here." : "Every lecture found its class.");
         return Show(name, body, c);
     }
+
+    /// <summary>"Claude Code", "Codex" or "Antigravity": what Open in… starts.</summary>
+    string AgentCli => AiSettings.Load(cfg.Home).For("agent").Provider switch { "codex" or "ollama" => "Codex", "gemini" => "Antigravity", _ => "Claude Code" };
 
     IResult ByClass(HttpContext ctx, string name) => WithMember(ctx, role =>
     {
@@ -458,7 +488,7 @@ public sealed partial class LibraryWeb
         int n = store.ListNotes(name).Count;
         string lede = Ui.Esc(desc + (desc.Length > 0 && !desc.EndsWith('.') ? ". " : desc.Length > 0 ? " " : ""))
             + $"{n} lecture{Plural(n, "", "s")}.";
-        return ClassPage(name, role, $"class:{name}", lede);
+        return ClassPage(name, role, $"class:{name}", lede, terminal: ChatOn && IsLocal(ctx), said: ctx.Request.Query["said"].FirstOrDefault());
     });
 
     IResult Search(string role, string query)
@@ -475,9 +505,11 @@ public sealed partial class LibraryWeb
             snippets[r.Id] = Ui.Snippet(text, q);
         }
         string found = q.Length > 0 ? $"{rows.Count} lecture{Plural(rows.Count, "", "s")} mention “{Ui.Esc(q)}”." : "";
+        string fileHits = FileResults(q);
         string body = "<h1>Search</h1>" + $"<div class=\"only-narrow\">{Ui.SearchBox(q)}</div>"
             + (q.Length > 0 ? $"<p class=\"sub\">{found}</p>" : "")
-            + (q.Length > 0 ? Ui.NoteList(rows, "No matches", "Try a shorter word, a topic, or a name.", snippets) : "");
+            + (fileHits.Length > 0 && rows.Count == 0 ? "" : q.Length > 0 ? Ui.NoteList(rows, "No matches", "Try a shorter word, a topic, or a name.", snippets) : "")
+            + fileHits;
         return Show(q.Length > 0 ? $"Search: {q}" : "Search", body, c);
     }
 
@@ -519,7 +551,7 @@ public sealed partial class LibraryWeb
         string notice = "";
         if (r.Status is Store.Queued or Store.Working)
             notice = "<div class=\"notice\" data-refresh=\"15\"><div>A new summary is being written with "
-                + $"{Ui.Esc(cfg.EffectiveSummaryModel)}. This page refreshes on its own.</div></div>";
+                + $"{Ui.Esc(NotesWriter)}. This page refreshes on its own.</div></div>";
         else if (!string.IsNullOrEmpty(r.Error))
         {
             string retry = role == "admin" ? $"<form method=\"post\" action=\"/note/{nid}/resummarize\"><button>Try again</button></form>" : "";
@@ -599,7 +631,7 @@ public sealed partial class LibraryWeb
         return $"<select id=\"{field}\" name=\"{field}\">{string.Concat(opts)}</select>";
     }
 
-    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued) => await WithMemberAsync(ctx, async role =>
+    async Task<IResult> Settings(HttpContext ctx, int? saved, int? queued, string? canvas, string? folders) => await WithMemberAsync(ctx, async role =>
     {
         var c = Context(role, "settings", ("/", cfg.PoolName));
         var models = await options.ListModels(cfg.OllamaHost);
@@ -619,7 +651,41 @@ public sealed partial class LibraryWeb
         static string Switch(string name, bool on, string text) =>
             $"<label class=\"row\"><span class=\"grow\">{text}</span><input class=\"switch\" type=\"checkbox\" name=\"{name}\" value=\"1\"{Checked(on)}></label>";
 
-        string ai = $"<div class=\"group-head\">AI models</div>{aiState}<div class=\"group\">"
+        // Which AI does the work (ai.json): Ollama on this computer, or Claude, ChatGPT or Gemini with your own account.
+        var picked = AiSettings.Load(cfg.Home);
+        var providers = AiProviders.All(() => cfg.OllamaHost);
+        string ProviderSelect(string field, string current, string? blank)
+        {
+            var opts = blank is null ? "" : $"<option value=\"\">{Ui.Esc(blank)}</option>";
+            foreach (var p in providers)
+                opts += $"<option value=\"{p.Id}\"{(p.Id == current ? " selected" : "")}>{Ui.Esc(p.Name)}{(p.Available() ? "" : " (not installed)")}</option>";
+            return $"<select id=\"{field}\" name=\"{field}\">{opts}</select>";
+        }
+        string JobRow(string job, string label) =>
+            $"<div class=\"row\"><label class=\"grow\" for=\"ai_job_{job}\">{label}</label>"
+            + ProviderSelect($"ai_job_{job}", picked.ByJob.TryGetValue(job, out var jc) ? jc.Provider : "", "Same as above") + "</div>";
+        var main = providers.First(p => p.Id == picked.Provider);
+        string modelOpts = string.Concat(main.Models.Select(m =>
+            $"<option value=\"{Ui.Esc(m.Id)}\"{(m.Id == picked.Models.GetValueOrDefault(main.Id, "") ? " selected" : "")}>{Ui.Esc(m.Label)}</option>"));
+        string tested = picked.Tests.GetValueOrDefault(main.Id, "") switch
+        {
+            "works" => "<span class=\"value\">Works</span>",
+            "" => "",
+            string why => $"<span class=\"value\" title=\"{Ui.Esc(why)}\">Didn't answer</span>",
+        };
+        string brain = "<div class=\"group-head\">AI</div><div class=\"group\">"
+            + $"<div class=\"row\"><label class=\"grow\" for=\"ai_provider\">Does the work</label>{tested}{ProviderSelect("ai_provider", picked.Provider, null)}</div>"
+            + (main.Id == "ollama" ? "" : $"<div class=\"row\"><label class=\"grow\" for=\"ai_model\">Model</label><select id=\"ai_model\" name=\"ai_model\">{modelOpts}</select></div>")
+            + JobRow("notes", "Writes study notes") + JobRow("sort", "Sorts lectures") + JobRow("ask", "Answers questions")
+            + (Terminal.Available() is { Count: > 0 } terms
+                ? "<div class=\"row\"><label class=\"grow\" for=\"terminal\">Open in… uses</label><select id=\"terminal\" name=\"terminal\">"
+                  + string.Concat(terms.Select(t => $"<option value=\"{t.Id}\"{(t.Id == picked.Terminal ? " selected" : "")}>{Ui.Esc(t.Name)}</option>")) + "</select></div>"
+                : "")
+            + "</div><p class=\"group-foot\">Claude, ChatGPT and Gemini run through their own apps (Claude Code, Codex, "
+            + "Antigravity), signed in with your own account, so they use your plan. The local model stays on this computer "
+            + "and costs nothing.</p>";
+
+        string ai = brain + $"<div class=\"group-head\">Local models</div>{aiState}<div class=\"group\">"
             + "<div class=\"row\"><label class=\"grow\" for=\"summary_model\">Writes summaries</label>"
             + $"{ModelSelect("summary_model", cfg.SummaryModel, models, "Same as the sorting model")}</div>"
             + "<div class=\"row\"><label class=\"grow\" for=\"ollama_model\">Sorts lectures into classes</label>"
@@ -701,13 +767,17 @@ public sealed partial class LibraryWeb
             + "<p class=\"group-foot\">Set with auto_update in config.toml.</p>"
             + "<div class=\"group-head\">Rewrite every summary</div><div class=\"group\">"
             + "<form class=\"row\" method=\"post\" action=\"/settings/resummarize-all\" data-confirm=\"Rewrite all "
-            + $"{c.Total} summaries with {Ui.Esc(cfg.EffectiveSummaryModel)}? This can take a while.\">"
-            + $"<span class=\"grow\">Rewrite all summaries with {Ui.Esc(cfg.EffectiveSummaryModel)}</span>"
+            + $"{c.Total} summaries with {Ui.Esc(NotesWriter)}? This can take a while.\">"
+            + $"<span class=\"grow\">Rewrite all summaries with {Ui.Esc(NotesWriter)}</span>"
             + "<button>Rewrite all</button></form></div>"
             + "<p class=\"group-foot\">Useful after switching models. Lectures stay readable while they are "
             + "rewritten, one at a time.</p>"
             + "<p class=\"group-foot\" style=\"margin-top:2.4rem\">Study Stash is an independent project, not affiliated with or endorsed by Granola. Granola is a trademark of its owner.</p>";
-        string body = $"<h1>Settings</h1>{flash}{form}{invite}{maintenance}";
+        // Canvas shows once it's set up or asked about, so a library without it looks as it always has.
+        string canvasGroup = CanvasOn || canvas is not null || Canvas.Settings.On ? CanvasSettingsGroup(canvas)
+            : "<div class=\"group-head\" id=\"canvas\">Canvas</div><div class=\"group\"><form class=\"row\" method=\"get\" action=\"/settings#canvas\">"
+              + "<input type=\"hidden\" name=\"canvas\" value=\"start\"><span class=\"grow\">Bring in assignments, feedback and course files from Canvas</span><button>Set up Canvas</button></form></div>";
+        string body = $"<h1>Settings</h1>{flash}{form}{canvasGroup}{FoldersSettingsGroup(folders)}{invite}{maintenance}";
         return Show("Settings", body, c);
     });
 
@@ -735,6 +805,26 @@ public sealed partial class LibraryWeb
         }
         cfg.Classes = classes;
         Configs.Save(cfg);
+        if (f.ContainsKey("ai_provider"))
+        {
+            var picked = AiSettings.Load(cfg.Home);
+            var known = AiProviders.All().Select(p => p.Id).ToHashSet();
+            string provider = Py.Strip(f.Get("ai_provider"));
+            if (known.Contains(provider))
+            {
+                if (provider != picked.Provider) picked.Models.Remove(provider); // a new AI starts on its default model
+                else if (f.ContainsKey("ai_model")) picked.Models[provider] = Py.Strip(f.Get("ai_model"));
+                picked.Provider = provider;
+            }
+            if (Terminal.Available().Any(t => t.Id == f.Get("terminal"))) picked.Terminal = f.Get("terminal");
+            foreach (string job in new[] { "notes", "sort", "ask" })
+            {
+                string p = Py.Strip(f.Get($"ai_job_{job}"));
+                if (known.Contains(p)) picked.ByJob[job] = new AiChoice(p);
+                else picked.ByJob.Remove(job);
+            }
+            picked.Save(cfg.Home);
+        }
         return Http.SeeOther("/settings?saved=1");
     });
 

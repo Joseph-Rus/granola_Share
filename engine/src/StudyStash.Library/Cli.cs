@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using StudyStash.Core;
+using StudyStash.Core.Ai;
 
 namespace StudyStash.Library;
 
@@ -14,7 +15,7 @@ namespace StudyStash.Library;
 public static class Cli
 {
     /// <summary>The words that make the app the engine instead of opening its windows.</summary>
-    public static readonly string[] Commands = ["run", "serve", "setup", "init", "login", "logout", "sync", "tools", "client", "doctor", "update", "autostart", "config-check", "version", "mcp"];
+    public static readonly string[] Commands = ["run", "serve", "setup", "init", "login", "logout", "sync", "tools", "client", "doctor", "update", "autostart", "config-check", "version", "mcp", "ai"];
 
     /// <summary>True when these arguments name a command (options may come first: <c>--home DIR run</c>).</summary>
     public static bool IsCommand(IReadOnlyList<string> args)
@@ -72,6 +73,7 @@ public static class Cli
                 "sync" => await SyncCommand(),
                 "tools" => await Tools(),
                 "mcp" => await Mcp(),
+                "ai" => await AiCommand(),
                 "client run" => await ClientRun(),
                 "client open" => await ClientOpen(),
                 "client once" => await ClientOnce(),
@@ -87,7 +89,8 @@ public static class Cli
                     + "       | client once [--auto] | client login [--no-browser]\n"
                     + "       | doctor [--role server|client] | update [--check] [--force]\n"
                     + "       | autostart install|uninstall|status --role server|client | config-check | version\n"
-                    + "       | mcp   (the MCP server for Claude, over stdin and stdout)   (each takes --home DIR)", 2),
+                    + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
+                    + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)", 2),
             };
         }
         catch (OAuthException e)
@@ -137,7 +140,9 @@ public static class Cli
             if (Flag("--no-ollama")) cfg.OllamaEnabled = false;
             Console.WriteLine($"studystash {Engine.Version}: pool '{cfg.PoolName}' on port {cfg.WebPort}");
             using var store = new Store(cfg.DbPath, cfg.PoolDir);
-            var pipeline = new Pipeline(cfg, store);
+            // Notes, sorting and Ask use the AI picked in Settings (ai.json): Ollama unless another is chosen.
+            var ai = new AiJobs(home, () => cfg.OllamaHost);
+            var pipeline = new Pipeline(cfg, store, ai.SortAsync, ai.SummarizeAsync, notesModel: () => ai.Describe("notes", cfg));
             var working = pipeline.Start(stop.Token);
             Task syncing = Task.CompletedTask, updating = Task.CompletedTask;
             if (ownSync && cfg.ServerSync)
@@ -155,16 +160,31 @@ public static class Cli
             // Settings' "Update now": on a Mac or Linux this restarts the service onto the new version, this copy included.
             // One record of who may read through Claude, for the library's Settings and for Claude's door alike.
             var access = new ClaudeAccess(home);
+            // Search over files that aren't lectures (the Canvas mirror, the AI's files, readable folders).
+            var fileIndex = LibraryWeb.MakeFileIndex(cfg, store);
+            var indexing = fileIndex.RunAsync(Console.WriteLine, stop.Token);
+            // Canvas, through the Chrome extension: one queue for the sync and for AIs' reads.
+            var canvas = new StudyStash.Core.Canvas.CanvasSync(home, c => store.ClassDir(c)) { KnownClass = c => cfg.ClassNames().Contains(c) };
+            // After a sync, an AI explores each class it hasn't explored yet (Settings can ask again).
+            var scout = new StudyStash.Core.Canvas.Scout(home, c => store.ClassDir(c), ai);
+            canvas.Synced += classes =>
+            {
+                var s = StudyStash.Core.Canvas.CanvasSettings.Load(home);
+                if (ai.AgentReady().Ok)
+                    scout.Queue(classes.Where(c => !s.Scouts.ContainsKey(c) && !File.Exists(Path.Combine(store.ClassDir(c), "Canvas", "canvas-recipe.md"))).ToArray());
+            };
             var app = LibraryWeb.Build(builder, cfg, store, pipeline, new LibraryWebOptions
             {
                 Apply = (rel, h) => Updates.ApplyAsync(rel, h, UpdateHost.ThisComputer()), Claude = access, Reach = ClaudeReach.ThisComputer(),
+                AskChat = ai.Ask(() => cfg), Ai = ai, Canvas = canvas, Scout = scout, Files = fileIndex,
+                Inbox = new Inbox(cfg.PoolDir, () => cfg.ClassNames(), c => store.ClassDir(c), ai, new History(cfg.PoolDir)),
             });
             await app.StartAsync(stop.Token);
             // Claude's door: MCP and its sign-in, on this computer only; Tailscale Serve or Funnel passes it on when that's on.
             var claudeBuilder = WebApplication.CreateSlimBuilder();
             claudeBuilder.Logging.ClearProviders();
             claudeBuilder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, ClaudeWeb.PortFor(cfg)));
-            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access);
+            var claude = ClaudeWeb.Build(claudeBuilder, cfg, new LibraryReader(cfg, store), access, canvas, fileIndex);
             try
             {
                 await claude.StartAsync(stop.Token);
@@ -178,7 +198,7 @@ public static class Cli
             await Until(stop.Token);
             await app.StopAsync(CancellationToken.None);
             await claude.StopAsync(CancellationToken.None);
-            await Task.WhenAll(working, syncing, updating);
+            await Task.WhenAll(working, syncing, updating, indexing);
             return 0;
         }
 
@@ -191,6 +211,58 @@ public static class Cli
             var (url, key) = McpTarget(home);
             if (url is null) return Print("Study Stash isn't set up on this computer yet: open the Study Stash app first.", 1);
             await ClaudeTools.RunStdioAsync(new RemoteLibrary(url, key), stop.Token);
+            return 0;
+        }
+
+        // Which AI does the work: show it, pick one, or try one.
+        async Task<int> AiCommand()
+        {
+            var settings = AiSettings.Load(home);
+            string sub = words.ElementAtOrDefault(1) ?? "";
+            if (sub == "use" && words.ElementAtOrDefault(2) is string pick)
+            {
+                if (AiProviders.All().All(p => p.Id != pick)) return Print($"There's no AI called {pick}: claude, codex, gemini or ollama.", 2);
+                string model = Option("--model") ?? "";
+                if (Option("--job") is string job)
+                {
+                    if (!AiSettings.Jobs.Contains(job)) return Print($"There's no kind of work called {job}: {string.Join(", ", AiSettings.Jobs)}.", 2);
+                    settings.ByJob[job] = new AiChoice(pick, model);
+                }
+                else
+                {
+                    settings.Provider = pick;
+                    if (model.Length > 0) settings.Models[pick] = model;
+                }
+                settings.Save(home);
+            }
+            else if (sub == "test")
+            {
+                string id = words.ElementAtOrDefault(2) ?? settings.Provider;
+                var (ok, why) = await new AiJobs(home, () => Configs.Load(home).OllamaHost).TestAsync(id, Option("--model") ?? settings.Models.GetValueOrDefault(id, ""));
+                return Print(ok ? $"{AiProviders.Get(id).Name} works." : $"{AiProviders.Get(id).Name} didn't answer: {why}", ok ? 0 : 1);
+            }
+            else if (sub == "ask" && words.Count > 2)
+            {
+                // As an agent, with the library's tools (Canvas too), reading this folder.
+                var jobs = new AiJobs(home, () => Configs.Load(home).OllamaHost);
+                bool wrote = false;
+                await foreach (var e in jobs.AgentAsync(string.Join(" ", words.Skip(2)), Directory.GetCurrentDirectory(), write: false, job: Option("--job") ?? "agent", ct: stop.Token))
+                {
+                    if (e.Kind == "text") { Console.Write(e.Text); wrote = true; }
+                    else if (e.Kind == "final" && !wrote) Console.Write(e.Text);
+                    else if (e.Kind == "tool") Console.Error.WriteLine($"  [{e.Name}] {e.Path}");
+                    else if (e.Kind == "error") return Print("\n" + e.Text, 1);
+                }
+                Console.WriteLine();
+                return 0;
+            }
+            foreach (string job in AiSettings.Jobs)
+            {
+                var c = settings.For(job);
+                Console.WriteLine($"{job,-6} {AiProviders.Get(c.Provider).Name}{(c.Model.Length > 0 ? " (" + c.Model + ")" : "")}");
+            }
+            foreach (var p in AiProviders.All())
+                Console.WriteLine($"  {p.Id,-7} {(p.Available() ? "installed" : "not installed: " + p.Site)}{(settings.Tests.GetValueOrDefault(p.Id) is { Length: > 0 } t ? ", last test: " + t : "")}");
             return 0;
         }
 
@@ -230,7 +302,8 @@ public static class Cli
             if (Flag("--no-ollama")) cfg.OllamaEnabled = false;
             var client = GranolaClient.For(cfg.McpUrl, GranolaOAuth.For(cfg));
             using var store = new Store(cfg.DbPath, cfg.PoolDir);
-            var pipeline = new Pipeline(cfg, store);
+            var ai = new AiJobs(home, () => cfg.OllamaHost);
+            var pipeline = new Pipeline(cfg, store, ai.SortAsync, ai.SummarizeAsync, notesModel: () => ai.Describe("notes", cfg));
             if (Flag("--once"))
             {
                 var rep = await Sync.SyncOnceAsync(cfg, client, store, ct: stop.Token);

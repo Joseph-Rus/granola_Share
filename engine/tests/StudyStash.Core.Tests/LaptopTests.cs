@@ -227,6 +227,18 @@ public class LaptopTests
     }
 
     [Fact]
+    public async Task A_lecture_granola_left_without_a_folder_is_sent_under_the_class_the_timetable_says_was_on()
+    {
+        using var dir = new TempDir();
+        // Bio lab starts at midnight on Friday 11 Sep; the timetable has Bio 110 then.
+        new Timetable { Classes = [new TimetableClass("Bio 110", ClassTime.ParseMany("Fri 0:00-1:00")!)] }.Save(dir.Path);
+        var w = new Watcher(dir, "auto");
+        await w.Client.PollOnceAsync();
+        Assert.Equal("Bio 110", w.Posted.Single(p => p.Payload["title"].S() == "Bio lab").Payload["folder"].S());
+        Assert.Equal("", w.Posted.Single(p => p.Payload["title"].S() == "CS101 lec 1").Payload["folder"].S());
+    }
+
+    [Fact]
     public async Task Auto_mode_shares_everything_without_asking()
     {
         using var dir = new TempDir();

@@ -3,7 +3,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <PackageReference Include="ReverseMarkdown" Version="6.2.1" />
     <PackageReference Include="Tomlyn" Version="2.10.1" />
+  </ItemGroup>
+
+  <!-- The Chrome extension that reads Canvas: written out as a folder Chrome loads (see Canvas/Extension.cs). -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../../extension/*" LogicalName="extension/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

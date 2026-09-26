@@ -11,6 +11,8 @@ public sealed partial class ClassItem : ObservableObject
     public string Name { get; init; } = "";
     public IBrush Dot { get; init; } = Brushes.Gray;
     public bool IsUnsorted { get; init; }
+    /// <summary>Not a class: what's due soon in every class, from Canvas.</summary>
+    public bool IsDue { get; init; }
     [ObservableProperty] public partial int Count { get; set; }
     [ObservableProperty] public partial bool Selected { get; set; }
     public bool HasDot => !IsUnsorted;
@@ -101,9 +103,13 @@ public sealed partial class LibraryModel : ObservableObject
 
     [RelayCommand] void OpenSource(SourceChip chip) => OnSource?.Invoke(chip);
 
+    /// <summary>The answer was closed: the next question starts a new conversation.</summary>
+    public Action? OnCloseAnswer { get; set; }
+
     [RelayCommand]
     void CloseAnswer()
     {
+        OnCloseAnswer?.Invoke();
         Answer = null;
         Thinking = false;
         Sources.Clear();

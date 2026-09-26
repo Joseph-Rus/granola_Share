@@ -138,13 +138,34 @@ The icon is a lime folder on a dark tile with lines of notes on it. It doesn't u
 The README's screenshots come from `macos/tour.py`. It runs made-up lectures through the app's tour
 mode, where the app captures its own window, and blurs addresses, passwords, and paths.
 
+## The AI, Canvas, chat and undo
+
+- **Providers** (`Core/Ai/Providers.cs`): each is its own CLI, run as a child process with JSON output, so it
+  keeps the person's own sign-in and plan and the library never holds a key. Claude Code (`claude -p`, Edit and
+  Write allowed only inside the working folder), Codex (`codex exec`, read-only or workspace-write), Antigravity
+  for Gemini (`agy -p`, plan or accept-edits; the library adds read-only command rules to its settings, since
+  print mode can't ask). Ollama answers plain questions directly; as an agent it runs through Codex (`--oss`).
+  `ai.json` says which does what, so `config.toml` stays as the Python engine writes it.
+- **Canvas** (`Core/Canvas`): a Chrome extension (in `extension/`, embedded in the engine and written out for
+  Chrome to load) is a read-only fetch proxy. It asks the library for work (`/api/v2/canvas/work`) with its own
+  key, fetches Canvas URLs with the browser's session, and posts the answers back. It refuses anything but the
+  school's Canvas and its file store, and checks often only while work is queued. The sync is a persisted job
+  queue (`crawl.json`); reads an AI asks for (the MCP canvas tools) jump the queue.
+- **Chat and history** (`Core/Ai/Chats.cs`, `History.cs`): a chat turn runs the agent AI in the library folder
+  with the engine's own MCP server. With edits allowed, the library's text is committed first, then exactly the
+  files the turn changed are one commit (trailer `Study-Stash-By:`), which History lists and Undo reverts. The
+  library folder's git repository is local only.
+- **Capture** asks the AI only for a plan (class and title per item, as JSON); the engine moves the files, so
+  it works with any AI and needs no write permission.
+
 ## Naming, terms, and privacy
 
 - **The name doesn't use Granola's.** Granola is named only to say what the app works with, and the
   README, the app's About box, and Settings all say it isn't affiliated.
 - **Transcript copying is opt-in,** for the terms-of-service reason above.
-- **Everything stays on the user's computers.** Lectures and notes live on the library computer,
-  and study notes are written by a local model. The only outside services are Granola (the user's
+- **Everything stays on the user's computers** unless they pick Claude, ChatGPT or Gemini, which then read
+  what they're asked about under the user's own account. Lectures and notes live on the library computer,
+  and by default study notes are written by a local model. The only outside services are Granola (the user's
   own account, over its official MCP server) and GitHub (update checks and downloads). There's no
   analytics.
 - **Recording is the user's responsibility:** consent laws, and their school's rules on recording

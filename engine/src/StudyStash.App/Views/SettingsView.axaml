@@ -96,6 +96,12 @@
       <Button Classes="nav" Classes.on="{Binding OnClasses}" Command="{Binding GoCommand}" CommandParameter="Classes">
         <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="schedule" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Classes" FontSize="13" VerticalAlignment="Center" /></StackPanel>
       </Button>
+      <Button Classes="nav" Classes.on="{Binding OnAi}" Command="{Binding GoCommand}" CommandParameter="AI">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="hub" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="AI" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
+      <Button Classes="nav" Classes.on="{Binding OnCanvas}" Command="{Binding GoCommand}" CommandParameter="Canvas">
+        <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="school" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Canvas" FontSize="13" VerticalAlignment="Center" /></StackPanel>
+      </Button>
       <Button Classes="nav" Classes.on="{Binding OnClaude}" Command="{Binding GoCommand}" CommandParameter="Claude">
         <StackPanel Orientation="Horizontal" Spacing="10"><c:Icon Glyph="auto_awesome" Size="17" Foreground="{DynamicResource Fg2}" /><TextBlock Text="Claude" FontSize="13" VerticalAlignment="Center" /></StackPanel>
       </Button>
@@ -192,6 +198,84 @@
             <Button Grid.Column="4" Classes="push" Command="{Binding AddClassCommand}"><TextBlock Text="Add" FontSize="13" /></Button>
           </Grid>
           <TextBlock Classes="say" Text="{Binding ClassesSay}" IsVisible="{Binding ClassesSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <!-- AI -->
+        <StackPanel IsVisible="{Binding OnAi}">
+          <TextBlock Classes="h" Text="AI" />
+          <TextBlock Classes="body" Text="What writes your study notes, sorts lectures, and answers questions. Claude, ChatGPT and Gemini use your own account through their apps on the library's computer; a local model stays on it." />
+          <TextBlock Classes="sub" Text="Does the work" />
+          <ItemsControl ItemsSource="{Binding Ais}" MaxWidth="480" HorizontalAlignment="Left">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="s:AiChoiceRow">
+                <Button Theme="{StaticResource Surface}" CornerRadius="{DynamicResource RadiusPanel}" Margin="0,0,0,8" Padding="0"
+                        Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).PickAiCommand}" CommandParameter="{Binding}">
+                  <Border Classes="card" Classes.on="{Binding Chosen}" Margin="0">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding About}" FontSize="12" Foreground="{DynamicResource Fg2}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <c:Icon Grid.Column="1" IsVisible="{Binding Works}" Glyph="check_circle" Filled="True" Size="18" Foreground="{DynamicResource Accent}" Margin="10,0,0,0" />
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel IsVisible="{Binding HasAiModels}">
+            <TextBlock Classes="sub" Text="Model" />
+            <ItemsControl ItemsSource="{Binding AiModels}" Width="480" HorizontalAlignment="Left">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="s:AiChoiceRow">
+                  <Button Theme="{StaticResource Surface}" CornerRadius="{DynamicResource RadiusPanel}" Margin="0,0,0,8" Padding="0"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Command="{Binding $parent[UserControl].((s:SettingsModel)DataContext).PickAiModelCommand}" CommandParameter="{Binding}">
+                    <Border Classes="card" Classes.on="{Binding Chosen}" Margin="0">
+                      <TextBlock Text="{Binding Name}" FontSize="13" />
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <Button Classes="push default" Command="{Binding TestAiCommand}" IsEnabled="{Binding !AiBusy}"><TextBlock Text="Try it" FontSize="13" FontWeight="Medium" /></Button>
+          </StackPanel>
+          <TextBlock Classes="say" Text="{Binding AiSay}" IsVisible="{Binding AiSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="body" Margin="0,12,0,0" Text="To use a different AI for notes, sorting or questions, open the library's Settings page." />
+        </StackPanel>
+
+        <!-- Canvas -->
+        <StackPanel IsVisible="{Binding OnCanvas}">
+          <TextBlock Classes="h" Text="Canvas" />
+          <TextBlock Classes="body" Text="Bring in each class's assignments, your submissions and feedback, modules, files and announcements. Canvas is read through Chrome with your own sign-in, so no Canvas token is needed, and nothing on Canvas changes." />
+          <TextBlock Classes="sub" Text="Your school's Canvas" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Border Classes="field" Width="300"><TextBox Classes="bare" Text="{Binding CanvasUrl}" PlaceholderText="school.instructure.com" FontSize="13" /></Border>
+            <Button Classes="push" Command="{Binding SaveCanvasUrlCommand}"><TextBlock Text="Save" FontSize="13" /></Button>
+          </StackPanel>
+          <TextBlock Classes="sub" Text="Chrome extension" />
+          <TextBlock Classes="body" Text="{Binding CanvasLine}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <Button Classes="push default" Command="{Binding SetUpExtensionCommand}" IsEnabled="{Binding !CanvasBusy}"><TextBlock Text="Set up the extension" FontSize="13" FontWeight="Medium" /></Button>
+            <Button Classes="push" Command="{Binding FindCoursesCommand}" IsEnabled="{Binding !CanvasBusy}"><TextBlock Text="Find my courses" FontSize="13" /></Button>
+            <Button Classes="push" Command="{Binding SyncCanvasCommand}" IsEnabled="{Binding !CanvasBusy}"><TextBlock Text="Sync now" FontSize="13" /></Button>
+          </StackPanel>
+          <TextBlock Classes="say" Text="{Binding CanvasSay}" IsVisible="{Binding CanvasSay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <StackPanel IsVisible="{Binding HasCanvasLinks}">
+            <TextBlock Classes="sub" Text="Which course each class is" />
+            <ItemsControl ItemsSource="{Binding CanvasLinks}" MaxWidth="520" HorizontalAlignment="Left">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="s:CanvasLink">
+                  <Grid ColumnDefinitions="160,10,*" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding ClassName}" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding Courses}" SelectedItem="{Binding Course}" HorizontalAlignment="Stretch" FontSize="13" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
         </StackPanel>
 
         <!-- Claude -->
