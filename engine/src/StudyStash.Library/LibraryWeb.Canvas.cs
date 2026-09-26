@@ -181,6 +181,9 @@ public sealed partial class LibraryWeb
         ["class"] = a.ClassName, ["id"] = a.Id, ["name"] = a.Name, ["due"] = a.Due, ["points"] = a.Points, ["status"] = a.Status,
         ["score"] = a.Score, ["submitted"] = a.Submitted, ["url"] = a.Url, ["done"] = a.Done,
         ["folder"] = Canvas.Crawl.AssignmentFolder(a.ClassName, a.Id),
+        ["label"] = Assignments.Label(a.Status, a.Late), ["score_text"] = Assignments.ScoreText(a), ["grade"] = a.Grade,
+        ["late"] = a.Late, ["missing"] = a.Missing, ["excused"] = a.Excused, ["graded_at"] = a.GradedAt, ["kind"] = a.Kind,
+        ["due_at"] = a.DueAt, ["comments"] = a.Comments ?? 0,
     };
 
     JsonObject CanvasJson()
@@ -202,6 +205,11 @@ public sealed partial class LibraryWeb
             {
                 ["ok"] = kv.Value.Ok, ["report"] = kv.Value.Report, ["when"] = kv.Value.When, ["files"] = kv.Value.Files,
             }))), ["changes"] = new JsonArray(s.Changes.Select(c => (JsonNode)c).ToArray()),
+            ["last_changes"] = new JsonArray(s.LastChanges.Select(c => (JsonNode)new JsonObject
+            {
+                ["kind"] = c.Kind, ["class"] = c.Class, ["name"] = c.Name, ["text"] = c.Text, ["assignment_id"] = c.AssignmentId,
+                ["announcement_id"] = c.AnnouncementId,
+            }).ToArray()),
         };
     }
 

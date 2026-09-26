@@ -19,8 +19,8 @@ public sealed partial class CanvasSync
 
     public Crawl Crawl { get; }
     public AgentQueue Agents { get; } = new();
-    /// <summary>A sync finished: what changed, for a notification.</summary>
-    public event Action<List<string>>? Finished;
+    /// <summary>A sync finished and something changed on Canvas: what, for a notification.</summary>
+    public event Action<List<CanvasChange>>? Finished;
     /// <summary>A sync finished: the classes it read (the course scout explores new ones).</summary>
     public event Action<List<string>>? Synced;
 
@@ -29,11 +29,14 @@ public sealed partial class CanvasSync
         this.home = home;
         this.classDir = classDir;
         this.log = log ?? Console.WriteLine;
-        Crawl = new Crawl(home, classDir, () => Clock());
+        Crawl = new Crawl(home, classDir, () => Clock(), () => Zone);
     }
 
     /// <summary>What time it is: when a sync is due, how long Canvas's pause lasts, what's past due (tests set it).</summary>
     public Func<DateTimeOffset> Clock { get; init; } = () => DateTimeOffset.Now;
+
+    /// <summary>The time zone due dates and the Markdown's times are in (tests set it).</summary>
+    public TimeZoneInfo Zone { get; init; } = TimeZoneInfo.Local;
 
     public CanvasSettings Settings => CanvasSettings.Load(home);
 
@@ -54,6 +57,8 @@ public sealed partial class CanvasSync
             st.ExtensionVersion = extVersion;
         });
         if (protocol < 1) return new CanvasWork([], false, Extension.Version()); // nothing this library knows how to hand it
+        // A sync that finished just before the library stopped is filed now, before the next one can start.
+        if (Crawl.Ready) Finish();
         if (!Crawl.Active && !Crawl.Ready && (force || s.Due(now)) && s.On && s.Courses.Count > 0
             && Crawl.Start(s.Url, s.Courses))
         {
@@ -96,15 +101,25 @@ public sealed partial class CanvasSync
     {
         if (Crawl.TakeFinished() is not { } done) return;
         var now = Clock();
+        var wall = TimeZoneInfo.ConvertTime(now, Zone).DateTime;
         var before = Assignments.Load(home);
-        var order = CanvasSettings.Load(home).Courses.Keys.Concat(done.Sections.Keys).Concat(done.Assignments.Keys).Distinct().ToList();
-        // A class whose assignments couldn't all be read keeps what was known: missing rows aren't "removed".
-        bool Read(string cls) => done.Sections.GetValueOrDefault(cls)?.GetValueOrDefault("assignments") == "ok";
-        var items = order.SelectMany(cls => Read(cls)
-            ? done.Assignments.GetValueOrDefault(cls, []).Where(Assignments.Published).Select(a => Assignments.From(cls, a, now))
-            : before.Where(a => a.ClassName == cls)).ToList();
-        // A class no longer linked to Canvas isn't news either.
-        var changes = Assignments.Diff(before.Where(a => order.Contains(a.ClassName)).ToList(), items);
+        var order = CanvasSettings.Load(home).Courses.Keys.Concat(done.Sections.Keys).Distinct().ToList();
+        var items = new List<Assignment>();
+        var changes = new List<CanvasChange>();
+        foreach (string cls in order)
+        {
+            var had = before.Where(a => a.ClassName == cls).ToList();
+            // The class's index has its assignments once they've been read completely, in this sync or an earlier one;
+            // until then (its listing failed), what was known is kept: missing rows aren't "removed".
+            var rows = done.Indexes.GetValueOrDefault(cls) is { } index && index.ReadAt.ContainsKey("assignments")
+                ? index.Assignments.Select(a => Assignments.From(cls, a, now, Zone)).ToList()
+                : had;
+            items.AddRange(rows);
+            // A class's first sync finds everything new: that isn't news.
+            if (had.Count > 0 || done.Before.GetValueOrDefault(cls)?.ReadAt.ContainsKey("assignments") == true)
+                changes.AddRange(Assignments.Diff(had, rows, wall));
+        }
+        // A class no longer linked to Canvas isn't news either: its rows just go.
         Assignments.Save(home, items);
         int files = done.Changed.Values.Sum(v => v.Count);
         var failed = done.Sections.SelectMany(c => c.Value.Where(l => l.Value == "failed").Select(l => $"{c.Key} {l.Key}")).ToList();
@@ -112,12 +127,13 @@ public sealed partial class CanvasSync
         {
             st.Error = failed.Count > 0 ? $"Couldn't read {string.Join(", ", failed)} from Canvas ({Reason(done.Errors, failed[0])}), so what you had is kept."
                 : done.Errors.Count > 0 ? $"{done.Errors.Count} thing(s) couldn't be read: {done.Errors[0]}" : "";
-            // The first sync finds everything new: that isn't news.
-            if (changes.Count > 0 && before.Count > 0) st.Changes = changes.Take(60).ToList();
+            if (changes.Count == 0) return;
+            st.Changes = changes.Take(60).Select(c => c.Text).ToList();
+            st.LastChanges = changes.Take(60).ToList();
         });
         log($"[canvas] sync done: {items.Count} assignments, {changes.Count} changes, {files} files" + (done.Errors.Count > 0 ? $", {done.Errors.Count} errors" : ""));
-        if (before.Count > 0 && changes.Count > 0) Finished?.Invoke(changes);
-        Synced?.Invoke(done.Assignments.Keys.Concat(done.Changed.Keys).Distinct().ToList());
+        if (changes.Count > 0) Finished?.Invoke(changes);
+        Synced?.Invoke(done.Sections.Where(c => c.Value.ContainsValue("ok")).Select(c => c.Key).Concat(done.Changed.Keys).Distinct().ToList());
     }
 
     /// <summary>Why a section failed ("Canvas answered 503"), from the crawl's errors ("CS 101 assignments: …").</summary>

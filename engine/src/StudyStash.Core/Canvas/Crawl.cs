@@ -9,6 +9,11 @@ namespace StudyStash.Core.Canvas;
 /// <summary>A Canvas address for the extension to read, as JSON (the API) or as a file's bytes.</summary>
 public sealed record CanvasJob(string Id, string Url, string Kind);
 
+/// <summary>What a finished sync did: the files it changed (class → paths inside the class's folder), what it couldn't
+/// read, how each class's listings went, and each class's index before the sync and after it.</summary>
+public sealed record CrawlFinished(Dictionary<string, List<string>> Changed, List<string> Errors,
+    Dictionary<string, Dictionary<string, string>> Sections, Dictionary<string, CourseIndex?> Before, Dictionary<string, CourseIndex> Indexes);
+
 /// <summary>What the extension read: the HTTP status, Canvas's paging header, and the text or bytes (base64). Status
 /// 401 with no text, or <see cref="SignedOut"/>, means Chrome isn't signed in to Canvas; 401 with Canvas's
 /// "unauthorized" JSON only means the student can't see that part of the course.</summary>
@@ -90,8 +95,12 @@ public sealed partial class Crawl
     readonly string home;
     readonly Func<string, string> classDir;
     readonly Func<DateTimeOffset> clock;
+    readonly Func<TimeZoneInfo> zone;
     readonly Lock gate = new();
     readonly JsonObject data;
+    // Each class's index as this sync has read it so far (home/canvas/<class>.sync.json), and the ones to save.
+    readonly Dictionary<string, CourseIndex> staging = [];
+    readonly HashSet<string> dirty = [];
 
     /// <param name="classDir">A class's folder in the library (created if missing).</param>
     public Crawl(string home, Func<string, string> classDir) : this(home, classDir, () => DateTimeOffset.Now)
@@ -99,14 +108,20 @@ public sealed partial class Crawl
     }
 
     /// <param name="clock">What time it is (tests set it).</param>
-    public Crawl(string home, Func<string, string> classDir, Func<DateTimeOffset> clock)
+    public Crawl(string home, Func<string, string> classDir, Func<DateTimeOffset> clock) : this(home, classDir, clock, () => TimeZoneInfo.Local)
+    {
+    }
+
+    /// <param name="zone">The time zone the Markdown gives times in (tests set it).</param>
+    public Crawl(string home, Func<string, string> classDir, Func<DateTimeOffset> clock, Func<TimeZoneInfo> zone)
     {
         this.home = home;
         this.classDir = classDir;
         this.clock = clock;
+        this.zone = zone;
         data = Read() ?? [];
-        foreach (string key in new[] { "jobs", "assignments" })
-            if (data[key] is null) data[key] = key == "jobs" ? new JsonArray() : new JsonObject();
+        data.Remove("assignments"); // a crawl.json from before the index kept every assignment's JSON here
+        if (data["jobs"] is not JsonArray) data["jobs"] = new JsonArray();
         foreach (string key in new[] { "inflight", "changed", "manifest", "sections", "pages" })
             if (data[key] is not JsonObject) data[key] = new JsonObject();
         if (data["errors"] is not JsonArray) data["errors"] = new JsonArray();
@@ -186,6 +201,16 @@ public sealed partial class Crawl
         }
     }
 
+    /// <summary>A class's index as this sync has read it so far.</summary>
+    CourseIndex Staged(string cls)
+    {
+        if (!staging.TryGetValue(cls, out var index))
+            staging[cls] = index = CourseIndex.LoadStaged(home, cls) ?? new CourseIndex { Class = cls, Staged = new SyncParts() };
+        index.Staged ??= new SyncParts();
+        dirty.Add(cls);
+        return index;
+    }
+
     void Add(string url, string kind, JsonObject tag)
     {
         int seq = (int)(D(data["seq"]) ?? 0) + 1;
@@ -217,7 +242,6 @@ public sealed partial class Crawl
             if (Flag(data["active"])) return false;
             data["jobs"] = new JsonArray();
             data["inflight"] = new JsonObject();
-            data["assignments"] = new JsonObject();
             data["changed"] = new JsonObject();
             data["errors"] = new JsonArray();
             data["sections"] = new JsonObject();
@@ -227,12 +251,18 @@ public sealed partial class Crawl
             data["signed_out"] = false;
             data["started"] = clock().ToString("o", CultureInfo.InvariantCulture);
             data["base"] = canvasUrl;
+            CourseIndex.DropStaged(home);
+            staging.Clear();
+            dirty.Clear();
             foreach (var (cls, id) in courses)
             {
+                staging[cls] = new CourseIndex { Class = cls, CourseId = id, Staged = new SyncParts() };
+                staging[cls].SaveStaged(home);
                 string api = $"{canvasUrl}/api/v1/courses/{id}";
                 Add($"{api}/assignments?include[]=submission&per_page=100&order_by=due_at", "json", Tag("assignments", cls));
-                Add($"{api}/students/submissions?student_ids[]=self&include[]=submission_comments&include[]=rubric_assessment&include[]=assignment&per_page=100",
-                    "json", Tag("submissions", cls));
+                // Only the student's own: every attempt (submission_history), the grader's comments and rubric marks.
+                Add($"{api}/students/submissions?student_ids[]=self&include[]=submission_comments&include[]=rubric_assessment&include[]=assignment"
+                    + "&include[]=submission_history&per_page=100", "json", Tag("submissions", cls));
                 Add($"{api}/modules?include[]=items&per_page=100", "json", Tag("modules", cls));
                 // Not /api/v1/announcements: without an end_date it stops 28 days after its start_date. The course's
                 // own list has the whole term, and whether the student has read each one.
@@ -400,29 +430,89 @@ public sealed partial class Crawl
                 data["active"] = false;
                 data["ready"] = !Flag(data["signed_out"]);
             }
+            SaveStaged();
             Save();
             return true;
         }
     }
 
-    /// <summary>A finished sync's results, once: every assignment (class → Canvas's JSON), the files that changed
-    /// (class → paths inside the class folder), what couldn't be read, and how each class's listings went. Null while
-    /// it's still running.</summary>
-    public (Dictionary<string, List<JsonObject>> Assignments, Dictionary<string, List<string>> Changed, List<string> Errors,
-        Dictionary<string, Dictionary<string, string>> Sections)? TakeFinished()
+    /// <summary>Keep what this sync has read of each class that changed, so a restart carries on.</summary>
+    void SaveStaged()
+    {
+        foreach (string cls in dirty)
+            if (staging.TryGetValue(cls, out var index)) index.SaveStaged(home);
+        dirty.Clear();
+    }
+
+    /// <summary>
+    /// A finished sync's results, once. Each class's index is promoted (<see cref="CourseIndex.Promoted"/>) and its
+    /// Markdown written from it; then: the files that changed (class → paths inside the class folder), what couldn't
+    /// be read, how each class's listings went, and each class's index before and after. Null while it's still running.
+    /// </summary>
+    public CrawlFinished? TakeFinished()
     {
         lock (gate)
         {
             if (!Flag(data["ready"])) return null;
-            var assignments = ((JsonObject)data["assignments"]!).ToDictionary(kv => kv.Key, kv => (kv.Value as JsonArray ?? []).OfType<JsonObject>().Select(o => (JsonObject)o.DeepClone()).ToList());
+            var sections = SectionsNow();
+            var before = new Dictionary<string, CourseIndex?>();
+            var after = new Dictionary<string, CourseIndex>();
+            string at = clock().ToString("o", CultureInfo.InvariantCulture);
+            foreach (var (cls, states) in sections)
+            {
+                try
+                {
+                    before[cls] = CourseIndex.Load(home, cls);
+                    after[cls] = CourseIndex.Promote(home, cls, states, at, index => Forget(cls, index));
+                    Render(cls, after[cls]);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    Errors.Add($"{cls}: {e.Message}");
+                }
+            }
+            staging.Clear();
+            dirty.Clear();
             var changed = Changed.ToDictionary(kv => kv.Key, kv => (kv.Value as JsonArray ?? []).Select(S).Distinct().ToList());
             var errors = Errors.Select(S).ToList();
             data["ready"] = false;
-            data["assignments"] = new JsonObject();
             data["changed"] = new JsonObject();
             data["pages"] = new JsonObject();
             Save();
-            return (assignments, changed, errors, SectionsNow());
+            return new CrawlFinished(changed, errors, sections, before, after);
+        }
+    }
+
+    /// <summary>A file the index says was saved but never arrived (Canvas refused it) isn't there: the next sync asks again.</summary>
+    void Forget(string cls, CourseIndex index)
+    {
+        string root = classDir(cls);
+        void Check(FileRef f)
+        {
+            if (f.Local is { } local && !File.Exists(Path.Combine(root, local))) f.Local = null;
+        }
+        foreach (var a in index.Assignments)
+        {
+            a.InstructionFiles.ForEach(Check);
+            if (a.Submission is not { } s) continue;
+            s.Files.ForEach(Check);
+            foreach (var t in s.Attempts) t.Files.ForEach(Check);
+            foreach (var c in s.Comments) c.Files.ForEach(Check);
+        }
+    }
+
+    /// <summary>Each assignment's spec.md and feedback.md, from the class's index (a spec written by hand is left alone).</summary>
+    void Render(string cls, CourseIndex index)
+    {
+        var tz = zone();
+        var now = clock();
+        foreach (var a in index.Assignments)
+        {
+            if (a.Folder.Length == 0) continue;
+            string dir = Path.Combine(classDir(cls), a.Folder);
+            if (SpecHead(dir) is not { } head || head.Contains(Generated, StringComparison.Ordinal))
+                Write(cls, Path.Combine(dir, "spec.md"), CanvasMarkdown.Spec(cls, a, tz));
+            if (CanvasMarkdown.HasFeedback(a)) Write(cls, Path.Combine(dir, "feedback.md"), CanvasMarkdown.Feedback(cls, a, tz, now));
         }
     }
 
@@ -538,9 +628,13 @@ public sealed partial class Crawl
             : null;
         if (dir is null)
         {
-            // Two assignments with the same name (or one renamed on Canvas) get their own folders.
+            // Two assignments with the same name (or one renamed on Canvas) get their own folders. Specs are written when
+            // the sync finishes, so a folder another assignment already has is taken too.
+            string mine = $"asgdir:{cls}:";
+            var taken = Manifest.Where(kv => kv.Key.StartsWith(mine, StringComparison.Ordinal)).Select(kv => S(kv.Value)).ToHashSet();
+            bool Taken(string d) => File.Exists(Path.Combine(d, "spec.md")) || taken.Contains(Path.GetRelativePath(classDir(cls), d));
             dir = Path.Combine(root, SafeName(S(a["name"]), 80));
-            for (int i = 2; File.Exists(Path.Combine(dir, "spec.md")); i++) dir = Path.Combine(root, SafeName(S(a["name"]), 76) + $" {i}");
+            for (int i = 2; Taken(dir); i++) dir = Path.Combine(root, SafeName(S(a["name"]), 76) + $" {i}");
         }
         Manifest[key] = Path.GetRelativePath(classDir(cls), dir);
         return dir;
@@ -549,116 +643,128 @@ public sealed partial class Crawl
     /// <summary>The marker in every spec.md the sync writes; one without it was written by hand and is left alone.</summary>
     public const string Generated = "generated_by: study-stash";
 
+    /// <summary>A path inside the class's folder, with / ("Canvas/assignments/Lab 1/spec.md").</summary>
+    string Rel(string cls, string path) => Path.GetRelativePath(classDir(cls), path).Replace('\\', '/');
+
     void AssignmentsPage(string cls, JsonArray list)
     {
-        if (data["assignments"]![cls] is not JsonArray all) data["assignments"]![cls] = all = [];
-        foreach (var a in list.OfType<JsonObject>())
+        var index = Staged(cls);
+        foreach (var a in list.OfType<JsonObject>().Where(Assignments.Published))
         {
-            all.Add(a.DeepClone());
-            if (!Assignments.Published(a)) continue;
-            string dir = AssignmentDir(cls, a);
-            if (SpecHead(dir) is { } head && !head.Contains(Generated, StringComparison.Ordinal)) continue;
-            Write(cls, Path.Combine(dir, "spec.md"), SpecMd(cls, a));
+            var info = AssignmentInfo.From(a, Rel(cls, AssignmentDir(cls, a)));
+            int at = index.Assignments.FindIndex(x => x.Id == info.Id);
+            if (at >= 0) index.Assignments[at] = info;
+            else index.Assignments.Add(info);
         }
     }
 
     static string Num(double? d) => (d ?? 0).ToString("0.##", CultureInfo.InvariantCulture);
 
-    /// <summary>"Tue 30 Sep 2026, 11:59 PM" in this computer's time.</summary>
-    public static string LocalTime(string iso) =>
-        DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var t)
-            ? t.ToLocalTime().ToString("ddd d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture) : "";
-
-    public static string SpecMd(string cls, JsonObject a)
-    {
-        var sb = new StringBuilder();
-        sb.Append("---\n")
-            .Append("title: ").Append(JsonSerializer.Serialize(S(a["name"]))).Append('\n')
-            .Append("class: ").Append(cls).Append('\n')
-            .Append("canvas_id: ").Append(Num(D(a["id"]))).Append('\n')
-            .Append("due: ").Append(LocalTime(S(a["due_at"])) is { Length: > 0 } due ? due : "none").Append('\n')
-            .Append("points: ").Append(Num(D(a["points_possible"]))).Append('\n')
-            .Append("submission_types: ").Append(string.Join(", ", (a["submission_types"] as JsonArray ?? []).Select(S))).Append('\n')
-            .Append("url: ").Append(S(a["html_url"])).Append('\n')
-            .Append("generated_by: study-stash (from Canvas; rewritten when Canvas changes)\n---\n\n")
-            .Append("# ").Append(S(a["name"])).Append("\n\n");
-        var facts = new List<string> { S(a["due_at"]).Length > 0 ? $"**Due** {LocalTime(S(a["due_at"]))}" : "**No due date**", $"**{Num(D(a["points_possible"]))} points**" };
-        if (S(a["lock_at"]).Length > 0) facts.Add($"closes {LocalTime(S(a["lock_at"]))}");
-        sb.Append(string.Join(" · ", facts)).Append("\n\n");
-        string text = HtmlText.ToMarkdown(S(a["description"]));
-        sb.Append(text.Length > 0 ? text : "_No instructions on Canvas._").Append('\n');
-        if (a["rubric"] is JsonArray rubric && rubric.Count > 0)
-        {
-            sb.Append("\n## Rubric\n\n| Criterion | Points | Levels |\n|---|---|---|\n");
-            foreach (var r in rubric.OfType<JsonObject>())
-            {
-                string levels = string.Join("; ", (r["ratings"] as JsonArray ?? []).OfType<JsonObject>().Select(x => $"{S(x["description"])} ({Num(D(x["points"]))})"));
-                string desc = S(r["description"]) + (S(r["long_description"]) is { Length: > 0 } ld ? " (" + ld.ReplaceLineEndings(" ") + ")" : "");
-                sb.Append("| ").Append(desc.Replace('|', '/')).Append(" | ").Append(Num(D(r["points"]))).Append(" | ").Append(levels.Replace('|', '/')).Append(" |\n");
-            }
-        }
-        return sb.ToString();
-    }
-
     void Submissions(string cls, JsonArray list)
     {
+        var index = Staged(cls);
         foreach (var s in list.OfType<JsonObject>())
         {
-            if (s["assignment"] is not JsonObject a) continue;
-            if (S(s["submitted_at"]).Length == 0 && D(s["score"]) is null && (s["submission_comments"] as JsonArray ?? []).Count == 0) continue;
-            string dir = AssignmentDir(cls, a);
-            Write(cls, Path.Combine(dir, "feedback.md"), FeedbackMd(a, s));
-            foreach (var att in (s["attachments"] as JsonArray ?? []).OfType<JsonObject>())
-                WantFile(cls, att, Path.Combine(dir, "submission"));
+            var a = s["assignment"] as JsonObject;
+            long id = (long)(D(s["assignment_id"]) ?? D(a?["id"]) ?? 0);
+            if (id == 0) continue;
+            string? dir = a is not null ? AssignmentDir(cls, a)
+                : S(Manifest[$"asgdir:{cls}:{id}"]) is { Length: > 0 } known ? Path.Combine(classDir(cls), known) : null;
+            index.Staged!.Submissions[id] = Submission(cls, s, dir);
+            if (a is not null && dir is not null && Assignments.Published(a)) index.Staged.Assignments[id] = AssignmentInfo.From(a, Rel(cls, dir));
         }
     }
 
-    public static string FeedbackMd(JsonObject a, JsonObject s)
+    [GeneratedRegex("/users/\\d+/")]
+    private static partial Regex UserPath();
+
+    /// <summary>
+    /// A submission as the index keeps it, with its files queued: the latest attempt's into submission/, older
+    /// attempts' into submission/attempt N/, files attached to comments into feedback/. Audio and video comments stay
+    /// links. People are kept by display name only (never ids, avatars or emails); a comment is the student's own
+    /// when its author is the submission's owner.
+    /// </summary>
+    SubmissionInfo Submission(string cls, JsonObject s, string? dir)
     {
-        double? pts = D(a["points_possible"]), score = D(s["score"]);
-        string state = Flag(s["excused"]) ? "excused" : Flag(s["missing"]) ? "missing" : Flag(s["late"]) ? "late" : S(s["workflow_state"]);
-        var sb = new StringBuilder();
-        sb.Append("---\ncanvas_id: ").Append(Num(D(a["id"]))).Append("\ngenerated_by: study-stash (from Canvas)\n---\n\n")
-            .Append("# ").Append(S(a["name"])).Append(": my submission\n\n")
-            .Append("- **Score:** ").Append(score is double sc ? $"{Num(sc)}/{Num(pts)}" : "not graded yet");
-        if (S(s["grade"]) is { Length: > 0 } g && g != Num(score)) sb.Append($" (grade {g})");
-        sb.Append("\n- **Status:** ").Append(state);
-        if (S(s["submitted_at"]).Length > 0) sb.Append(", submitted ").Append(LocalTime(S(s["submitted_at"])));
-        sb.Append("\n- **Attempt:** ").Append(Num(D(s["attempt"]))).Append('\n');
-        if (D(s["points_deducted"]) is double off && off > 0) sb.Append("- **Late penalty:** −").Append(Num(off)).Append('\n');
-        var files = (s["attachments"] as JsonArray ?? []).OfType<JsonObject>().ToList();
-        if (files.Count > 0)
-            sb.Append("- **Files:** ").Append(string.Join(", ", files.Select(f => $"[{S(f["display_name"])}](submission/{Uri.EscapeDataString(SafeName(S(f["display_name"])))})"))).Append('\n');
-        if (S(s["body"]) is { Length: > 0 } body) sb.Append("\n## What I submitted\n\n").Append(HtmlText.ToMarkdown(body)).Append('\n');
-        if (s["rubric_assessment"] is JsonObject ra && ra.Count > 0)
+        var info = SubmissionInfo.Summary(s);
+        var had = new Dictionary<long, FileRef>(); // a file handed in again with the next attempt is saved once
+        List<FileRef> Files(JsonNode? list, string into) => (list as JsonArray ?? []).OfType<JsonObject>().Select(meta =>
         {
-            var names = (a["rubric"] as JsonArray ?? []).OfType<JsonObject>().ToDictionary(r => S(r["id"]), r => S(r["description"]));
-            sb.Append("\n## Rubric marks\n\n");
-            foreach (var (rid, mark) in ra)
-                sb.Append("- ").Append(names.GetValueOrDefault(rid, rid)).Append(": ").Append(D(mark?["points"]) is double p ? Num(p) : "none")
-                    .Append(S(mark?["comments"]) is { Length: > 0 } c ? " (" + c + ")" : "").Append('\n');
-        }
-        var comments = (s["submission_comments"] as JsonArray ?? []).OfType<JsonObject>().ToList();
-        if (comments.Count > 0)
+            long fid = (long)(D(meta["id"]) ?? 0);
+            if (fid != 0 && had.TryGetValue(fid, out var known)) return known;
+            var f = dir is null ? Describe(meta) : WantFile(cls, meta, Path.Combine(dir, into));
+            if (fid != 0) had[fid] = f;
+            return f;
+        }).ToList();
+
+        info.Files = Files(s["attachments"], "submission");
+        info.Body = HtmlText.ToMarkdown(S(s["body"])) is { Length: > 0 } body ? body : S(s["url"]) is { Length: > 0 } link ? $"<{link}>" : "";
+        var history = (s["submission_history"] as JsonArray ?? []).OfType<JsonObject>().Where(h => D(h["attempt"]) is not null)
+            .GroupBy(h => (int)D(h["attempt"])!.Value).Select(g => g.Last()).OrderBy(h => D(h["attempt"]));
+        foreach (var h in history)
         {
-            sb.Append("\n## Comments\n\n");
-            foreach (var c in comments)
-                sb.Append("- **").Append(S(c["author_name"])).Append("** (").Append(LocalTime(S(c["created_at"]))).Append("): ")
-                    .Append(Py.Strip(S(c["comment"])).ReplaceLineEndings(" ")).Append('\n');
+            int n = (int)D(h["attempt"])!.Value;
+            info.Attempts.Add(new AttemptInfo
+            {
+                Attempt = n, SubmittedAt = S(h["submitted_at"]) is { Length: > 0 } at ? at : null, Late = Flag(h["late"]),
+                Files = n == info.Attempt ? info.Files : Files(h["attachments"], Path.Combine("submission", $"attempt {n}")),
+            });
         }
-        return sb.ToString();
+        if (info.Attempts.Count == 0 && info.Attempt is int only && info.SubmittedAt is not null)
+            info.Attempts.Add(new AttemptInfo { Attempt = only, SubmittedAt = info.SubmittedAt, Late = info.Late, Files = info.Files });
+
+        if (s["rubric_assessment"] is JsonObject marks)
+            foreach (var (criterion, m) in marks)
+                if (m is JsonObject mark)
+                    info.Marks[criterion] = new RubricMark { Points = D(mark["points"]), RatingId = S(mark["rating_id"]) is { Length: > 0 } r ? r : null, Comment = Py.Strip(S(mark["comments"])) };
+
+        double? owner = D(s["user_id"]);
+        foreach (var c in (s["submission_comments"] as JsonArray ?? []).OfType<JsonObject>())
+            info.Comments.Add(new CommentInfo
+            {
+                Author = Py.Strip(S(c["author_name"])),
+                At = S(c["created_at"]) is { Length: > 0 } at ? at : null,
+                Text = Py.Strip(S(c["comment"])),
+                Files = Files(c["attachments"], "feedback"),
+                // Canvas's link names the student by id; "self" opens the same recording.
+                MediaUrl = c["media_comment"] is JsonObject media && S(media["url"]) is { Length: > 0 } url ? UserPath().Replace(url, "/users/self/") : null,
+                Mine = owner is not null && D(c["author_id"]) == owner,
+            });
+        return info;
     }
 
-    /// <summary>Queue a file's bytes, unless this version is already here, it's audio or video, or it's too big.</summary>
-    void WantFile(string cls, JsonObject meta, string destDir, string? name = null)
+    /// <summary>A Canvas file as the index keeps it (its link without the one-time verifier), and why it won't be
+    /// saved, if it won't: "locked", "too big", or "video" (audio and video).</summary>
+    static FileRef Describe(JsonObject meta)
     {
-        string type = S(meta["content-type"]);
-        if (Flag(meta["locked_for_user"]) || (D(meta["size"]) ?? 0) > MaxBytes || type.StartsWith("video/", StringComparison.Ordinal)
-            || type.StartsWith("audio/", StringComparison.Ordinal) || S(meta["url"]).Length == 0) return;
-        string path = Path.Combine(destDir, SafeName(name ?? (S(meta["display_name"]) is { Length: > 0 } dn ? dn : S(meta["filename"]) is { Length: > 0 } fn ? fn : Num(D(meta["id"])))));
+        string type = S(meta["content-type"]), url = S(meta["url"]);
+        return new FileRef
+        {
+            Id = (long)(D(meta["id"]) ?? 0),
+            Name = S(meta["display_name"]) is { Length: > 0 } dn ? dn : S(meta["filename"]) is { Length: > 0 } fn ? fn : Num(D(meta["id"])),
+            Size = D(meta["size"]) is double n ? (long)n : null,
+            ContentType = type,
+            UpdatedAt = S(meta["updated_at"]) is { Length: > 0 } u ? u : null,
+            Url = url.Split('?')[0],
+            Skipped = Flag(meta["locked_for_user"]) || url.Length == 0 ? "locked"
+                : (D(meta["size"]) ?? 0) > MaxBytes ? "too big"
+                : type.StartsWith("video/", StringComparison.Ordinal) || type.StartsWith("audio/", StringComparison.Ordinal) ? "video"
+                : null,
+        };
+    }
+
+    /// <summary>Queue a file's bytes into <paramref name="destDir"/>, unless this version is already there, and say
+    /// where it goes (or why it won't).</summary>
+    FileRef WantFile(string cls, JsonObject meta, string destDir, string? name = null)
+    {
+        var f = Describe(meta);
+        if (f.Skipped is not null) return f;
+        string path = Path.Combine(destDir, SafeName(name ?? f.Name));
+        f.Local = Rel(cls, path);
         string key = $"file:{Num(D(meta["id"]))}:{Path.GetRelativePath(classDir(cls), path)}";
-        if (S(Manifest[key]) == S(meta["updated_at"]) && File.Exists(path)) return;
+        if (S(Manifest[key]) == S(meta["updated_at"]) && File.Exists(path)) return f;
         Add(S(meta["url"]), "bytes", Tag("file_bytes", cls, ("path", path), ("key", key), ("updated", S(meta["updated_at"]))));
+        return f;
     }
 
     void FileBytes(JsonObject tag, byte[] body)
@@ -708,7 +814,7 @@ public sealed partial class Crawl
     void Page(string cls, JsonObject page, string dir)
     {
         if (Flag(page["locked_for_user"])) return;
-        string text = $"# {S(page["title"])}\n\n_From Canvas ({S(page["html_url"])}), updated {LocalTime(S(page["updated_at"]))}._\n\n{HtmlText.ToMarkdown(S(page["body"]))}\n";
+        string text = $"# {S(page["title"])}\n\n_From Canvas ({S(page["html_url"])}), updated {CanvasMarkdown.When(S(page["updated_at"]), zone())}._\n\n{HtmlText.ToMarkdown(S(page["body"]))}\n";
         Write(cls, Path.Combine(dir, SafeName(S(page["title"]) is { Length: > 0 } t ? t : "page") + ".md"), text);
     }
 
@@ -717,7 +823,7 @@ public sealed partial class Crawl
         if (list.Count == 0) return;
         var sb = new StringBuilder($"# {cls}: announcements\n\n_From Canvas, newest first._\n\n");
         foreach (var a in list.OfType<JsonObject>().OrderByDescending(x => S(x["posted_at"]), StringComparer.Ordinal))
-            sb.Append("## ").Append(S(a["title"])).Append("\n_").Append(LocalTime(S(a["posted_at"]))).Append(" · ")
+            sb.Append("## ").Append(S(a["title"])).Append("\n_").Append(CanvasMarkdown.When(S(a["posted_at"]), zone())).Append(" · ")
                 .Append(S(a["author"]?["display_name"])).Append("_\n\n").Append(HtmlText.ToMarkdown(S(a["message"]))).Append("\n\n");
         Write(cls, Path.Combine(CanvasDir(cls), "announcements.md"), sb.ToString().TrimEnd() + "\n");
     }

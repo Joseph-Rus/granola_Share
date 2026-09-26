@@ -239,7 +239,7 @@ public class CanvasSyncTests
 
         if (how == "the whole listing fails") canvas.Status(AssignmentsPath, 500);
         else canvas.Status(AssignmentsPath + "?page=2", 502, "Bad Gateway");
-        var said = new List<string>();
+        var said = new List<CanvasChange>();
         sync.Finished += said.AddRange;
         Assert.True(canvas.Run(sync));
 
@@ -329,7 +329,7 @@ public class CanvasSyncTests
         byte[] list = File.ReadAllBytes(Assignments.PathIn(dir.Path));
         Assert.Contains(files.Keys, f => f.EndsWith("ps4-answers.pdf", StringComparison.Ordinal));
         int asked = canvas.Requested.Count;
-        var said = new List<string>();
+        var said = new List<CanvasChange>();
         sync.Finished += said.AddRange;
 
         Assert.True(canvas.Run(sync));

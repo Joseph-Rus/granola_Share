@@ -14,6 +14,8 @@ public sealed partial class FakeCanvas
     public const string Base = "https://canvas.test";
     /// <summary>The design's "now": Thu 25 Sep 2025, 10:24 in California.</summary>
     public static readonly DateTimeOffset DesignNow = new(2025, 9, 25, 17, 24, 0, TimeSpan.Zero);
+    /// <summary>The design's time zone: California's.</summary>
+    public static readonly TimeZoneInfo Zone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
 
     /// <summary>One answer: status, body, paging link, and what the extension passes on from the headers.</summary>
     public sealed record Reply(int Status, byte[] Body, string Link = "", double? Rate = null, double? RetryAfter = null,
@@ -148,7 +150,7 @@ public sealed partial class FakeCanvas
         .Bytes("/files/8601/download", Encoding.UTF8.GetBytes("%PDF-1.4 lab 2"));
 
     /// <summary>A library whose classes are linked to these Canvas courses, synced by a <see cref="CanvasSync"/> on the
-    /// given clock. Class folders are under <c>pool/</c> in the temp folder.</summary>
+    /// given clock, in California's time zone. Class folders are under <c>pool/</c> in the temp folder.</summary>
     public static CanvasSync Library(TempDir dir, Func<DateTimeOffset> clock, params (string Class, long Course)[] courses)
     {
         CanvasSettings.Update(dir.Path, s =>
@@ -156,7 +158,7 @@ public sealed partial class FakeCanvas
             s.Url = Base;
             foreach (var (cls, id) in courses.Length > 0 ? courses : [("CS 101", 4201L)]) s.Courses[cls] = id;
         });
-        return new CanvasSync(dir.Path, c => ClassDir(dir, c), _ => { }) { Clock = clock };
+        return new CanvasSync(dir.Path, c => ClassDir(dir, c), _ => { }) { Clock = clock, Zone = Zone };
     }
 
     public static string ClassDir(TempDir dir, string cls)

@@ -35,6 +35,8 @@ public sealed class CanvasSettings
     public bool SyncNow { get; set; }
     /// <summary>What changed in the last sync that changed anything ("New: CS 101 · Lab 3 · due Tue 11:59 PM").</summary>
     public List<string> Changes { get; set; } = [];
+    /// <summary>The same changes with what each is about (kind, class, assignment), for the app's list and notifications.</summary>
+    public List<CanvasChange> LastChanges { get; set; } = [];
     /// <summary>What the course scout said last, per class.</summary>
     public Dictionary<string, ScoutReport> Scouts { get; set; } = [];
 

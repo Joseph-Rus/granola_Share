@@ -24,13 +24,32 @@ public class CanvasTests
     [Fact]
     public void Changes_between_syncs_are_said_in_words()
     {
-        var old = new List<Assignment> { new("CS 101", 1, "Lab 1", "2026-09-30T23:59", 10, "open", null, "", ""), new("CS 101", 2, "Quiz", "", 5, "open", null, "", "") };
-        var now = new List<Assignment> { new("CS 101", 1, "Lab 1", "2026-10-01T23:59", 10, "graded", 9, "", ""), new("CS 101", 3, "Lab 2", "", 10, "open", null, "", "") };
-        var said = Assignments.Diff(old, now);
-        Assert.Contains(said, s => s.StartsWith("Due date moved: CS 101 · Lab 1", StringComparison.Ordinal));
-        Assert.Contains("Now graded: CS 101 · Lab 1 (9/10)", said);
-        Assert.Contains(said, s => s.StartsWith("New: CS 101 · Lab 2", StringComparison.Ordinal));
-        Assert.Contains("Removed: CS 101 · Quiz", said);
+        // The design's now: Thu 25 Sep 2025, 10:24 in California.
+        var now = new DateTime(2025, 9, 25, 10, 24, 0);
+        var old = new List<Assignment>
+        {
+            new("CS 101", 9002, "Problem set 4", "2025-09-16T23:59", 20, "submitted", null, "2025-09-16T21:41", "", Comments: 0),
+            new("CALC II", 9301, "Quiz 3 practice", "2025-09-25T23:59", 10, "open", null, "", ""),
+            new("BIO 110", 9201, "Osmosis lab report", "2025-09-24T23:59", 20, "submitted", null, "2025-09-24T20:15", ""),
+        };
+        var after = new List<Assignment>
+        {
+            new("CS 101", 9002, "Problem set 4", "2025-09-16T23:59", 20, "graded", 18, "2025-09-16T21:41", "", Grade: "18", Comments: 1),
+            new("CALC II", 9301, "Quiz 3 practice", "2025-09-26T09:00", 10, "open", null, "", ""),
+            new("CS 101", 9001, "Lab 3: recursion traces", "2025-09-30T23:59", 20, "open", null, "", ""),
+        };
+        var said = Assignments.Diff(old, after, now);
+        Assert.Equal(
+        [
+            "Graded: CS 101 · Problem set 4 · 18/20",
+            "Feedback: CS 101 · Problem set 4 · 1 new comment",
+            "Moved: CALC II · Quiz 3 practice · now Fri 9:00 AM",
+            "New: CS 101 · Lab 3: recursion traces · due Tue 11:59 PM",
+            "Removed: BIO 110 · Osmosis lab report",
+        ], said.Select(c => c.Text));
+        Assert.Equal(["graded", "feedback", "moved", "new", "removed"], said.Select(c => c.Kind));
+        Assert.All(said, c => Assert.Null(c.AnnouncementId));
+        Assert.Equal((9002L, "CS 101", "Problem set 4"), (said[0].AssignmentId!.Value, said[0].Class, said[0].Name));
     }
 
     [Fact]
@@ -58,7 +77,7 @@ public class CanvasTests
         Assert.Contains("| Correct traces (Every call and every return value is right.) | 10 |", spec);
         string feedback = File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "feedback.md"));
         Assert.Contains("- **Score:** 18/20", feedback);
-        Assert.Contains("- Stack traces: 8 (The frame for n = 1 is missing in 3b.)", feedback);
+        Assert.Contains("| Stack traces | 8 / 10 | One frame missing | The frame for n = 1 is missing in 3b. |", feedback);
         Assert.Contains("**Dr. Okafor**", feedback);
         Assert.Contains("Watch the last frame in 3b, it’s the one people drop.", feedback);
         Assert.Equal("%PDF-1.4 ps4 answers", File.ReadAllText(Path.Combine(root, "assignments", "Problem set 4", "submission", "ps4-answers.pdf")));
