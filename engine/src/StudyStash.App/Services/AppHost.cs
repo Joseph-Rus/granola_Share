@@ -267,12 +267,7 @@ public sealed class AppHost : IDisposable
         watchdog = new Timer(_ => CheckRecorder(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         // A download that quitting (or a closed laptop) cut short picks up where it stopped.
         if (Settings.SetupDone && !ModelReady) _ = DownloadModelAsync();
-        if (Settings.Role != AppRole.Laptop && Settings.SetupDone)
-        {
-            var svc = localLibrary?.Invoke() ?? new LibraryService(Home, Configs.Load(Home));
-            UseLocalLibrary(svc);
-            _ = svc.StartAsync();
-        }
+        if (Settings.Role != AppRole.Laptop && Settings.SetupDone) _ = RefreshLocalLibraryAsync();
     }
 
     /// <summary>Take this as this computer's own library: the one <see cref="LocalLibrary"/> shows from now on, stopped
