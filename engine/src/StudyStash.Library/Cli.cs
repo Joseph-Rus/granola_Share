@@ -16,6 +16,13 @@ public static class Cli
     /// <summary>The words that make the app the engine instead of opening its windows.</summary>
     public static readonly string[] Commands = ["run", "serve", "setup", "init", "doctor", "update", "autostart", "version", "mcp", "ai"];
 
+    /// <summary>What a command the engine doesn't know prints: every command there is.</summary>
+    public const string Usage = "usage: studystash run | serve | setup --page [--no-browser] | init\n"
+        + "       | doctor [--role server|client] | update [--check] [--force]\n"
+        + "       | autostart install|uninstall|status --role server|client | version\n"
+        + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
+        + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)";
+
     /// <summary>True when these arguments name a command (options may come first: <c>--home DIR run</c>).</summary>
     public static bool IsCommand(IReadOnlyList<string> args)
     {
@@ -71,11 +78,7 @@ public static class Cli
             "update" => await Update(),
             "autostart" => AutostartCommand(),
             "version" => Print(Engine.Version),
-            _ => Print("usage: studystash run | serve | setup --page [--no-browser] | init\n"
-                + "       | doctor [--role server|client] | update [--check] [--force]\n"
-                + "       | autostart install|uninstall|status --role server|client | version\n"
-                + "       | mcp   (the MCP server for Claude, over stdin and stdout)\n"
-                + "       | ai [use PROVIDER [--job notes|sort|ask|agent] [--model M] | test [PROVIDER] | ask QUESTION]   (each takes --home DIR)", 2),
+            _ => Print(Usage, 2),
         };
 
         // Where `mcp` reads the library: the laptop's library, or this computer's own.

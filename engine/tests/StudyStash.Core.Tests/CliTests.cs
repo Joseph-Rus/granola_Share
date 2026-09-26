@@ -39,4 +39,13 @@ public class CliTests
         Assert.Equal(2, await Cli.RunAsync(["--home", dir["home"], command]));
         Assert.Empty(Directory.GetFileSystemEntries(dir["home"]));
     }
+
+    [Fact]
+    public void The_usage_names_every_command_and_only_studystash_ones()
+    {
+        Assert.StartsWith("usage: studystash ", Cli.Usage);
+        foreach (string command in Cli.Commands) Assert.Contains(command, Cli.Usage);
+        foreach (string gone in (string[])["granola", "login", "logout", "sync", "tools", "client run", "client open", "config-check"])
+            Assert.DoesNotContain(gone, Cli.Usage, StringComparison.OrdinalIgnoreCase);
+    }
 }
