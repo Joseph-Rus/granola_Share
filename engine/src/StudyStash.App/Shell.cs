@@ -849,12 +849,26 @@ public static partial class Shell
             trayRecording = recording;
             tray.Icon = TrayImage(recording);
         }
-        if (OperatingSystem.IsWindows() && mainWindow?.TryGetPlatformHandle()?.Handle is IntPtr hwnd)
-        {
-            var busy = host.Lectures.All().FirstOrDefault(l => l.State == LectureState.Transcribing);
-            Desktop.TaskbarProgress(hwnd, busy?.Progress);
-        }
+        if (OperatingSystem.IsWindows()) UpdateTaskbar(problem);
         if (setup is not null) Setup.Refresh(setup, host);
+    }
+
+    static int lastTaskbarPercent = -1;
+
+    /// <summary>Windows: every visible regular window's taskbar button shows the model's download, or a lecture
+    /// transcribing, or turns red while <paramref name="problem"/> is stopping a lecture being recorded.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    static void UpdateTaskbar(AppProblem? problem)
+    {
+        double? fraction = !host.ModelReady && host.Downloading is { } d ? d.Fraction
+            : host.Lectures.All().FirstOrDefault(l => l.State == LectureState.Transcribing)?.Progress;
+        bool blocked = !panel.CanRecord && problem is not null;
+        foreach (var w in new[] { mainWindow, setupWindow, settingsWindow })
+            if (w?.IsVisible == true && w.TryGetPlatformHandle()?.Handle is IntPtr hwnd)
+                Desktop.TaskbarProgress(hwnd, fraction, blocked);
+        int percent = fraction is double f ? (int)(Math.Round(f * 10) * 10) : -1;
+        if (percent != lastTaskbarPercent && percent >= 0) Program.Log($"[taskbar] {percent}%");
+        lastTaskbarPercent = percent;
     }
 
     /// <summary>The dropdown's recent lectures: this laptop's (where each is on its way), newest first.</summary>

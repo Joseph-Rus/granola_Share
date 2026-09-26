@@ -183,9 +183,10 @@ public static class Desktop
 
     static ITaskbarList3? taskbar;
 
-    /// <summary>Windows: the green bar under the app's taskbar button while a lecture transcribes (null clears it).</summary>
+    /// <summary>Windows: the bar under the app's taskbar button while the model downloads or a lecture transcribes
+    /// (null clears it), red while <paramref name="blocked"/> says a problem is stopping a lecture being recorded.</summary>
     [SupportedOSPlatform("windows")]
-    public static void TaskbarProgress(IntPtr hwnd, double? fraction)
+    public static void TaskbarProgress(IntPtr hwnd, double? fraction, bool blocked = false)
     {
         if (hwnd == IntPtr.Zero) return;
         try
@@ -195,7 +196,11 @@ public static class Desktop
                 taskbar = (ITaskbarList3)new TaskbarList();
                 taskbar.HrInit();
             }
-            if (fraction is double f)
+            if (blocked)
+            {
+                taskbar.SetProgressState(hwnd, 4); // TBPF_ERROR
+            }
+            else if (fraction is double f)
             {
                 taskbar.SetProgressState(hwnd, 2); // TBPF_NORMAL
                 taskbar.SetProgressValue(hwnd, (ulong)Math.Round(Math.Clamp(f, 0, 1) * 1000), 1000);
