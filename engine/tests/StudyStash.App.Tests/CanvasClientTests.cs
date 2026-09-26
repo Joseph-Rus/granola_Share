@@ -360,7 +360,9 @@ public class CanvasClientTests
         Assert.Equal(0, o.Courses["HIST 210"]);
         Assert.Equal("COMP 101 · Intro to Programming", o.Available["4201"]);
         Assert.Single(o.CourseInfo);
-        Assert.Single(o.LastChanges);
+        Assert.Equal(3, o.LastChanges.Count);
+        Assert.Equal("new", o.LastChanges[0].Kind);
+        Assert.Equal("graded", o.LastChanges[2].Kind);
         Assert.Equal(60, o.PollMinutes);
     }
 
