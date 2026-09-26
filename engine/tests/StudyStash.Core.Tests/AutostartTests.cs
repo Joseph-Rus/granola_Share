@@ -43,6 +43,15 @@ public class AutostartTests
     }
 
     [Fact]
+    public void A_service_file_from_before_the_rename_still_counts_as_a_service()
+    {
+        Assert.False(Autostart.UnderService(_ => null));
+        Assert.True(Autostart.UnderService(name => name == Autostart.ServiceEnv ? "1" : null));
+        Assert.True(Autostart.UnderService(name => name == Autostart.LegacyServiceEnv ? "1" : null));
+        Assert.False(Autostart.UnderService(name => name == Autostart.LegacyServiceEnv ? "0" : null));
+    }
+
+    [Fact]
     public void Install_and_uninstall_on_a_mac()
     {
         using var dir = new TempDir();
@@ -82,6 +91,46 @@ public class AutostartTests
             ["systemctl", "--user", "restart", "study-stash-server.service"]], run.Calls);
         Assert.True(Autostart.Uninstall("server", Places(dir), run.Run, "Linux"));
         Assert.Equal(["systemctl", "--user", "disable", "--now", "study-stash-server.service"], run.Calls[^1]);
+    }
+
+    /// <summary>Where a service from before the app's rename lived, for each system.</summary>
+    static (string Server, string Client) LegacyPaths(TempDir dir, string system) => system switch
+    {
+        "Darwin" => (Path.Combine(dir["agents"], "com.granola-share.server.plist"), Path.Combine(dir["agents"], "com.granola-share.client.plist")),
+        "Windows" => (Path.Combine(dir["startup"], "granola-share-server.cmd"), Path.Combine(dir["startup"], "granola-share-client.cmd")),
+        _ => (Path.Combine(dir["systemd"], "granola-share-server.service"), Path.Combine(dir["systemd"], "granola-share-client.service")),
+    };
+
+    [Theory]
+    [InlineData("Darwin")]
+    [InlineData("Windows")]
+    [InlineData("Linux")]
+    public void Installing_the_library_retires_the_services_from_before_the_rename(string system)
+    {
+        using var dir = new TempDir();
+        var places = Places(dir);
+        var (legacyServer, legacyClient) = LegacyPaths(dir, system);
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyServer)!);
+        File.WriteAllText(legacyServer, "old");
+        File.WriteAllText(legacyClient, "old");
+        var run = new FakeRunner();
+        string installed = Autostart.Install("server", dir["home"], places, run.Run, Engine, system, []);
+        Assert.True(File.Exists(installed));
+        Assert.False(File.Exists(legacyServer));
+        Assert.False(File.Exists(legacyClient));
+        switch (system)
+        {
+            case "Darwin":
+                Assert.Equal(2, run.Calls.Count(c => c.Count >= 2 && c[0] == "launchctl" && c[1] == "bootout" && c[^1] != installed));
+                break;
+            case "Windows":
+                Assert.True(run.Calls.Count(c => c[0] == "powershell" && c[^1].Contains("Stop-Process")) >= 2);
+                break;
+            default:
+                Assert.Contains(run.Calls, c => c.SequenceEqual(["systemctl", "--user", "disable", "--now", "granola-share-server.service"]));
+                Assert.Contains(run.Calls, c => c.SequenceEqual(["systemctl", "--user", "disable", "--now", "granola-share-client.service"]));
+                break;
+        }
     }
 
     [Fact]
@@ -209,8 +258,12 @@ public class AutostartTests
         if (Environment.GetEnvironmentVariable("STUDYSTASH_LIVE_SERVICE") != "1" || !(OperatingSystem.IsMacOS() || OperatingSystem.IsWindows())) return;
         Assert.Equal("missing", Autostart.Status("server", ServicePlaces.Default, Machine.Run));
         if (OperatingSystem.IsMacOS())
+        {
             Assert.False(Machine.Run("launchctl", ["print", $"gui/{Machine.Uid()}/{Autostart.Label("server")}"], TimeSpan.FromSeconds(10)) is { ExitCode: 0 },
                 "a library service is loaded on this computer: not touching it");
+            Assert.False(Machine.Run("launchctl", ["print", $"gui/{Machine.Uid()}/com.granola-share.server"], TimeSpan.FromSeconds(10)) is { ExitCode: 0 },
+                "a library service from before the rename is loaded on this computer: not touching it");
+        }
         else
         {
             var count = Machine.Run("powershell", ["-NoProfile", "-Command",
