@@ -1,13 +1,13 @@
 {
  "services": {
-  "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.granola-share.server</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/Study Stash/studystash</string>\n        <string>--home</string>\n        <string>/home/student/.granola-share</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>GRANOLA_SHARE_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
-  "plist_odd": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.granola-share.client</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/a&amp;b &lt;c&gt;/studystash</string>\n        <string>--home</string>\n        <string>/home/student/x &amp; y</string>\n        <string>client</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.granola-share/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>GRANOLA_SHARE_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
-  "systemd": "[Unit]\nDescription=granola-share server\n\n[Service]\nExecStart=\"/opt/Study Stash/studystash\" --home /home/student/.granola-share run\nEnvironment=GRANOLA_SHARE_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
-  "systemd_odd": "[Unit]\nDescription=granola-share client\n\n[Service]\nExecStart=\"/opt/a&b <c>/studystash\" --home \"/home/student/x & y\" client run\nEnvironment=GRANOLA_SHARE_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
+  "plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.study-stash.server</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/Study Stash/studystash</string>\n        <string>--home</string>\n        <string>/home/student/.study-stash</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.study-stash/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.study-stash/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>STUDYSTASH_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
+  "plist_odd": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key><string>com.study-stash.client</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>/opt/a&amp;b &lt;c&gt;/studystash</string>\n        <string>--home</string>\n        <string>/home/student/x &amp; y</string>\n        <string>client</string>\n        <string>run</string>\n    </array>\n    <key>RunAtLoad</key><true/>\n    <key>KeepAlive</key><true/>\n    <key>StandardOutPath</key><string>/home/student/.study-stash/logs/server.log</string>\n    <key>StandardErrorPath</key><string>/home/student/.study-stash/logs/server.log</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/home/student/.local/bin</string>\n        <key>STUDYSTASH_SERVICE</key><string>1</string>\n    </dict>\n</dict>\n</plist>\n",
+  "systemd": "[Unit]\nDescription=Study Stash library\n\n[Service]\nExecStart=\"/opt/Study Stash/studystash\" --home /home/student/.study-stash run\nEnvironment=STUDYSTASH_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
+  "systemd_odd": "[Unit]\nDescription=Study Stash library\n\n[Service]\nExecStart=\"/opt/a&b <c>/studystash\" --home \"/home/student/x & y\" client run\nEnvironment=STUDYSTASH_SERVICE=1\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n",
   "args": [
    "/opt/Study Stash/studystash",
    "--home",
-   "/home/student/.granola-share",
+   "/home/student/.study-stash",
    "run"
   ],
   "odd": [
@@ -17,7 +17,7 @@
    "client",
    "run"
   ],
-  "log": "/home/student/.granola-share/logs/server.log",
+  "log": "/home/student/.study-stash/logs/server.log",
   "user_home": "/home/student"
  },
  "firewall": {

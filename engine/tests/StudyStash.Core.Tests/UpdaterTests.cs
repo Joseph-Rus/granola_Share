@@ -177,7 +177,6 @@ public class UpdaterTests
         File.WriteAllText(Path.Combine(folder, "stale.txt"), "old");
         var places = new ServicePlaces(dir["agents"], dir["startup"], dir["systemd"]);
         Service(places, system, "server", Path.Combine(folder, "studystash"));
-        Service(places, system, "client", "/elsewhere/python3.12"); // the Python engine's laptop watcher: not ours to restart
         var downloads = new FakeDownloads(new() { ["https://dl/e.zip"] = Zip(Engine("9.9.9")) });
         // Unpacking is real (ditto on a Mac); anything that would touch a service is only written down.
         var services = new FakeRunner();
@@ -264,16 +263,15 @@ public class UpdaterTests
     }
 
     [Fact]
-    public async Task The_mac_app_is_replaced_along_with_its_old_names()
+    public async Task The_mac_app_is_replaced_wherever_it_used_to_be()
     {
         using var dir = new TempDir();
         var at = new AppPlaces(dir["Applications"], dir["mine"], dir["Local"], dir["Roaming"], dir["userhome"]);
-        foreach (string old in new[] { Path.Combine(dir["mine"], "Study Stash.app"), Path.Combine(dir["Applications"], "Granola Share.app") })
-        {
-            Directory.CreateDirectory(Path.Combine(old, "Contents", "MacOS"));
-            File.WriteAllText(Path.Combine(old, "Contents", "MacOS", Path.GetFileNameWithoutExtension(old)), "old");
-        }
-        Assert.Equal(Path.Combine(dir["mine"], "Study Stash.app"), Apps.NativeInstalled(at));
+        Directory.CreateDirectory(dir["Applications"]); // this account can write there, like a real /Applications
+        string old = Path.Combine(dir["mine"], "Study Stash.app");
+        Directory.CreateDirectory(Path.Combine(old, "Contents", "MacOS"));
+        File.WriteAllText(Path.Combine(old, "Contents", "MacOS", "Study Stash"), "old");
+        Assert.Equal(old, Apps.NativeInstalled(at));
         var downloads = new FakeDownloads(new() { ["https://dl/mac.zip"] = [1, 2, 3] });
         var ditto = new FakeRunner((_, args) =>
         {
@@ -286,8 +284,7 @@ public class UpdaterTests
         string? dest = await Apps.InstallNativeAsync("https://dl/mac.zip", said.Add, downloads.Client(), ditto.Run, at: at);
         Assert.Equal(Path.Combine(dir["Applications"], "Study Stash.app"), dest); // this account can write there
         Assert.Equal("new", File.ReadAllText(Path.Combine(dest!, "Contents", "MacOS", "Study Stash")));
-        Assert.False(Directory.Exists(Path.Combine(dir["mine"], "Study Stash.app")));
-        Assert.False(Directory.Exists(Path.Combine(dir["Applications"], "Granola Share.app")));
+        Assert.False(Directory.Exists(old));
         Assert.Equal($"Installed the Study Stash app in {dir["Applications"]}.", said.Single());
         var broken = new FakeRunner((_, _) => new ProcResult(0, ""));
         Assert.Null(await Apps.InstallNativeAsync("https://dl/mac.zip", said.Add, downloads.Client(), broken.Run, at: at));
