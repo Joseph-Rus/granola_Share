@@ -46,7 +46,8 @@ public static partial class HtmlText
     [GeneratedRegex("/files/(\\d+)(?:[/?]|$)")]
     private static partial Regex FileIdIn();
 
-    [GeneratedRegex("https?://\\S*?/files/(\\d+)(?:[/?]\\S*)?")]
+    // Stops before ) or ]: the URL is usually inside a Markdown link or image, "(https://.../files/555)".
+    [GeneratedRegex("https?://[^\\s)\\]]*?/files/(\\d+)(?:[/?][^\\s)\\]]*)?")]
     private static partial Regex FileUrlInText();
 
     /// <summary>Plain Markdown, without the file-link plumbing (existing callers that only want readable text).</summary>
@@ -134,11 +135,13 @@ public static partial class HtmlText
         return root.InnerHtml;
     }
 
-    /// <summary>A relative address, made absolute on <see cref="HtmlContext.BaseUrl"/>; anything already absolute, or
-    /// with no base to resolve against, is left alone.</summary>
+    /// <summary>A relative address, made absolute on <see cref="HtmlContext.BaseUrl"/>; an http(s) address already
+    /// absolute, or one with no base to resolve against, is left alone. (<c>UriKind.Absolute</c> alone isn't enough:
+    /// a root address like "/courses/4201/…" parses as an absolute <c>file:</c> URI on some platforms.)</summary>
     static string Absolute(string address, HtmlContext ctx)
     {
-        if (address.Length == 0 || ctx.BaseUrl.Length == 0 || Uri.TryCreate(address, UriKind.Absolute, out _)) return address;
+        if (address.Length == 0 || ctx.BaseUrl.Length == 0) return address;
+        if (Uri.TryCreate(address, UriKind.Absolute, out var direct) && direct.Scheme is "http" or "https") return address;
         return Uri.TryCreate(new Uri(ctx.BaseUrl + "/"), address, out var abs) ? abs.ToString() : address;
     }
 
