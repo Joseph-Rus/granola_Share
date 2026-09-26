@@ -183,6 +183,7 @@ public sealed partial class SettingsModel : ObservableObject, IDisposable
         {
             LibraryState.Connected when host.OlderLibrary => $"Connected to {cc.PoolName}. It runs an older Study Stash: update it to browse, search and ask from here.",
             LibraryState.Connected => $"Connected to {cc.PoolName} at {cc.ServerUrl}.",
+            LibraryState.Starting => "Starting your library…",
             LibraryState.Unreachable => $"Can't reach {cc.ServerUrl} right now. Lectures wait here until it's back.",
             LibraryState.WrongPassword => "The library's password changed. Type the new one below.",
             _ => "No library yet.",

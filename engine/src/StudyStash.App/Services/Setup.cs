@@ -98,7 +98,7 @@ public static class Setup
             if (m.ThisComputer)
             {
                 string done = await LibraryHere.ThisComputer().CreateAsync(host.Home, m.LibraryName, m.Password, Person());
-                host.Save(s => s.LibraryHere = true);
+                host.Save(s => s.Role = AppRole.Both);
                 m.LibraryOk = true;
                 m.LibraryResult = done;
             }

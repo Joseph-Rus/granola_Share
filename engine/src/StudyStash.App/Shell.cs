@@ -709,6 +709,7 @@ public static partial class Shell
         library.Status = host.Library switch
         {
             LibraryState.Connected => "Library connected",
+            LibraryState.Starting => "Starting your library…",
             LibraryState.Unreachable => "Can't reach your library",
             LibraryState.WrongPassword => "Library password changed",
             _ => "No library yet",

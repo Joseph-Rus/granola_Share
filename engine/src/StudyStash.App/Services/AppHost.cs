@@ -1,10 +1,21 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using StudyStash.App.Platform;
 using StudyStash.Audio;
 using StudyStash.Core;
 
 namespace StudyStash.App.Services;
+
+/// <summary>What this computer does: record and send lectures (Laptop), also run the library (Both), or only run the
+/// library, with no recording (Library).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AppRole>))]
+public enum AppRole
+{
+    Laptop,
+    Both,
+    Library,
+}
 
 /// <summary>The app's own settings (app.json beside client.toml): what's been set up, and how to record.</summary>
 public sealed class AppSettings
@@ -20,8 +31,12 @@ public sealed class AppSettings
     public bool ComputerAudio { get; set; }
     /// <summary>Filed lectures' audio is deleted after this many days (the notes and transcript stay). 0 keeps it.</summary>
     public int KeepAudioDays { get; set; } = 30;
-    /// <summary>This computer is the library too (it runs the library's service).</summary>
-    public bool LibraryHere { get; set; }
+    /// <summary>What this computer is for.</summary>
+    public AppRole Role { get; set; } = AppRole.Laptop;
+    /// <summary>This computer is the library too (Both or Library). Read-only: set <see cref="Role"/> instead. Kept
+    /// for the places that only ask "is it here", such as Settings' binding.</summary>
+    [JsonIgnore]
+    public bool LibraryHere => Role != AppRole.Laptop;
     public bool Shortcuts { get; set; } = true;
     public double? RecorderX { get; set; }
     public double? RecorderY { get; set; }
@@ -32,7 +47,12 @@ public sealed class AppSettings
     {
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(PathIn(home)), Json) ?? new AppSettings();
+            string text = File.ReadAllText(PathIn(home));
+            var settings = JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new AppSettings();
+            // Before roles existed, "library_here": true meant Both; a file with no "role" yet still means that.
+            if (JsonNode.Parse(text) is JsonObject raw && raw["role"] is null && raw["library_here"]?.GetValue<bool>() == true)
+                settings.Role = AppRole.Both;
+            return settings;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -53,6 +73,8 @@ public sealed class AppSettings
 public enum LibraryState
 {
     NotSetUp,
+    /// <summary>This computer's own library is starting: not "Can't reach your library" while it does.</summary>
+    Starting,
     Connected,
     Unreachable,
     WrongPassword,
@@ -74,6 +96,7 @@ public sealed class AppHost : IDisposable
     KeepAwake? awake;
     readonly ModelSetting models;
     readonly HttpClient? http;
+    readonly Func<LibraryService>? localLibrary;
     // The model download: one at a time, its stop button, and a nudge that ends a wait to try again.
     readonly Lock downloadLock = new();
     CancellationTokenSource? download;
@@ -90,6 +113,9 @@ public sealed class AppHost : IDisposable
     public Timetable Timetable { get; private set; }
 
     public LibraryState Library { get; private set; } = LibraryState.NotSetUp;
+    /// <summary>This computer's own library, for Both/Library roles: started in <see cref="Start"/>, stopped in
+    /// <see cref="Dispose"/>. Null on a plain laptop.</summary>
+    public LibraryService? LocalLibrary { get; private set; }
     /// <summary>The library is from before /api/v2 (the Python engine): it files lectures, but can't be browsed, searched
     /// or asked from the app until it's updated.</summary>
     public bool OlderLibrary { get; private set; }
@@ -122,15 +148,18 @@ public sealed class AppHost : IDisposable
     /// one, STUDYSTASH_MIC_FILE (a WAV) does, and only with neither is the real microphone ever opened.
     /// <paramref name="models"/> is the model the environment asks for (by default, this process's: see
     /// <see cref="ModelSetting"/>); <paramref name="http"/> downloads it (a test's pretend server).
+    /// <paramref name="localLibrary"/> makes this computer's own library (a test's, on a spare port with no real child).
     /// </summary>
     public AppHost(string home, Func<IAudioSource>? microphone = null, Func<ITranscriber>? whisper = null, LaptopHost? laptop = null,
-        Action<string>? log = null, ILoginItems? loginItems = null, ModelSetting? models = null, HttpClient? http = null)
+        Action<string>? log = null, ILoginItems? loginItems = null, ModelSetting? models = null, HttpClient? http = null,
+        Func<LibraryService>? localLibrary = null)
     {
         Home = home;
         this.log = log ?? (s => Console.WriteLine(s));
         pretendMic = microphone ?? MicFromEnvironment();
         this.models = models ?? ModelSetting.FromEnvironment();
         this.http = http;
+        this.localLibrary = localLibrary;
         LoginItems = loginItems ?? Platform.LoginItems.System;
         Directory.CreateDirectory(home);
         Settings = AppSettings.Load(home);
@@ -238,6 +267,12 @@ public sealed class AppHost : IDisposable
         watchdog = new Timer(_ => CheckRecorder(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         // A download that quitting (or a closed laptop) cut short picks up where it stopped.
         if (Settings.SetupDone && !ModelReady) _ = DownloadModelAsync();
+        if (Settings.Role != AppRole.Laptop && Settings.SetupDone)
+        {
+            LocalLibrary = localLibrary?.Invoke() ?? new LibraryService(Home, Configs.Load(Home));
+            LocalLibrary.Changed += () => Changed?.Invoke();
+            _ = LocalLibrary.StartAsync();
+        }
     }
 
     /// <summary>Every second, on the thread pool: the recorder looks at its microphone and the disk. One look at a
@@ -286,6 +321,13 @@ public sealed class AppHost : IDisposable
     public async Task CheckLibraryAsync()
     {
         var before = Library;
+        if (LocalLibrary is { State: LibraryServiceState.Starting })
+        {
+            // Our own library is coming up: "Can't reach it" would be alarming and wrong.
+            Library = LibraryState.Starting;
+            Changed?.Invoke();
+            return;
+        }
         if (Remote() is not { } lib)
         {
             Library = LibraryState.NotSetUp;
@@ -353,6 +395,7 @@ public sealed class AppHost : IDisposable
         string lib = Library switch
         {
             LibraryState.Connected => "Library connected",
+            LibraryState.Starting => "Starting your library…",
             LibraryState.Unreachable => "Can't reach your library",
             LibraryState.WrongPassword => "Library password changed",
             _ => "No library yet",
@@ -666,6 +709,7 @@ public sealed class AppHost : IDisposable
         }
         awake?.Dispose();
         awake = null;
+        LocalLibrary?.Dispose();
         try
         {
             if (!Task.WaitAll([.. running, downloading], TimeSpan.FromSeconds(3))) log("[app] still busy after 3 seconds: quitting anyway");
