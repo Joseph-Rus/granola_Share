@@ -83,4 +83,93 @@
     <Setter Property="BoxShadow" Value="none" />
   </Style>
 
+  <!-- design 06: Settings -> Canvas -->
+  <!-- letter-spacing (design -0.015em) goes on the element itself, as c:Typography.Extra="-0.39" -->
+  <Style Selector="TextBlock.cv-h1">
+    <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.cv-intro">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="19.5" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxWidth" Value="520" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="TextBlock.cv-h2">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="4,0" />
+  </Style>
+  <Style Selector="TextBlock.cv-link">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+  </Style>
+  <Style Selector="Border.cv-group">
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Background" Value="{DynamicResource Group}" />
+  </Style>
+  <Style Selector="Border.cv-sep">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource Sep}" />
+    <Setter Property="Margin" Value="16,0,0,0" />
+  </Style>
+  <Style Selector="Grid.cv-row">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Margin" Value="16,8" />
+  </Style>
+  <Style Selector="TextBlock.cv-value">
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="TextBlock.cv-dot-label">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="Ellipse.cv-dot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+  </Style>
+  <Style Selector="c|Icon.cv-scout">
+    <Setter Property="Size" Value="14" />
+    <Setter Property="Filled" Value="True" />
+  </Style>
+  <Style Selector="TextBlock.cv-scout">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+  <Style Selector="TextBlock.cv-change">
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="c|Icon.cv-change">
+    <Setter Property="Size" Value="17" />
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+
+  <!-- The design's select: a rounded pill with a chevron, its flyout listing the choices. -->
+  <Style Selector="Button.cv-select">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="12,0,8,0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="{DynamicResource Raised}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.cv-select /template/ Border#PART_Bg">
+    <Setter Property="BoxShadow" Value="{DynamicResource RaisedShadow}" />
+  </Style>
+  <Style Selector="Button.cv-select-item">
+    <Setter Property="Theme" Value="{StaticResource Surface}" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="TextBlock.cv-placeholder">
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}" />
+  </Style>
+
 </Styles>

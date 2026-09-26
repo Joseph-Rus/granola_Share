@@ -18,6 +18,9 @@ public sealed record CourseChoice(string? Id, string Label)
 /// due Tue 11:59 PM").</summary>
 public sealed record CanvasChangeRow(string Glyph, string Text);
 
+/// <summary>One choice in the sync interval select ("Every hour").</summary>
+public sealed record PollChoice(int Minutes, string Label);
+
 /// <summary>One class in Settings' Courses list: its dot, Scout's line, and the course picker. A class Canvas hasn't
 /// matched shows <see cref="CanvasWords.NotMatched"/> and a "Choose a course…" placeholder instead of a scout state.</summary>
 public sealed partial class CanvasCourseRow : ObservableObject
@@ -88,7 +91,8 @@ public sealed partial class CanvasSettingsModel : ObservableObject
 
     [ObservableProperty] public partial string ExtensionLine { get; set; } = "";
 
-    public static readonly IReadOnlyList<int> PollChoices = [15, 30, 60, 180, 1440];
+    public IReadOnlyList<PollChoice> PollChoices { get; } =
+        [.. new[] { 15, 30, 60, 180, 1440 }.Select(m => new PollChoice(m, CanvasWords.PollIntervalText(m)))];
     [NotifyPropertyChangedFor(nameof(PollLabel))]
     [ObservableProperty]
     public partial int PollMinutes { get; set; } = 60;
