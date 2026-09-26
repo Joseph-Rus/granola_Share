@@ -449,6 +449,8 @@ public sealed class AppHost : IDisposable
     /// </summary>
     public Task DownloadModelAsync(WhisperModel? model = null)
     {
+        // A model file given to use as it is (the self-test's): nothing to download unless another is picked.
+        if (model is null && ModelFile is not null) return Task.CompletedTask;
         model ??= Model;
         if (WhisperModels.IsDownloaded(Home, model)) return Task.CompletedTask;
         lock (downloadLock)
@@ -551,7 +553,6 @@ public sealed class AppHost : IDisposable
                 {
                     var wait = RetryAfter(failures++);
                     log($"[model] {e.Message}: trying again in {wait.TotalSeconds:0} s");
-                    Say(cts, DownloadStopped);
                     await WaitToRetry(wait, cts);
                 }
             }
@@ -612,11 +613,20 @@ public sealed class AppHost : IDisposable
         Changed?.Invoke();
     }
 
+    /// <summary>Say the download stopped, then wait to try again: until the wait's over, or the student says now.</summary>
     async Task WaitToRetry(TimeSpan wait, CancellationTokenSource cts)
     {
         var now = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Together, so a Try again the moment the words show is never missed.
         lock (downloadLock)
-            if (download == cts) retryNow = now;
+        {
+            if (download == cts)
+            {
+                retryNow = now;
+                DownloadProblem = DownloadStopped;
+            }
+        }
+        Changed?.Invoke();
         using (var waiting = CancellationTokenSource.CreateLinkedTokenSource(cts.Token))
         {
             await Task.WhenAny(Task.Delay(wait, waiting.Token), now.Task);
