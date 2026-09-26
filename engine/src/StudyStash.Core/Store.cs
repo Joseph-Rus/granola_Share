@@ -137,8 +137,8 @@ public static partial class Notes
 }
 
 /// <summary>
-/// The SQLite index (state.db) and the Markdown folder tree. A shared lecture arrives with its transcript and is
-/// queued; the pipeline writes notes from the transcript, sorts it into a class, and saves it here.
+/// The SQLite index (state.db) and the Markdown folder tree. A lecture arrives from the laptop with its transcript
+/// and is queued; the pipeline writes notes from the transcript, sorts it into a class, and saves it here.
 /// </summary>
 public sealed class Store : IDisposable
 {
@@ -174,7 +174,7 @@ public sealed class Store : IDisposable
     // Columns added after 0.1.0. Databases from older versions get them when opened.
     static readonly (string Name, string Decl)[] Migrations =
     [
-        ("payload_json", "TEXT"), // the whole shared lecture, so it can be processed again
+        ("payload_json", "TEXT"), // the whole lecture as the laptop sent it, so it can be processed again
         ("summary_md", "TEXT"), // our notes, written from the transcript
         ("summary_model", "TEXT"),
         ("status", "TEXT DEFAULT 'done'"), // queued | working | done | failed
@@ -294,7 +294,7 @@ public sealed class Store : IDisposable
 
     // --- the processing queue ------------------------------------------------------------------------------------
 
-    /// <summary>Accept a shared lecture. The pipeline picks it up and files it.</summary>
+    /// <summary>Accept a lecture the laptop sent. The pipeline picks it up and files it.</summary>
     public void Enqueue(Meeting m)
     {
         lock (gate)
@@ -346,7 +346,7 @@ public sealed class Store : IDisposable
 
     public void MarkFailed(string noteId, string error)
     {
-        // Only if still ours: a re-share or re-queue meanwhile means it runs again instead.
+        // Only if still ours: a resend or re-queue meanwhile means it runs again instead.
         lock (gate)
             Exec("UPDATE notes SET status=?, error=?, updated_at=? WHERE id=? AND status=?",
                 Failed, Py.Head(error, 2000), Now(), noteId, Working);
@@ -354,7 +354,7 @@ public sealed class Store : IDisposable
 
     /// <summary>
     /// Save the pipeline's result for a row it claimed, unless the note changed meanwhile. The pipeline works for
-    /// minutes on a snapshot: if the note was deleted, re-shared, or re-queued since, the result is stale and is
+    /// minutes on a snapshot: if the note was deleted, sent again, or re-queued since, the result is stale and is
     /// dropped (a re-queued note simply runs again). If a person moved the note meanwhile, their class wins.
     /// </summary>
     public string? Finish(NoteRow claimed, Meeting m, Classification c, string summaryMd = "", string summaryModel = "",
@@ -473,7 +473,7 @@ public sealed class Store : IDisposable
         }
     }
 
-    /// <summary>The whole shared lecture behind a row (rebuilt from its columns and Markdown file for rows from 0.1).</summary>
+    /// <summary>The whole lecture behind a row (rebuilt from its columns and Markdown file for rows from 0.1).</summary>
     public Meeting Meeting(NoteRow row)
     {
         lock (gate)
