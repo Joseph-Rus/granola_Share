@@ -33,6 +33,8 @@ public partial class SettingsView : UserControl
             drawChrome = value;
             Lights.IsVisible = value && Skin.Current == SkinKind.Mac;
             Captions.IsVisible = value && Skin.Current == SkinKind.Win;
+            // The Mac's own radius/shadow are for a screenshot only (a real window is already rounded by the OS).
+            Chrome.Classes.Set("chrome", value);
         }
     }
 
