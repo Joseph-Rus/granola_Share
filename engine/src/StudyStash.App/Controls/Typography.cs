@@ -33,13 +33,43 @@ public static class Typography
         return i < 0 ? SfText[0] : SfText[Math.Min(i, SfText.Length - 1)];
     }
 
+    // A Mac's line of text is as tall as the system font's ascent and descent, each rounded to whole points (as AppKit
+    // and the design's browser both do). By size from 6 pt: the text face's, which isn't a formula, and the display
+    // face's, which is.
+    static readonly byte[] TextLines =
+        [7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 18, 20, 21, 22, 23, 24, 26, 27, 28, 29, 30, 32, 33, 34, 35, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47, 49, 50, 51, 52, 53, 54, 55, 56];
+
+    /// <summary>
+    /// The height of one line of the Mac's type at a size, where the design leaves it at "normal": SF Pro Text below
+    /// the display sizes, SF Pro Display where a view asks for it. Avalonia would give the font's exact height, rounded
+    /// up for the whole block, so a small line (11 pt: 13.1) takes 14 points where the design takes 13, and a list of
+    /// them runs long. Other faces (the serif notes) keep their own.
+    /// </summary>
+    public static double LineHeight(double size, bool display)
+    {
+        if (display) return Math.Round(0.95215 * size) + Math.Round(0.2412 * size);
+        int i = (int)Math.Round(size) - 6;
+        return i >= 0 && i < TextLines.Length ? TextLines[i] : Math.Round(size * 1.17);
+    }
+
     sealed class Converter(bool sf) : IMultiValueConverter
     {
         public object? Convert(IList<object?> values, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
             (values.Count > 0 && values[0] is double size ? Tracking(size, sf) : 0) + (values.Count > 1 && values[1] is double extra ? extra : 0);
     }
 
-    /// <summary>The style that does it, for the Mac look.</summary>
+    sealed class LineConverter : IMultiValueConverter
+    {
+        public object? Convert(IList<object?> values, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
+        {
+            if (values.Count < 2 || values[0] is not double size || values[1] is not FontFamily family) return double.NaN;
+            string name = family.Name;
+            bool display = name.Contains("Display", StringComparison.Ordinal);
+            return display || name.Contains("SF Pro", StringComparison.Ordinal) ? LineHeight(size, display) : double.NaN;
+        }
+    }
+
+    /// <summary>The style that does it, for the Mac look: the tracking, and the line heights.</summary>
     public static Style MacStyle()
     {
         var style = new Style(x => x.OfType<TextBlock>());
@@ -47,6 +77,10 @@ public static class Typography
         binding.Bindings.Add(new Binding(nameof(TextBlock.FontSize)) { RelativeSource = new RelativeSource(RelativeSourceMode.Self) });
         binding.Bindings.Add(new Binding { Path = "(c:Typography.Extra)", RelativeSource = new RelativeSource(RelativeSourceMode.Self), TypeResolver = (ns, name) => typeof(Typography) });
         style.Setters.Add(new Setter(TextBlock.LetterSpacingProperty, binding));
+        var lines = new MultiBinding { Converter = new LineConverter() };
+        lines.Bindings.Add(new Binding(nameof(TextBlock.FontSize)) { RelativeSource = new RelativeSource(RelativeSourceMode.Self) });
+        lines.Bindings.Add(new Binding(nameof(TextBlock.FontFamily)) { RelativeSource = new RelativeSource(RelativeSourceMode.Self) });
+        style.Setters.Add(new Setter(TextBlock.LineHeightProperty, lines));
         return style;
     }
 }

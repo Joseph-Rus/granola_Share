@@ -339,10 +339,17 @@ public static class Skin
     static Color Rgba(byte r, byte g, byte b, double a) => Color.FromArgb(Oklch.Byte(a), r, g, b);
 
     static BoxShadow Outer(double x, double y, double blur, double spread, Color c) =>
-        new() { OffsetX = x, OffsetY = y, Blur = blur, Spread = spread, Color = c };
+        new() { OffsetX = x, OffsetY = y, Blur = Blur(blur), Spread = spread, Color = c };
 
     static BoxShadow Inset(double x, double y, double blur, double spread, Color c) =>
-        new() { OffsetX = x, OffsetY = y, Blur = blur, Spread = spread, Color = c, IsInset = true };
+        new() { OffsetX = x, OffsetY = y, Blur = Blur(blur), Spread = spread, Color = c, IsInset = true };
+
+    /// <summary>
+    /// A CSS box-shadow blur as Avalonia's. CSS blurs by a Gaussian of half the blur radius; Avalonia takes the radius
+    /// the way Skia once did (0.2887 × radius + 0.5), which is only about 0.6 of that, so the design's shadows and the
+    /// accent's glow would come out tight and hard.
+    /// </summary>
+    public static double Blur(double css) => Math.Max(0, (css / 2 - 0.5) / 0.288675);
 
     static BoxShadows Shadows(BoxShadow[] s) => s.Length == 1 ? new BoxShadows(s[0]) : new BoxShadows(s[0], s[1..]);
 }

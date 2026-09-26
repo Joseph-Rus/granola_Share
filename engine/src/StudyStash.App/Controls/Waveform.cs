@@ -9,7 +9,7 @@ namespace StudyStash.App.Controls;
 public sealed class Waveform : Control
 {
     public static readonly StyledProperty<IReadOnlyList<double>?> LevelsProperty = AvaloniaProperty.Register<Waveform, IReadOnlyList<double>?>(nameof(Levels));
-    public static readonly StyledProperty<int> BarsProperty = AvaloniaProperty.Register<Waveform, int>(nameof(Bars), 22);
+    public static readonly StyledProperty<int> BarsProperty = AvaloniaProperty.Register<Waveform, int>(nameof(Bars), 20);
     public static readonly StyledProperty<IBrush?> ForegroundProperty = TextBlock.ForegroundProperty.AddOwner<Waveform>();
     public static readonly StyledProperty<double> MinBarProperty = AvaloniaProperty.Register<Waveform, double>(nameof(MinBar), 4);
 

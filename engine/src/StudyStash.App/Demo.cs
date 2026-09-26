@@ -7,7 +7,10 @@ namespace StudyStash.App;
 public static class Demo
 {
     /// <summary>The design's waveform, bar by bar (heights out of 28).</summary>
-    public static readonly double[] Wave = [.. new double[] { 6, 10, 16, 22, 14, 8, 12, 20, 26, 18, 10, 6, 9, 15, 24, 20, 12, 8, 14, 18, 10, 6 }.Select(h => h / 28)];
+    public static readonly double[] Wave = [.. new double[] { 6, 10, 16, 22, 14, 8, 12, 20, 26, 18, 10, 6, 9, 15, 24, 20, 12, 8, 14, 6 }.Select(h => h / 28)];
+
+    /// <summary>The recorder pill's five bars (heights out of 20).</summary>
+    public static readonly double[] PillWave = [.. new double[] { 8, 16, 11, 18, 7 }.Select(h => h / 20)];
 
     static IBrush Cs => Skin.ClassDot(0);
     static IBrush Bio => Skin.ClassDot(1);
@@ -16,7 +19,7 @@ public static class Demo
 
     public static RecorderModel Recorder(bool paused = false, bool expanded = false)
     {
-        var r = new RecorderModel { ClassName = "CS 101", ClassDot = Cs, Elapsed = "24:18", IsPaused = paused, Levels = Wave, Expanded = expanded };
+        var r = new RecorderModel { ClassName = "CS 101", ClassDot = Cs, Elapsed = "24:18", IsPaused = paused, Levels = PillWave, Expanded = expanded };
         r.Lines.Add(new HeardLine { Time = "18:05", Text = "Okay, the midterm. Recursion traces will be on it, the stack diagrams from last week." });
         r.Lines.Add(new HeardLine { Time = "19:30", Text = "Think of each call as a plate on a stack. You can only take the top one off." });
         r.Lines.Add(new HeardLine { Time = "21:52", Text = "When factorial of three calls factorial of two, the first call is paused, waiting." });
@@ -139,7 +142,6 @@ public static class Demo
         else
         {
             p.Recent.Add(new LectureItem { Title = "The Treaty of Versailles", Detail = "Filed in HIST 210", Time = "Mon", Dot = Hist });
-            p.Recent.Add(new LectureItem { Title = "Integration by parts, practice", Detail = "Filed in CALC II", Time = "Mon", Dot = Calc });
             p.Recent.Add(new LectureItem { Title = "Cell transport, part 1", Detail = "Filed in BIO 110", Time = "Fri", Dot = Bio });
         }
         return p;
