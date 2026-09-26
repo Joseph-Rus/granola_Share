@@ -30,6 +30,8 @@ public sealed class LibraryService : IDisposable
 {
     const int MaxRestartsIn10Min = 5;
     static readonly int[] RestartDelaysSeconds = [2, 5, 15, 60];
+    /// <summary>Bytes: the log starts over (keeping one old copy) past this, same as the app's own log.</summary>
+    const long LogLimit = 5_000_000;
 
     readonly string home;
     readonly Config cfg;
@@ -165,7 +167,7 @@ public sealed class LibraryService : IDisposable
         try
         {
             var f = new FileInfo(LogPath);
-            if (f.Exists && f.Length >= Autostart.LogLimit) File.Move(LogPath, LogPath + ".1", overwrite: true);
+            if (f.Exists && f.Length >= LogLimit) File.Move(LogPath, LogPath + ".1", overwrite: true);
         }
         catch (IOException) { }
     }
