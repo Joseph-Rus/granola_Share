@@ -729,7 +729,15 @@ public sealed class AppHost : IDisposable
         }
         awake?.Dispose();
         awake = null;
-        LocalLibrary?.Dispose();
+        if (LocalLibrary is { } lib)
+        {
+            // A clean stop (SIGTERM, then a moment to shut its database down) if it manages one in time; otherwise
+            // Dispose's hard kill so quitting is never held up by a library that won't go. On the thread pool: awaits
+            // inside StopAsync must not need this (UI) thread's own message loop to go on.
+            try { Task.Run(lib.StopAsync).Wait(TimeSpan.FromSeconds(3)); }
+            catch (AggregateException e) { log($"[library] {e.InnerException?.Message}"); }
+            lib.Dispose();
+        }
         try
         {
             if (!Task.WaitAll([.. running, downloading], TimeSpan.FromSeconds(3))) log("[app] still busy after 3 seconds: quitting anyway");
