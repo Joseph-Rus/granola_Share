@@ -83,7 +83,7 @@ public static partial class Shell
         else if (OperatingSystem.IsMacOS())
             Program.Log("[app] this Mac doesn't say when the app is opened again; a second copy still hands off");
         host = new AppHost(home, laptop: new LaptopHost(), log: Program.Log);
-        host.Changed += () => Dispatcher.UIThread.Post(Refresh);
+        host.Changed += RequestRefresh;
         host.Heard += (l, lines) => Dispatcher.UIThread.Post(() => AddHeard(l, lines));
         host.Filed += l => Dispatcher.UIThread.Post(() => Toast($"Filed in {(l.FiledClass.Length > 0 ? l.FiledClass : "your library")}",
             l.FiledTitle.Length > 0 ? l.FiledTitle : "The notes are written.", "Open note", () => OpenLecture(l.Id)));
@@ -701,6 +701,40 @@ public static partial class Shell
         var levels = host.Recorder.Levels();
         panel.Elapsed = recorder.Elapsed = elapsed;
         panel.Levels = recorder.Levels = levels;
+    }
+
+    static DateTime lastRefreshAt = DateTime.MinValue;
+    static bool refreshDue, refreshRetryQueued;
+
+    /// <summary>The host changed (called from any thread, often several times a second): at most one <see cref="Refresh"/>
+    /// runs every 100 ms, on the UI thread, however many times this fires in between.</summary>
+    static void RequestRefresh()
+    {
+        refreshDue = true;
+        Dispatcher.UIThread.Post(TryRefresh);
+    }
+
+    static void TryRefresh()
+    {
+        if (quitting || !refreshDue) return;
+        var now = DateTime.UtcNow;
+        var since = now - lastRefreshAt;
+        if (since < TimeSpan.FromMilliseconds(100))
+        {
+            if (!refreshRetryQueued)
+            {
+                refreshRetryQueued = true;
+                DispatcherTimer.RunOnce(() =>
+                {
+                    refreshRetryQueued = false;
+                    TryRefresh();
+                }, TimeSpan.FromMilliseconds(100) - since);
+            }
+            return;
+        }
+        refreshDue = false;
+        lastRefreshAt = now;
+        Refresh();
     }
 
     static void Refresh()
