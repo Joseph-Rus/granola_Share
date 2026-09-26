@@ -28,8 +28,10 @@ public class StoreClassifyTests
         Assert.Equal("Lec 3 Loops while", Notes.Slugify("Lec 3: \"Loops\" / while?"));
         foreach (var c in Golden.Cases("slugify"))
             Assert.Equal(c![2].S(), Notes.Slugify(c[0].S(), c[1]!.GetValue<int>()));
+        // A date that isn't in the input is "today" when the golden file was made: the clock's, not the code's.
         foreach (var c in Golden.Cases("date_prefix"))
-            if (c![1].S() != DateTime.UtcNow.ToString("yyyy-MM-dd")) Assert.Equal(c[1].S(), Notes.DatePrefix(c[0].S()));
+            if (c![0].S().Contains(c[1].S(), StringComparison.Ordinal)) Assert.Equal(c[1].S(), Notes.DatePrefix(c[0].S()));
+        Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), Notes.DatePrefix(""));
     }
 
     [Fact]
