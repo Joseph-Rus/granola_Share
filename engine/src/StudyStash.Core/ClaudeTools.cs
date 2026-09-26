@@ -538,8 +538,9 @@ public static class ClaudeTools
             foreach (var it in (mod["items"] as JsonArray ?? []).OfType<JsonObject>())
             {
                 string kind = S(it["kind"]), source = S(it["source"]);
+                bool saved = Bool(it["saved"]);
                 string extra = kind == "file" && S(it["format"]) is { Length: > 0 } fmt ? $" ({fmt})"
-                    : kind == "link" ? source.Length > 0 ? $" (saved from {char.ToUpperInvariant(source[0])}{source[1..]})" : Bool(it["saved"]) ? " (saved)" : " (link)"
+                    : kind == "link" ? saved ? source.Length > 0 ? $" (saved from {char.ToUpperInvariant(source[0])}{source[1..]})" : " (saved)" : " (link)"
                     : "";
                 sb.Append("- ").Append(S(it["title"])).Append(extra).Append(Bool(it["locked"]) ? " · locked" : "").Append('\n');
             }
