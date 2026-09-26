@@ -147,8 +147,8 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <!-- If an engine isn't available -->
-      <TextBlock Classes="ai-section" Text="If an engine isn't available" Margin="0,18,0,8" />
+      <!-- If an engine isn’t available -->
+      <TextBlock Classes="ai-section" Text="If an engine isn’t available" Margin="0,18,0,8" />
       <Border Classes="ai-card">
         <Grid Classes="ai-row" ColumnDefinitions="Auto,16,*,Auto">
           <c:Icon Glyph="swap_horiz" Size="20" />

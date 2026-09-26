@@ -156,9 +156,9 @@
         </Border>
       </StackPanel>
 
-      <!-- If an engine isn't available -->
+      <!-- If an engine isn’t available -->
       <StackPanel Spacing="8">
-        <TextBlock Classes="ai-section" Text="If an engine isn't available" Margin="4,0" />
+        <TextBlock Classes="ai-section" Text="If an engine isn’t available" Margin="4,0" />
         <Border Classes="ai-group">
           <Grid Classes="ai-row" ColumnDefinitions="Auto,12,*,Auto" MinHeight="44" Margin="16,8">
             <StackPanel Classes="ai-row-text" Grid.Column="2" VerticalAlignment="Center">
